@@ -1,41 +1,89 @@
 <template>
-  <div class="flex items-start gap-3 p-4 surface-card rounded-2xl btn-tap" :class="task.completed && 'opacity-50'">
-    <button @click.prevent="$emit('toggle', task.id)" class="touch-target flex-shrink-0 -ml-2 -mt-1">
-      <div class="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all duration-200"
-        :class="task.completed ? 'checkbox-checked' : 'checkbox-unchecked'">
-        <svg v-if="task.completed" class="w-3 h-3 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
-        </svg>
+  <div>
+    <UCard class="transition-all duration-200 hover:ring-(--ui-primary)/20" :class="task.completed && 'opacity-50'" :ui="{ body: 'sm:p-4' }">
+      <div class="flex items-start gap-3">
+        <UCheckbox
+          :model-value="task.completed"
+          @update:model-value="$emit('toggle', task.id)"
+          class="mt-0.5"
+        />
+        <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium leading-snug" :class="task.completed && 'line-through text-(--ui-text-muted)'">
+              {{ task.title }}
+            </span>
+            <UIcon v-if="task.pinned" name="i-lucide-pin" class="size-3.5 text-(--ui-text-dimmed)" />
+          </div>
+          <p v-if="task.description" class="text-xs text-(--ui-text-muted) mt-0.5 line-clamp-1">{{ task.description }}</p>
+          <div v-if="hasMeta" class="flex items-center gap-2 mt-2 flex-wrap">
+            <UBadge v-if="task.due_at" :color="isOverdue ? 'error' : 'neutral'" variant="subtle" size="xs">
+              <UIcon name="i-lucide-clock" class="size-3 mr-1" />
+              {{ formatDue(task.due_at) }}
+            </UBadge>
+            <UBadge v-if="task.subtask_count && !expanded" color="neutral" variant="subtle" size="xs">
+              <UIcon name="i-lucide-list-checks" class="size-3 mr-1" />
+              {{ task.subtask_done }}/{{ task.subtask_count }}
+            </UBadge>
+            <UBadge v-for="tag in (task.tags || []).slice(0, 2)" :key="tag" color="neutral" variant="subtle" size="xs">
+              {{ tag }}
+            </UBadge>
+          </div>
+        </NuxtLink>
+        <UButton v-if="task.subtask_count" color="neutral" variant="ghost" size="xs"
+          :icon="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+          @click.prevent="toggleExpand" class="shrink-0 mt-0.5" />
       </div>
-    </button>
-    <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0 py-0.5">
-      <div class="flex items-center gap-2">
-        <span class="text-[15px] font-medium leading-snug" :class="task.completed && 'line-through text-muted'">{{ task.title }}</span>
-        <svg v-if="task.pinned" class="w-3.5 h-3.5 flex-shrink-0 text-faint" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M10.75 2.567a1.5 1.5 0 0 0-1.5 0L3.456 6.05a1.5 1.5 0 0 0-.75 1.3v6.3a1.5 1.5 0 0 0 .75 1.3l5.794 3.483a1.5 1.5 0 0 0 1.5 0l5.794-3.483a1.5 1.5 0 0 0 .75-1.3v-6.3a1.5 1.5 0 0 0-.75-1.3L10.75 2.567Z"/>
-        </svg>
+    </UCard>
+
+    <!-- Inline subtasks tree -->
+    <div v-if="expanded && subtasks.length" class="ml-8 pl-3 border-l border-(--ui-border) mt-1 mb-1 space-y-0.5">
+      <div v-for="sub in subtasks" :key="sub.id"
+        class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-colors hover:bg-(--ui-bg-elevated)">
+        <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub)" size="xs" />
+        <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0 text-sm transition-all duration-200"
+          :class="sub.completed && 'line-through text-(--ui-text-muted)'">
+          {{ sub.title }}
+        </NuxtLink>
       </div>
-      <p v-if="task.description" class="text-[13px] text-muted mt-0.5 line-clamp-1">{{ task.description }}</p>
-      <div v-if="hasMeta" class="flex items-center gap-2.5 mt-2 flex-wrap">
-        <span v-if="task.due_at" class="inline-flex items-center gap-1 text-[12px] font-medium" :class="isOverdue ? 'accent-text' : 'text-faint'">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-          {{ formatDue(task.due_at) }}
-        </span>
-        <span v-if="task.subtask_count" class="inline-flex items-center gap-1 text-[12px] text-faint font-medium">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/></svg>
-          {{ task.subtask_done }}/{{ task.subtask_count }}
-        </span>
-        <span v-for="tag in (task.tags || []).slice(0, 2)" :key="tag" class="tag">{{ tag }}</span>
-      </div>
-    </NuxtLink>
+    </div>
+    <div v-if="expanded && loadingSubs" class="ml-8 pl-3 border-l border-(--ui-border) mt-1 mb-1 py-3">
+      <UIcon name="i-lucide-loader-2" class="size-4 animate-spin text-(--ui-text-dimmed)" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
 const props = defineProps<{ task: Task }>();
-defineEmits<{ toggle: [id: string] }>();
+const emit = defineEmits<{ toggle: [id: string] }>();
+
+const expanded = ref(false);
+const subtasks = ref<Task[]>([]);
+const loadingSubs = ref(false);
+
+const { toggleComplete } = useTasks();
+
 const isOverdue = computed(() => { if (!props.task.due_at || props.task.completed) return false; return new Date(props.task.due_at) < new Date(); });
 const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.tags?.length);
+
+async function toggleExpand() {
+  expanded.value = !expanded.value;
+  if (expanded.value && !subtasks.value.length) {
+    loadingSubs.value = true;
+    try {
+      const data = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${props.task.id}`);
+      subtasks.value = data.subtasks || [];
+    } finally {
+      loadingSubs.value = false;
+    }
+  }
+}
+
+async function handleSubToggle(sub: Task) {
+  const u = await toggleComplete(sub.id);
+  const i = subtasks.value.findIndex(s => s.id === sub.id);
+  if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u };
+}
+
 function formatDue(dateStr: string) { const d = new Date(dateStr); const now = new Date(); const days = Math.ceil((d.getTime()-now.getTime())/86400000); if (days<0) return `${Math.abs(days)}d overdue`; if (days===0) return 'Today'; if (days===1) return 'Tomorrow'; if (days<7) return `${days}d`; return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 </script>

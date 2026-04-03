@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event);
   const { source_type, source_id, target_type, target_id } = body;
 
-  if (!['task', 'note'].includes(source_type) || !['task', 'note'].includes(target_type)) {
+  if (!['task', 'note', 'diary'].includes(source_type) || !['task', 'note', 'diary'].includes(target_type)) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid type' });
   }
   if (!source_id || !target_id) throw createError({ statusCode: 400, statusMessage: 'IDs required' });

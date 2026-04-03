@@ -69,6 +69,63 @@ export function useDB() {
         )
       `);
 
+      await connection.run(`
+        CREATE TABLE IF NOT EXISTS diary_entries (
+          id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          workspace_id VARCHAR DEFAULT NULL,
+          entry_date DATE NOT NULL,
+          content TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+          updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+        )
+      `);
+
+      await connection.run(`
+        CREATE TABLE IF NOT EXISTS event_log (
+          id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          event_type VARCHAR NOT NULL,
+          method VARCHAR NOT NULL,
+          path VARCHAR NOT NULL,
+          entity_type VARCHAR,
+          entity_id VARCHAR,
+          workspace_id VARCHAR,
+          metadata TEXT DEFAULT '{}',
+          user_agent VARCHAR,
+          created_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+        )
+      `);
+
+      // Add display_id column to tasks and notes (migration)
+      try { await connection.run("ALTER TABLE tasks ADD COLUMN display_id VARCHAR DEFAULT ''"); } catch {}
+      try { await connection.run("ALTER TABLE notes ADD COLUMN display_id VARCHAR DEFAULT ''"); } catch {}
+
+      // Backfill empty display_ids with a short id derived from existing data
+      const emptyTasks = await connection.runAndReadAll(
+        "SELECT id, title, tags, parent_id FROM tasks WHERE display_id = '' OR display_id IS NULL"
+      );
+      for (const row of emptyTasks.getRowObjectsJson()) {
+        const title = (row.title as string) || 'task';
+        const tags: string[] = Array.isArray(row.tags) ? row.tags : [];
+        const prefix = title.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toLowerCase().padEnd(3, 'x');
+        const tagPart = tags.length ? (tags[0] as string).replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toLowerCase().padEnd(2, 'x') : 'xx';
+        const shortId = (row.id as string).slice(0, 4);
+        const displayId = prefix + tagPart + shortId;
+        await connection.run(`UPDATE tasks SET display_id = '${displayId}' WHERE id = '${row.id}'`);
+      }
+
+      const emptyNotes = await connection.runAndReadAll(
+        "SELECT id, title, tags FROM notes WHERE display_id = '' OR display_id IS NULL"
+      );
+      for (const row of emptyNotes.getRowObjectsJson()) {
+        const title = (row.title as string) || 'note';
+        const tags: string[] = Array.isArray(row.tags) ? row.tags : [];
+        const prefix = title.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toLowerCase().padEnd(3, 'x');
+        const tagPart = tags.length ? (tags[0] as string).replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toLowerCase().padEnd(2, 'x') : 'xx';
+        const shortId = (row.id as string).slice(0, 4);
+        const displayId = prefix + tagPart + shortId;
+        await connection.run(`UPDATE notes SET display_id = '${displayId}' WHERE id = '${row.id}'`);
+      }
+
       // Seed default workspaces if empty
       const wsCount = await connection.runAndReadAll('SELECT count(*)::INTEGER as c FROM workspaces');
       const count = wsCount.getRowObjectsJson()[0]?.c;

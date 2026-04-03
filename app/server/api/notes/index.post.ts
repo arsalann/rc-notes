@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { generateNoteDisplayId } from '~/server/utils/ids';
 import { listValue, VARCHAR, LIST } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -10,10 +11,12 @@ export default defineEventHandler(async (event) => {
 
   if (!title) throw createError({ statusCode: 400, statusMessage: 'Title is required' });
 
-  const cols = ['id', 'title', 'content', 'tags'];
-  const vals = ['uuid()::VARCHAR', '$title', '$content', '$tags'];
-  const params: Record<string, any> = { title, content, tags: listValue(tags) };
-  const types: Record<string, any> = { title: VARCHAR, content: VARCHAR, tags: LIST(VARCHAR) };
+  const displayId = await generateNoteDisplayId(title, tags);
+
+  const cols = ['id', 'title', 'content', 'tags', 'display_id'];
+  const vals = ['uuid()::VARCHAR', '$title', '$content', '$tags', '$display_id'];
+  const params: Record<string, any> = { title, content, tags: listValue(tags), display_id: displayId };
+  const types: Record<string, any> = { title: VARCHAR, content: VARCHAR, tags: LIST(VARCHAR), display_id: VARCHAR };
 
   if (workspaceId) {
     cols.push('workspace_id');
