@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  SINGLE DIM THEME — based on Tailwind zinc dark palette
+  Body:    zinc-900  #18181b
+  Card:    zinc-800  #27272a
+  Input:   zinc-700  #3f3f46
+  Border:  zinc-600  #52525b
+  Text:    zinc-50   #fafafa
+  Muted:   zinc-400  #a1a1aa
+  Faint:   zinc-500  #71717a
+  Accent:  teal-400  #2dd4bf
+*/
+
+@layer base {
+  html {
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #18181b;
+    color: #fafafa;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* Accent */
+  .accent-text {
+    color: #2dd4bf;
+  }
+  .accent-bg {
+    background-color: #0d9488;
+  }
+
+  /* Surfaces — clear visual hierarchy */
+  .surface-card {
+    background-color: #27272a;
+    border: 1px solid #3f3f46;
+  }
+  .surface-input {
+    background-color: #3f3f46;
+    color: #fafafa;
+  }
+  .surface-overlay {
+    background-color: #27272a;
+    border: 1px solid #52525b;
+  }
+
+  /* Text hierarchy */
+  .text-muted {
+    color: #a1a1aa;
+  }
+  .text-faint {
+    color: #71717a;
+  }
+
+  /* Shared button base */
+  .btn-tap {
+    @apply active:scale-[0.97] transition-all duration-150;
+  }
+  .btn-primary {
+    @apply px-4 py-2.5 text-sm font-semibold text-white rounded-xl btn-tap disabled:opacity-40;
+    background-color: #0d9488;
+  }
+  .btn-secondary {
+    @apply px-4 py-2.5 text-sm font-medium rounded-xl btn-tap;
+    background-color: #3f3f46;
+    color: #fafafa;
+  }
+  .btn-danger {
+    @apply px-4 py-2.5 text-sm font-semibold text-white rounded-xl btn-tap;
+    background-color: #b91c1c;
+  }
+
+  /* Touch target */
+  .touch-target {
+    @apply min-w-[44px] min-h-[44px] flex items-center justify-center;
+  }
+
+  /* Section label */
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider;
+    color: #71717a;
+  }
+
+  /* Checkbox (unchecked) */
+  .checkbox-unchecked {
+    border: 2px solid #71717a;
+  }
+  .checkbox-checked {
+    border: 2px solid #14b8a6;
+    background-color: #14b8a6;
+  }
+
+  /* Divider */
+  .divider {
+    border-top: 1px solid #3f3f46;
+  }
+
+  /* Tag */
+  .tag {
+    @apply px-2 py-0.5 text-[11px] rounded-md;
+    background-color: #3f3f46;
+    color: #d4d4d8;
+  }
+
+  /* Badge */
+  .badge-task {
+    @apply text-[11px] px-1.5 py-0.5 rounded font-medium;
+    background-color: #134e4a;
+    color: #5eead4;
+  }
+  .badge-note {
+    @apply text-[11px] px-1.5 py-0.5 rounded font-medium;
+    background-color: #3f3f46;
+    color: #d4d4d8;
+  }
+}
+
+/* Page transitions */
+.page-enter-active, .page-leave-active { transition: opacity 0.15s ease; }
+.page-enter-from, .page-leave-to { opacity: 0; }
+
+textarea { field-sizing: content; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
