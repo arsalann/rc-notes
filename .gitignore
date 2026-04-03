@@ -1,0 +1,10 @@
+.bruin.yml
+data/
+node_modules/
+.nuxt/
+.output/
+.context/
+logs/runs
+logs/*.log
+__pycache__/
+*.py[cod]
