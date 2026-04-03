@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -12,6 +13,20 @@ export default defineEventHandler(async (event) => {
 
   if (!title) throw createError({ statusCode: 400, statusMessage: 'Title is required' });
 
+  // Generate display_id
+  let displayId: string;
+  if (parentId) {
+    // Get parent's display_id
+    const parentRows = await queryAll(
+      'SELECT display_id FROM tasks WHERE id = $pid',
+      { pid: parentId }, { pid: VARCHAR }
+    );
+    const parentDisplayId = parentRows[0]?.display_id || parentId.slice(0, 8);
+    displayId = await generateSubtaskDisplayId(parentDisplayId, parentId);
+  } else {
+    displayId = await generateTaskDisplayId(title, tags);
+  }
+
   const posQuery = parentId
     ? 'SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_id = $pid'
     : 'SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_id IS NULL';
@@ -20,10 +35,10 @@ export default defineEventHandler(async (event) => {
   const posRows = await queryAll(posQuery, posParams, posTypes);
   const position = posRows[0]?.next_pos ?? 0;
 
-  const cols = ['id', 'title', 'description', 'tags', 'position'];
-  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position'];
-  const params: Record<string, any> = { title, description, tags: listValue(tags), position };
-  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER };
+  const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id'];
+  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id'];
+  const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId };
+  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR };
 
   if (parentId) {
     cols.push('parent_id');

@@ -1,49 +1,50 @@
 <template>
   <div class="px-4">
-    <div class="surface-card rounded-2xl overflow-hidden transition-all duration-200" :style="expanded ? 'border-color:#14b8a6' : ''">
-      <div class="flex items-center gap-2 px-4 py-3">
-        <svg class="w-5 h-5 text-faint flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-        <input ref="titleRef" v-model="title" :placeholder="placeholder" class="flex-1 bg-transparent outline-none text-[15px]"
+    <UCard :ui="{ body: 'sm:p-0' }" :class="expanded && 'ring-(--ui-primary)'">
+      <div class="flex items-center gap-2.5 px-4 py-3">
+        <UIcon name="i-lucide-plus" class="size-5 text-(--ui-text-dimmed) shrink-0" />
+        <input ref="titleRef" v-model="title" :placeholder="placeholder"
+          class="flex-1 bg-transparent outline-none text-sm placeholder:text-(--ui-text-dimmed)"
           @focus="expanded = true" @keydown.enter.prevent="submit" @keydown.escape="collapse" />
       </div>
-      <div v-if="expanded" class="px-4 pb-4 space-y-3">
-        <div class="flex items-center gap-2">
-          <button @click="showDatePicker = !showDatePicker" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors btn-tap"
-            :class="dueAt ? 'accent-bg text-white' : 'text-muted'" :style="!dueAt ? 'background-color:#3f3f46' : ''">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
-            {{ dueAt ? formatDate(dueAt) : 'Due date' }}
-          </button>
-          <button v-if="dueAt" @click="dueAt = ''" class="touch-target text-faint"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
-        </div>
-        <div v-if="showDatePicker" class="flex gap-2 flex-wrap">
-          <button v-for="opt in dateShortcuts" :key="opt.label" @click="dueAt = opt.value; showDatePicker = false"
-            class="px-3 py-1.5 text-[12px] font-medium rounded-lg text-muted btn-tap" style="background-color:#3f3f46">{{ opt.label }}</button>
-          <input type="datetime-local" @change="dueAt = ($event.target as HTMLInputElement).value; showDatePicker = false"
-            class="px-3 py-1.5 text-[12px] rounded-lg text-muted outline-none" style="background-color:#3f3f46" />
-        </div>
-        <div v-if="subtasks.length || showSubtaskInput" class="space-y-1.5">
-          <div v-for="(sub, i) in subtasks" :key="i" class="flex items-center gap-2 pl-1">
-            <div class="w-4 h-4 rounded-full checkbox-unchecked flex-shrink-0" />
-            <span class="text-[13px] flex-1">{{ sub }}</span>
-            <button @click="subtasks.splice(i, 1)" class="touch-target text-faint"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button>
+      <template v-if="expanded">
+        <USeparator />
+        <div class="px-4 py-3 space-y-3">
+          <div class="flex items-center gap-2">
+            <UButton :color="dueAt ? 'primary' : 'neutral'" variant="soft" size="xs" icon="i-lucide-calendar"
+              @click="showDatePicker = !showDatePicker">
+              {{ dueAt ? formatDate(dueAt) : 'Due date' }}
+            </UButton>
+            <UButton v-if="dueAt" color="neutral" variant="ghost" size="xs" icon="i-lucide-x" @click="dueAt = ''" />
           </div>
-          <div v-if="showSubtaskInput" class="flex items-center gap-2 pl-1">
-            <div class="w-4 h-4 rounded-full flex-shrink-0" style="border:2px dashed #71717a" />
-            <input ref="subtaskRef" v-model="newSubtask" placeholder="Subtask title" class="flex-1 text-[13px] bg-transparent outline-none text-muted"
-              @keydown.enter.prevent="addSubtask" @keydown.escape="showSubtaskInput = false" />
+          <div v-if="showDatePicker" class="flex gap-2 flex-wrap">
+            <UButton v-for="opt in dateShortcuts" :key="opt.label" color="neutral" variant="soft" size="xs"
+              @click="dueAt = opt.value; showDatePicker = false">{{ opt.label }}</UButton>
+            <input type="datetime-local" @change="dueAt = ($event.target as HTMLInputElement).value; showDatePicker = false"
+              class="px-2 py-1 text-xs rounded-md bg-(--ui-bg-elevated) text-(--ui-text-muted) outline-none" />
+          </div>
+          <div v-if="subtasks.length || showSubtaskInput" class="space-y-1.5">
+            <div v-for="(sub, i) in subtasks" :key="i" class="flex items-center gap-2 pl-1">
+              <UCheckbox disabled />
+              <span class="text-xs flex-1">{{ sub }}</span>
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" @click="subtasks.splice(i, 1)" />
+            </div>
+            <div v-if="showSubtaskInput" class="flex items-center gap-2 pl-1">
+              <UIcon name="i-lucide-circle-dashed" class="size-4 text-(--ui-text-dimmed)" />
+              <input ref="subtaskRef" v-model="newSubtask" placeholder="Subtask title"
+                class="flex-1 text-xs bg-transparent outline-none text-(--ui-text-muted)"
+                @keydown.enter.prevent="addSubtask" @keydown.escape="showSubtaskInput = false" />
+            </div>
+          </div>
+          <UButton v-if="!showSubtaskInput" color="neutral" variant="ghost" size="xs" icon="i-lucide-plus"
+            @click="showSubtaskInput = true; nextTick(() => subtaskRef?.focus())">Add subtask</UButton>
+          <div class="flex items-center justify-between pt-1">
+            <UButton color="neutral" variant="ghost" size="xs" @click="collapse">Cancel</UButton>
+            <UButton color="primary" size="xs" :disabled="!title.trim()" @click="submit">Add Task</UButton>
           </div>
         </div>
-        <button v-if="!showSubtaskInput" @click="showSubtaskInput = true; nextTick(() => subtaskRef?.focus())"
-          class="flex items-center gap-1.5 text-[13px] text-muted font-medium btn-tap pl-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-          Add subtask
-        </button>
-        <div class="flex items-center justify-between pt-1">
-          <button @click="collapse" class="text-[13px] text-muted font-medium btn-tap px-2 py-1">Cancel</button>
-          <button @click="submit" :disabled="!title.trim()" class="btn-primary text-[13px] px-5 py-2">Add Task</button>
-        </div>
-      </div>
-    </div>
+      </template>
+    </UCard>
   </div>
 </template>
 

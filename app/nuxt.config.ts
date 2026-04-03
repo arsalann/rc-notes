@@ -1,7 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   ssr: false,
-  modules: ['@nuxtjs/tailwindcss'],
+  modules: ['@nuxt/ui'],
 
   app: {
     head: {
@@ -10,7 +10,7 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'theme-color', content: '#18181b' },
+        { name: 'theme-color', content: '#042f2e' },
       ],
       link: [
         { rel: 'manifest', href: '/manifest.json' },
@@ -20,8 +20,17 @@ export default defineNuxtConfig({
     pageTransition: { name: 'page', mode: 'out-in' },
   },
 
-  tailwindcss: {
-    configPath: './tailwind.config.ts',
+  css: ['~/assets/css/main.css'],
+
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark',
+  },
+
+  ui: {
+    theme: {
+      colors: ['teal', 'purple', 'zinc'],
+    },
   },
 
   nitro: {
@@ -35,6 +44,12 @@ export default defineNuxtConfig({
     },
     rollupConfig: {
       external: ['@duckdb/node-api'],
+    },
+  },
+
+  vite: {
+    optimizeDeps: {
+      include: ['vuedraggable'],
     },
   },
 

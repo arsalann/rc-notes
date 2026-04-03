@@ -18,20 +18,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const tasks = await queryAll(`
-    SELECT id, 'task' as type, title, description as detail, completed, pinned, due_at, tags, updated_at
+    SELECT id, display_id, 'task' as type, title, description as detail, completed, pinned, due_at, tags, updated_at
     FROM tasks
     WHERE archived = false AND parent_id IS NULL ${wsFilter}
-      AND (title ILIKE $term OR description ILIKE $term)
+      AND (title ILIKE $term OR description ILIKE $term OR display_id ILIKE $term)
     ORDER BY updated_at DESC LIMIT 25
   `, params, types);
 
   const notes = await queryAll(`
-    SELECT id, 'note' as type, title,
+    SELECT id, display_id, 'note' as type, title,
       CASE WHEN length(content) > 100 THEN substring(content, 1, 100) || '...' ELSE content END as detail,
       false as completed, pinned, NULL as due_at, tags, updated_at
     FROM notes
     WHERE archived = false ${wsFilter}
-      AND (title ILIKE $term OR content ILIKE $term)
+      AND (title ILIKE $term OR content ILIKE $term OR display_id ILIKE $term)
     ORDER BY updated_at DESC LIMIT 25
   `, params, types);
 

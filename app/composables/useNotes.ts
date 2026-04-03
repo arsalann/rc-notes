@@ -1,5 +1,6 @@
 export interface Task {
   id: string;
+  display_id: string;
   workspace_id: string | null;
   parent_id: string | null;
   title: string;
@@ -20,6 +21,7 @@ export interface Task {
 
 export interface Note {
   id: string;
+  display_id: string;
   workspace_id: string | null;
   title: string;
   content: string;

@@ -1,8 +1,11 @@
 <template>
-  <div class="min-h-screen pb-20">
-    <NuxtPage />
-    <BottomNav />
-  </div>
+  <UApp>
+    <div class="min-h-screen pb-36">
+      <NuxtPage />
+      <BottomNav />
+    </div>
+    <UToaster />
+  </UApp>
 </template>
 
 <script setup lang="ts">
