@@ -2,29 +2,33 @@
 
 ## Project Context
 - This is a mobile-first **todo/reminder + notes app** called **rc-notes**
-- Core features: tasks with subtasks, notes with @-mention linking, workspaces, 5-day calendar
-- Tech: Nuxt 3 (SPA) + Tailwind CSS + DuckDB + Bruin CLI
-- Runs on localhost, no auth needed
+- Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar
+- Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + MotherDuck (cloud DuckDB) + Bruin CLI
+- Runs on localhost, no auth needed (yet — schema has user_id/user_name columns ready)
 - Primary use: phone browser
 
 ## Key File Locations
 - `PLAN.md` — full requirements, schema, API reference, known issues
-- `.bruin.yml` — Bruin pipeline config (root)
+- `.bruin.yml` — Bruin pipeline config (root, gitignored — contains MotherDuck connection)
+- `app/.env` — `MOTHERDUCK_NOTEBOOK_RC` token (gitignored)
 - `pipeline/` — Bruin SQL assets
-- `app/` — Nuxt 3 application
-- `app/server/utils/db.ts` — DuckDB singleton + schema init (critical file)
+- `app/` — Nuxt 4 application
+- `app/server/utils/db.ts` — MotherDuck/DuckDB singleton + schema init + migrations (critical file)
 - `app/server/api/tasks/` — Task CRUD endpoints
 - `app/server/api/notes/` — Notes CRUD endpoints
 - `app/composables/useNotes.ts` — exports `useTasks()`, `useNotesCrud()`, `Task`, `Note` types
 - `app/composables/useWorkspace.ts` — workspace state management
-- `app/assets/css/main.css` — single dim theme, all CSS utility classes defined here
-- `data/notes.db` — DuckDB database file (gitignored)
+- `app/assets/css/main.css` — theme, all CSS utility classes defined here
 
 ## Data Model
-- **workspaces**: filter-based labels (Personal, Work seeded by default)
-- **tasks**: parent_id for subtasks, workspace_id, completed/completed_at, due_at, position, tags[]
-- **notes**: workspace_id, title/content, tags[]
+All content tables include `user_id` and `user_name` for future multi-user support.
+
+- **workspaces**: filter-based labels (Personal, Work seeded by default), with description, color, archived, updated_at
+- **tasks**: parent_id for subtasks, workspace_id, display_id, status, priority, completed/completed_at, due_at, reminder_at, deleted_at, position, tags[]
+- **notes**: workspace_id, display_id, title/content, deleted_at, tags[]
 - **links**: bidirectional links between tasks and notes (source_type/id ↔ target_type/id)
+- **diary_entries**: workspace_id, entry_date, content, deleted_at
+- **event_log**: audit log of all API actions with user_id, user_name
 
 ## Color System — CRITICAL
 The app uses a **single dim theme** with NO light/dark mode toggle. All colors are defined in `app/assets/css/main.css` as CSS utility classes.
@@ -52,6 +56,13 @@ The app uses a **single dim theme** with NO light/dark mode toggle. All colors a
 
 **DO NOT use Tailwind `dark:` prefix** — there is no dark mode toggle. DO NOT use `bg-white`, `bg-zinc-50`, `bg-zinc-100`, `text-zinc-900`, or any light-mode Tailwind classes. These will render as white/light on the dark body and look broken.
 
+## Database Connection
+- **MotherDuck** (cloud): set `MOTHERDUCK_NOTEBOOK_RC` env var → `db.ts` does `INSTALL motherduck; LOAD motherduck; ATTACH 'md:'; CREATE DATABASE IF NOT EXISTS rc_notes; USE rc_notes`
+- **Local fallback**: without the env var, uses local file at `data/notes.db`
+- All 29 API endpoints use `queryAll()` / `execute()` from `db.ts` — they don't know about MotherDuck vs local
+- Migrations use `ALTER TABLE ... ADD COLUMN` wrapped in try/catch (idempotent)
+- MotherDuck adds ~50-200ms latency per query vs <5ms local — acceptable for this app's dataset size
+
 ## DuckDB Node API
 - Always provide **explicit types** for all params: `VARCHAR`, `BOOLEAN`, `INTEGER`, `LIST(VARCHAR)`
 - Import types from `@duckdb/node-api`
@@ -75,9 +86,15 @@ The app uses a **single dim theme** with NO light/dark mode toggle. All colors a
 
 ## Bruin
 - Run from project root, not from `app/`
-- DB path in `.bruin.yml`: `data/notes.db`
-- Nuxt resolves: `resolve(process.cwd(), '..', 'data', 'notes.db')`
+- `.bruin.yml` at project root references `md:rc_notes` (MotherDuck) via `MOTHERDUCK_NOTEBOOK_RC` env var
 - `bruin validate pipeline/` then `bruin run pipeline/`
+
+## Home Page (Tasks) UI
+- Two independent toolbar controls: **order-by** (newest / due date) and **group-by** (none / workspace / tag)
+- Default view: group by workspace + order newest
+- Workspace groups use drag-and-drop (via `vuedraggable` with `@change` event, NOT `@end`) to move tasks between workspaces
+- Flat list uses drag handles for reordering
+- Empty workspace groups are hidden
 
 ## User Preferences
 - Keep things simple — this is a personal tool

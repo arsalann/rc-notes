@@ -1,15 +1,21 @@
 export interface Task {
   id: string;
   display_id: string;
+  user_id: string | null;
+  user_name: string | null;
   workspace_id: string | null;
   parent_id: string | null;
   title: string;
   description: string;
+  status: string;
+  priority: number;
   completed: boolean;
   completed_at: string | null;
   pinned: boolean;
   archived: boolean;
+  deleted_at: string | null;
   due_at: string | null;
+  reminder_at: string | null;
   tags: string[];
   position: number;
   created_at: string;
@@ -22,12 +28,15 @@ export interface Task {
 export interface Note {
   id: string;
   display_id: string;
+  user_id: string | null;
+  user_name: string | null;
   workspace_id: string | null;
   title: string;
   content: string;
   preview?: string;
   pinned: boolean;
   archived: boolean;
+  deleted_at: string | null;
   tags: string[];
   created_at: string;
   updated_at: string;

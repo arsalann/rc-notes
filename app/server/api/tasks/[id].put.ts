@@ -48,6 +48,15 @@ export default defineEventHandler(async (event) => {
       types.due_at = VARCHAR;
     }
   }
+  if (body.workspace_id !== undefined) {
+    if (body.workspace_id === null) {
+      sets.push('workspace_id = NULL');
+    } else {
+      sets.push('workspace_id = $workspace_id');
+      params.workspace_id = body.workspace_id;
+      types.workspace_id = VARCHAR;
+    }
+  }
 
   if (!sets.length) {
     throw createError({ statusCode: 400, statusMessage: 'No fields to update' });

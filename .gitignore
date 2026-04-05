@@ -1,4 +1,5 @@
 .bruin.yml
+.env
 data/
 node_modules/
 .nuxt/
