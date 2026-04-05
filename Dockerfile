@@ -19,9 +19,6 @@ COPY --from=builder /app/.output .output
 COPY --from=builder /app/node_modules/@duckdb node_modules/@duckdb
 COPY --from=builder /app/node_modules/.duckdb node_modules/.duckdb
 
-# Persistent volume for config and local DB fallback
-VOLUME /app/data
-
 EXPOSE 3000
 
 ENV HOST=0.0.0.0
