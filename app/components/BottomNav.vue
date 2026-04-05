@@ -71,6 +71,7 @@ const items = [
   { to: '/notes', label: 'Notes', icon: 'i-lucide-file-text' },
   { to: '/diary', label: 'Diary', icon: 'i-lucide-book-open' },
   { to: '/calendar', label: 'Calendar', icon: 'i-lucide-calendar' },
+  { to: '/settings', label: 'Settings', icon: 'i-lucide-settings' },
 ];
 function isActive(path: string) { if (path === '/') return route.path === '/'; return route.path.startsWith(path); }
 

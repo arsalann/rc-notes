@@ -1,17 +1,26 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import { resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { getMotherDuckToken } from '~/server/utils/config';
 
 let connectionPromise: Promise<any> | null = null;
+
+export function resetConnection() {
+  connectionPromise = null;
+}
 
 export function useDB() {
   if (!connectionPromise) {
     connectionPromise = (async () => {
-      const token = process.env.MOTHERDUCK_NOTEBOOK_RC;
+      const token = getMotherDuckToken();
       let connection;
 
       if (token) {
         // MotherDuck cloud mode
+        // Validate token chars to prevent injection in SET command
+        if (!/^[a-zA-Z0-9_\-.:=]+$/.test(token)) {
+          throw new Error('Invalid MotherDuck token format');
+        }
         const instance = await DuckDBInstance.create();
         connection = await instance.connect();
         await connection.run('INSTALL motherduck');
