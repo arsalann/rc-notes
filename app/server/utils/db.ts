@@ -7,36 +7,65 @@ let connectionPromise: Promise<any> | null = null;
 export function useDB() {
   if (!connectionPromise) {
     connectionPromise = (async () => {
-      const dataDir = resolve(process.cwd(), '..', 'data');
-      if (!existsSync(dataDir)) {
-        mkdirSync(dataDir, { recursive: true });
+      const token = process.env.MOTHERDUCK_NOTEBOOK_RC;
+      let connection;
+
+      if (token) {
+        // MotherDuck cloud mode
+        const instance = await DuckDBInstance.create();
+        connection = await instance.connect();
+        await connection.run('INSTALL motherduck');
+        await connection.run('LOAD motherduck');
+        await connection.run(`SET motherduck_token = '${token}'`);
+        await connection.run(`ATTACH 'md:'`);
+        await connection.run(`CREATE DATABASE IF NOT EXISTS rc_notes`);
+        await connection.run('USE rc_notes');
+      } else {
+        // Local file fallback
+        const dataDir = resolve(process.cwd(), '..', 'data');
+        if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+        const dbPath = process.env.DUCKDB_PATH || resolve(dataDir, 'notes.db');
+        const instance = await DuckDBInstance.create(dbPath);
+        connection = await instance.connect();
       }
-      const dbPath = process.env.DUCKDB_PATH || resolve(dataDir, 'notes.db');
-      const instance = await DuckDBInstance.create(dbPath);
-      const connection = await instance.connect();
+
+      // --- Schema ---
 
       await connection.run(`
         CREATE TABLE IF NOT EXISTS workspaces (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          user_id VARCHAR DEFAULT NULL,
+          user_name VARCHAR DEFAULT NULL,
           name VARCHAR NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
           emoji VARCHAR NOT NULL DEFAULT '',
+          color VARCHAR DEFAULT NULL,
           position INTEGER NOT NULL DEFAULT 0,
-          created_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+          archived BOOLEAN NOT NULL DEFAULT false,
+          created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+          updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
         )
       `);
 
       await connection.run(`
         CREATE TABLE IF NOT EXISTS tasks (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          display_id VARCHAR NOT NULL DEFAULT '',
+          user_id VARCHAR DEFAULT NULL,
+          user_name VARCHAR DEFAULT NULL,
           workspace_id VARCHAR DEFAULT NULL,
           parent_id VARCHAR DEFAULT NULL,
           title VARCHAR NOT NULL DEFAULT '',
           description TEXT NOT NULL DEFAULT '',
+          status VARCHAR NOT NULL DEFAULT 'open',
+          priority INTEGER NOT NULL DEFAULT 0,
           completed BOOLEAN NOT NULL DEFAULT false,
           completed_at TIMESTAMP DEFAULT NULL,
           pinned BOOLEAN NOT NULL DEFAULT false,
           archived BOOLEAN NOT NULL DEFAULT false,
+          deleted_at TIMESTAMP DEFAULT NULL,
           due_at TIMESTAMP DEFAULT NULL,
+          reminder_at TIMESTAMP DEFAULT NULL,
           tags VARCHAR[] NOT NULL DEFAULT [],
           position INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
@@ -47,11 +76,15 @@ export function useDB() {
       await connection.run(`
         CREATE TABLE IF NOT EXISTS notes (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          display_id VARCHAR NOT NULL DEFAULT '',
+          user_id VARCHAR DEFAULT NULL,
+          user_name VARCHAR DEFAULT NULL,
           workspace_id VARCHAR DEFAULT NULL,
           title VARCHAR NOT NULL DEFAULT '',
           content TEXT NOT NULL DEFAULT '',
           pinned BOOLEAN NOT NULL DEFAULT false,
           archived BOOLEAN NOT NULL DEFAULT false,
+          deleted_at TIMESTAMP DEFAULT NULL,
           tags VARCHAR[] NOT NULL DEFAULT [],
           created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
           updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
@@ -61,6 +94,7 @@ export function useDB() {
       await connection.run(`
         CREATE TABLE IF NOT EXISTS links (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          user_id VARCHAR DEFAULT NULL,
           source_type VARCHAR NOT NULL,
           source_id VARCHAR NOT NULL,
           target_type VARCHAR NOT NULL,
@@ -72,9 +106,12 @@ export function useDB() {
       await connection.run(`
         CREATE TABLE IF NOT EXISTS diary_entries (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          user_id VARCHAR DEFAULT NULL,
+          user_name VARCHAR DEFAULT NULL,
           workspace_id VARCHAR DEFAULT NULL,
           entry_date DATE NOT NULL,
           content TEXT NOT NULL DEFAULT '',
+          deleted_at TIMESTAMP DEFAULT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
           updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
         )
@@ -83,6 +120,8 @@ export function useDB() {
       await connection.run(`
         CREATE TABLE IF NOT EXISTS event_log (
           id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+          user_id VARCHAR DEFAULT NULL,
+          user_name VARCHAR DEFAULT NULL,
           event_type VARCHAR NOT NULL,
           method VARCHAR NOT NULL,
           path VARCHAR NOT NULL,
@@ -95,9 +134,37 @@ export function useDB() {
         )
       `);
 
-      // Add display_id column to tasks and notes (migration)
-      try { await connection.run("ALTER TABLE tasks ADD COLUMN display_id VARCHAR DEFAULT ''"); } catch {}
-      try { await connection.run("ALTER TABLE notes ADD COLUMN display_id VARCHAR DEFAULT ''"); } catch {}
+      // --- Migrations (for existing databases) ---
+      const migrate = async (sql: string) => { try { await connection.run(sql); } catch {} };
+
+      // v1: display_id
+      await migrate("ALTER TABLE tasks ADD COLUMN display_id VARCHAR DEFAULT ''");
+      await migrate("ALTER TABLE notes ADD COLUMN display_id VARCHAR DEFAULT ''");
+
+      // v2: user_id, user_name on all tables
+      await migrate("ALTER TABLE workspaces ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE workspaces ADD COLUMN user_name VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE tasks ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE tasks ADD COLUMN user_name VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE notes ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE notes ADD COLUMN user_name VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE links ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE diary_entries ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE diary_entries ADD COLUMN user_name VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN user_id VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN user_name VARCHAR DEFAULT NULL");
+
+      // v2: additional standard columns
+      await migrate("ALTER TABLE workspaces ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+      await migrate("ALTER TABLE workspaces ADD COLUMN color VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE workspaces ADD COLUMN archived BOOLEAN NOT NULL DEFAULT false");
+      await migrate("ALTER TABLE workspaces ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp");
+      await migrate("ALTER TABLE tasks ADD COLUMN status VARCHAR NOT NULL DEFAULT 'open'");
+      await migrate("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0");
+      await migrate("ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
+      await migrate("ALTER TABLE tasks ADD COLUMN reminder_at TIMESTAMP DEFAULT NULL");
+      await migrate("ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
+      await migrate("ALTER TABLE diary_entries ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
 
       // Backfill empty display_ids with a short id derived from existing data
       const emptyTasks = await connection.runAndReadAll(

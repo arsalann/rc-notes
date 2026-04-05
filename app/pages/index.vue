@@ -12,20 +12,21 @@
           Done
         </UButton>
         <USeparator orientation="vertical" class="h-4" />
-        <UButton :color="sortMode === 'created' ? 'primary' : 'neutral'" :variant="sortMode === 'created' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-clock" @click="sortMode = 'created'">
+        <UButton :color="orderBy === 'created' ? 'primary' : 'neutral'" :variant="orderBy === 'created' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-clock" @click="orderBy = 'created'">
           Newest
         </UButton>
-        <UButton :color="sortMode === 'due' ? 'primary' : 'neutral'" :variant="sortMode === 'due' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-calendar" @click="sortMode = 'due'">
+        <UButton :color="orderBy === 'due' ? 'primary' : 'neutral'" :variant="orderBy === 'due' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-calendar" @click="orderBy = 'due'">
           Due date
         </UButton>
-        <UButton :color="sortMode === 'tag' ? 'primary' : 'neutral'" :variant="sortMode === 'tag' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-tags" @click="sortMode = sortMode === 'tag' ? 'created' : 'tag'">
+        <USeparator orientation="vertical" class="h-4" />
+        <UButton :color="groupBy === 'tag' ? 'primary' : 'neutral'" :variant="groupBy === 'tag' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'">
           By tag
         </UButton>
-        <UButton :color="sortMode === 'workspace' ? 'primary' : 'neutral'" :variant="sortMode === 'workspace' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-folder" @click="sortMode = sortMode === 'workspace' ? 'created' : 'workspace'">
+        <UButton :color="groupBy === 'workspace' ? 'primary' : 'neutral'" :variant="groupBy === 'workspace' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'">
           By space
         </UButton>
       </div>
@@ -36,29 +37,37 @@
     <div v-if="loading" class="px-4 mt-4 space-y-3">
       <USkeleton v-for="i in 4" :key="i" class="h-18 w-full" />
     </div>
-    <template v-else-if="filteredTasks.length">
+    <template v-else-if="sortedTasks.length">
       <!-- Grouped by workspace (draggable between groups) -->
-      <template v-if="sortMode === 'workspace'">
-        <div v-for="group in workspaceGroupsLive" :key="group.wsId ?? '__none__'" class="px-4 mt-4">
+      <template v-if="groupBy === 'workspace'">
+        <div v-for="group in workspaceGroupsLive.filter(g => g.tasks.length)" :key="group.wsId ?? '__none__'" class="px-4 mt-4">
           <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
           <draggable
             :list="group.tasks"
-            group="workspace-tasks"
+            :group="{ name: 'workspace-tasks', pull: true, put: true }"
             item-key="id"
             :animation="200"
             ghost-class="opacity-30"
             drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+            handle=".drag-handle"
             class="space-y-2.5 min-h-8"
-            @end="(e: any) => handleWorkspaceDrop(e, group.wsId)">
+            @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
             <template #item="{ element }">
-              <TaskItem :task="element" @toggle="handleToggle" />
+              <div class="flex items-start gap-1">
+                <div class="drag-handle cursor-grab active:cursor-grabbing pt-4 px-1 text-(--ui-text-dimmed) hover:text-(--ui-text-muted) transition-colors">
+                  <UIcon name="i-lucide-grip-vertical" class="size-4" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <TaskItem :task="element" @toggle="handleToggle" />
+                </div>
+              </div>
             </template>
           </draggable>
         </div>
         <div class="pb-6" />
       </template>
       <!-- Grouped by tag -->
-      <template v-else-if="sortMode === 'tag'">
+      <template v-else-if="groupBy === 'tag'">
         <div v-for="group in tagGroups" :key="group.label" class="px-4 mt-4">
           <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
           <div class="space-y-2.5">
@@ -103,40 +112,45 @@ const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask } = u
 const { activeId, workspaces } = useWorkspace();
 
 const showDone = ref(true);
-const sortMode = ref<'created' | 'due' | 'tag' | 'workspace'>('created');
+const orderBy = ref<'created' | 'due'>('created');
+const groupBy = ref<'none' | 'workspace' | 'tag'>('workspace');
 
 async function load() { await fetchTasks({ workspace_id: activeId.value }); }
 onMounted(load); watch(activeId, load);
 
+// Step 1: filter
 const filteredTasks = computed(() => {
   let list = tasks.value;
   if (!showDone.value) list = list.filter(t => !t.completed);
+  return list;
+});
 
-  if (sortMode.value === 'due') {
-    return [...list].sort((a, b) => {
+// Step 2: sort (applied independently of grouping)
+const sortedTasks = computed(() => {
+  const list = [...filteredTasks.value];
+  if (orderBy.value === 'due') {
+    return list.sort((a, b) => {
       if (!a.due_at && !b.due_at) return 0;
       if (!a.due_at) return 1;
       if (!b.due_at) return -1;
       return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
     });
   }
-  if (sortMode.value === 'created') {
-    return [...list].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }
-  return list;
+  // 'created' — incomplete first, pinned first, then newest
+  return list.sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 });
 
 // Mutable copy for flat-list drag reorder
 const draggableTasks = ref<Task[]>([]);
-watch(filteredTasks, (val) => { draggableTasks.value = [...val]; }, { immediate: true });
+watch(sortedTasks, (val) => { draggableTasks.value = [...val]; }, { immediate: true });
 
 const tagGroups = computed(() => {
   const groups = new Map<string, Task[]>();
-  for (const task of filteredTasks.value) {
+  for (const task of sortedTasks.value) {
     const tags = task.tags?.length ? task.tags : ['Untagged'];
     for (const tag of tags) {
       if (!groups.has(tag)) groups.set(tag, []);
@@ -158,7 +172,7 @@ function buildWorkspaceGroups() {
   for (const ws of workspaces.value) {
     groups.set(ws.id, { label: `${ws.emoji} ${ws.name}`, wsId: ws.id, tasks: [] });
   }
-  for (const task of filteredTasks.value) {
+  for (const task of sortedTasks.value) {
     const key = task.workspace_id || null;
     if (!groups.has(key)) {
       groups.set(key, { label: 'No workspace', wsId: null, tasks: [] });
@@ -168,18 +182,16 @@ function buildWorkspaceGroups() {
   workspaceGroupsLive.value = [...groups.values()];
 }
 
-watch([filteredTasks, () => sortMode.value], () => {
-  if (sortMode.value === 'workspace') buildWorkspaceGroups();
+watch([sortedTasks, groupBy], () => {
+  if (groupBy.value === 'workspace') buildWorkspaceGroups();
 }, { immediate: true });
 
 async function handleWorkspaceDrop(e: any, targetWsId: string | null) {
-  // Find the task that was moved
-  const taskId = e.item?.__draggable_context?.element?.id;
-  if (!taskId) return;
-  // Update workspace on the server
-  await updateTask(taskId, { workspace_id: targetWsId } as any);
-  // Update local state
-  const idx = tasks.value.findIndex(t => t.id === taskId);
+  // Only act when an item is added to this group (not removed from it)
+  if (!e.added) return;
+  const task = e.added.element;
+  await updateTask(task.id, { workspace_id: targetWsId } as any);
+  const idx = tasks.value.findIndex(t => t.id === task.id);
   if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], workspace_id: targetWsId };
 }
 
