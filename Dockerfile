@@ -17,7 +17,6 @@ COPY --from=builder /app/.output .output
 
 # Copy DuckDB native bindings (not bundled by Nitro)
 COPY --from=builder /app/node_modules/@duckdb node_modules/@duckdb
-COPY --from=builder /app/node_modules/.duckdb node_modules/.duckdb
 
 EXPOSE 3000
 
