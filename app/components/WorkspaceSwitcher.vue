@@ -1,6 +1,6 @@
 <template>
   <UDropdownMenu :items="menuItems" :ui="{ content: 'min-w-52' }">
-    <UButton color="neutral" variant="soft" size="xs" trailing-icon="i-lucide-chevron-down">
+    <UButton color="neutral" variant="soft" size="sm" trailing-icon="i-lucide-chevron-down">
       <span v-if="active">{{ active.emoji }} {{ active.name }}</span>
       <span v-else>All</span>
     </UButton>

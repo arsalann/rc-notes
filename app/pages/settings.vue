@@ -51,9 +51,9 @@
             </UInput>
           </UFormField>
 
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <UButton
-              size="sm"
+              size="md"
               variant="soft"
               icon="i-lucide-plug"
               :loading="testing"
@@ -63,7 +63,7 @@
             </UButton>
             <UButton
               v-if="newToken"
-              size="sm"
+              size="md"
               icon="i-lucide-save"
               :loading="saving"
               @click="updateToken"
@@ -78,24 +78,106 @@
         </div>
       </UCard>
 
-      <!-- Danger zone -->
+      <!-- Default Views -->
       <UCard>
         <template #header>
-          <div class="flex items-center gap-2 text-red-400">
-            <UIcon name="i-lucide-log-out" class="size-5" />
-            <span class="font-semibold">Session</span>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-sliders-horizontal" class="size-5" />
+            <span class="font-semibold">Default Views</span>
           </div>
         </template>
-        <UButton color="error" variant="soft" icon="i-lucide-log-out" @click="handleLogout">
-          Sign Out
-        </UButton>
+        <div class="space-y-5">
+          <!-- Default workspace -->
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-2">Default Workspace</p>
+            <div class="flex gap-2 flex-wrap">
+              <UButton
+                size="sm"
+                :color="!prefs.defaultWorkspace ? 'primary' : 'neutral'"
+                :variant="!prefs.defaultWorkspace ? 'solid' : 'outline'"
+                @click="setDefaultWorkspace(null)"
+              >
+                All
+              </UButton>
+              <UButton
+                v-for="ws in workspaces"
+                :key="ws.id"
+                size="sm"
+                :color="prefs.defaultWorkspace === ws.id ? 'primary' : 'neutral'"
+                :variant="prefs.defaultWorkspace === ws.id ? 'solid' : 'outline'"
+                @click="setDefaultWorkspace(ws.id)"
+              >
+                {{ ws.emoji }} {{ ws.name }}
+              </UButton>
+            </div>
+          </div>
+
+          <!-- Task grouping -->
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-2">Task Grouping</p>
+            <div class="flex gap-2 flex-wrap">
+              <UButton v-for="opt in groupOptions" :key="opt.value" size="sm"
+                :color="prefs.taskGroupBy === opt.value ? 'primary' : 'neutral'"
+                :variant="prefs.taskGroupBy === opt.value ? 'solid' : 'outline'"
+                :icon="opt.icon"
+                @click="set('taskGroupBy', opt.value)">
+                {{ opt.label }}
+              </UButton>
+            </div>
+          </div>
+
+          <!-- Task sorting -->
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-2">Task Sorting</p>
+            <div class="flex gap-2 flex-wrap">
+              <UButton v-for="opt in orderOptions" :key="opt.value" size="sm"
+                :color="prefs.taskOrderBy === opt.value ? 'primary' : 'neutral'"
+                :variant="prefs.taskOrderBy === opt.value ? 'solid' : 'outline'"
+                :icon="opt.icon"
+                @click="set('taskOrderBy', opt.value)">
+                {{ opt.label }}
+              </UButton>
+            </div>
+          </div>
+
+          <!-- Show completed -->
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Show Completed Tasks</p>
+              <p class="text-xs text-(--ui-text-muted) mt-0.5">Display done tasks in the list by default</p>
+            </div>
+            <USwitch :model-value="prefs.taskShowDone" @update:model-value="set('taskShowDone', $event)" />
+          </div>
+        </div>
       </UCard>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const { username, logout } = useAuth();
+const { username } = useAuth();
+const { workspaces, fetchWorkspaces, setActive } = useWorkspace();
+const { prefs, set } = usePreferences();
+
+onMounted(() => fetchWorkspaces());
+
+const groupOptions = [
+  { value: 'status' as const, label: 'Status', icon: 'i-lucide-circle-dot' },
+  { value: 'workspace' as const, label: 'Space', icon: 'i-lucide-folder' },
+  { value: 'tag' as const, label: 'Tag', icon: 'i-lucide-tags' },
+  { value: 'none' as const, label: 'None', icon: 'i-lucide-list' },
+];
+
+const orderOptions = [
+  { value: 'created' as const, label: 'Newest', icon: 'i-lucide-clock' },
+  { value: 'due' as const, label: 'Due Date', icon: 'i-lucide-calendar' },
+];
+
+function setDefaultWorkspace(id: string | null) {
+  set('defaultWorkspace', id);
+  setActive(id);
+}
 
 const newToken = ref('');
 const showToken = ref(false);
@@ -136,7 +218,4 @@ async function updateToken() {
   saving.value = false;
 }
 
-async function handleLogout() {
-  await logout();
-}
 </script>

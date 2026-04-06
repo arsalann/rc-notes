@@ -18,6 +18,8 @@
   html {
     -webkit-text-size-adjust: 100%;
     color-scheme: dark;
+    scroll-padding-top: 5rem;
+    overscroll-behavior: contain;
   }
 
   body {
@@ -25,6 +27,12 @@
     -webkit-font-smoothing: antialiased;
     background-color: #042f2e !important;
     color: #fafafa;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent iOS zoom on input focus — inputs must be >= 16px */
+  input, textarea, select {
+    font-size: 16px !important;
   }
 }
 
@@ -69,3 +77,40 @@ textarea { field-sizing: content; }
 /* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Touch-friendly tap target minimum (44px per Apple HIG) */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scroll hint fade for horizontal scrollable areas */
+.scroll-hint {
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 24px), transparent 100%);
+}
+
+/* Mobile-optimized touch action for draggable areas */
+.drag-area {
+  touch-action: pan-y;
+}
+
+/* Improved focus states for accessibility */
+input:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+}
+
+/* Colorblind-friendly: high-contrast checkboxes */
+button[role="checkbox"] {
+  border-color: #ccfbf1 !important;
+  border-width: 2px !important;
+}
+button[role="checkbox"][data-state="checked"] {
+  background-color: #a855f7 !important;
+  border-color: #a855f7 !important;
+}

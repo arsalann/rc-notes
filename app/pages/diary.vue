@@ -2,24 +2,25 @@
   <div class="max-w-lg mx-auto min-h-screen">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-3">
+        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/notes" />
         <h1 class="text-2xl font-bold tracking-tight">Diary</h1>
         <WorkspaceSwitcher />
       </div>
     </div>
 
     <!-- Day selector -->
-    <div class="flex gap-2 px-4 mt-3 no-scrollbar overflow-x-auto">
+    <div class="flex gap-1.5 px-3 mt-3 no-scrollbar overflow-x-auto scroll-hint">
       <button v-for="day in days" :key="day.date" @click="selectDay(day.date)"
-        class="flex flex-col items-center flex-1 min-w-16 px-2 py-3 rounded-2xl transition-all duration-200 active:scale-95"
+        class="flex flex-col items-center flex-1 min-w-[3.25rem] px-1.5 py-3 rounded-2xl transition-all duration-200 active:scale-95"
         :class="selectedDate === day.date
           ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
           : day.isToday
             ? 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-primary)/40'
             : 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)'">
-        <span class="text-[11px] uppercase font-semibold tracking-wide"
+        <span class="text-[10px] uppercase font-semibold tracking-wide"
           :class="selectedDate === day.date ? 'text-white/70' : 'text-(--ui-text-dimmed)'">{{ day.dayName }}</span>
-        <span class="text-xl font-bold mt-1">{{ day.dayNum }}</span>
-        <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-1.5"
+        <span class="text-lg font-bold mt-0.5">{{ day.dayNum }}</span>
+        <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-1"
           :class="selectedDate === day.date ? 'bg-white/60' : 'bg-(--ui-primary)'" />
       </button>
     </div>
@@ -27,8 +28,10 @@
     <!-- Day label + edit toggle -->
     <div class="px-4 mt-5 flex items-center justify-between">
       <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">{{ selectedDayLabel }}</p>
-      <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="xs"
-        :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" @click="editMode = !editMode" />
+      <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
+        :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode">
+        {{ editMode ? 'Preview' : 'Edit' }}
+      </UButton>
     </div>
 
     <!-- Loading -->
@@ -48,18 +51,6 @@
         </div>
       </div>
 
-      <!-- Create tasks from checklist -->
-      <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 translate-y-1" enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0 translate-y-1">
-        <div v-if="editMode && checklistDetected" class="flex items-center gap-2 px-3 py-2.5 mb-3 rounded-xl bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)">
-          <UIcon name="i-lucide-list-checks" class="size-4 text-(--ui-primary) shrink-0" />
-          <span class="text-xs text-(--ui-text-muted) flex-1">Checklist detected ({{ checklistCount }} item{{ checklistCount > 1 ? 's' : '' }})</span>
-          <UButton size="xs" color="primary" variant="soft" :loading="creatingTasks" @click="convertChecklistToTasks">
-            Create tasks
-          </UButton>
-        </div>
-      </Transition>
-
       <!-- Edit mode -->
       <div v-if="editMode" class="relative">
         <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
@@ -69,16 +60,16 @@
           </div>
         </Transition>
         <textarea v-model="editContent" @input="handleContentInput" @blur="saveContent" @keydown.escape="mentionOpen = false" ref="contentRef"
-          class="w-full text-sm leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[250px] placeholder:text-(--ui-text-dimmed) font-mono"
+          class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[200px] placeholder:text-(--ui-text-dimmed) font-mono"
           placeholder="Write about your day... Type @ to link a task or note" />
         <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
           leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
-          <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto" :ui="{ body: 'sm:p-1' }" style="top:0">
+          <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto overscroll-contain" :ui="{ body: 'p-1' }" style="top:0">
             <button v-for="item in mentionResults" :key="item.id" @mousedown.prevent="insertMention(item)"
-              class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 rounded-md transition-colors hover:bg-(--ui-bg-elevated)">
+              class="w-full px-3 py-3 text-left text-sm flex items-center gap-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
               <UBadge :color="item.type === 'task' ? 'primary' : 'neutral'" variant="subtle" size="xs">{{ item.type === 'task' ? 'Task' : 'Note' }}</UBadge>
               <span class="truncate">{{ item.title }}</span>
-              <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto">{{ item.display_id }}</span>
+              <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto shrink-0">{{ item.display_id }}</span>
             </button>
           </UCard>
         </Transition>
@@ -97,7 +88,20 @@
             prose-hr:border-(--ui-border)"
             v-html="block.html" />
         </template>
-        <p v-if="!editContent?.trim() && !carriedTasks.length" class="text-sm text-(--ui-text-dimmed) italic">
+
+        <!-- Linked tasks not mentioned inline -->
+        <div v-if="extraLinkedTasks.length" class="mt-4">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="h-px flex-1 bg-(--ui-border)" />
+            <span class="text-[10px] uppercase tracking-wider text-(--ui-text-dimmed) font-medium">Due this day</span>
+            <div class="h-px flex-1 bg-(--ui-border)" />
+          </div>
+          <div class="space-y-1.5">
+            <InlineTask v-for="lt in extraLinkedTasks" :key="lt.target_id" :task-id="lt.target_id" />
+          </div>
+        </div>
+
+        <p v-if="!editContent?.trim() && !carriedTasks.length && !extraLinkedTasks.length" class="text-sm text-(--ui-text-dimmed) italic">
           Nothing written yet. Tap the pencil to start writing.
         </p>
       </div>
@@ -108,6 +112,7 @@
 <script setup lang="ts">
 import { marked } from 'marked';
 import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
+import { todayLocal, localDateOffset } from '~/composables/useDate';
 
 interface DiaryEntry {
   id: string;
@@ -119,7 +124,7 @@ interface DiaryEntry {
 
 const { activeId } = useWorkspace();
 
-const selectedDate = ref(new Date().toISOString().split('T')[0]);
+const selectedDate = ref(todayLocal());
 const entry = ref<DiaryEntry | null>(null);
 const editContent = ref('');
 const loading = ref(false);
@@ -133,30 +138,43 @@ const mentionResults = ref<any[]>([]);
 const contentRef = ref<HTMLTextAreaElement>();
 const creatingTasks = ref(false);
 
-const checklistDetected = computed(() => hasChecklist(editContent.value));
-const checklistCount = computed(() => parseChecklist(editContent.value).length);
-
 // Day navigation
 const days = computed(() => {
   const r: any[] = [];
   const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const td = new Date().toISOString().split('T')[0];
+  const td = todayLocal();
   for (let i = -3; i <= 3; i++) {
-    const d = new Date(); d.setDate(d.getDate() + i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = localDateOffset(i);
+    const d = new Date(ds + 'T12:00:00');
     r.push({ date: ds, dayName: dn[d.getDay()], dayNum: d.getDate(), isToday: ds === td, hasContent: entryDates.value.has(ds) });
   }
   return r;
 });
 
 const selectedDayLabel = computed(() => {
-  const td = new Date().toISOString().split('T')[0];
+  const td = todayLocal();
   if (selectedDate.value === td) return 'Today';
-  const y = new Date(); y.setDate(y.getDate() - 1);
-  if (selectedDate.value === y.toISOString().split('T')[0]) return 'Yesterday';
-  const t = new Date(); t.setDate(t.getDate() + 1);
-  if (selectedDate.value === t.toISOString().split('T')[0]) return 'Tomorrow';
+  if (selectedDate.value === localDateOffset(-1)) return 'Yesterday';
+  if (selectedDate.value === localDateOffset(1)) return 'Tomorrow';
   return new Date(selectedDate.value + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+});
+
+// Linked tasks not already rendered inline via @[mentions]
+const extraLinkedTasks = computed(() => {
+  const links = entry.value?.links?.filter((l: any) => l.target_type === 'task') || [];
+  if (!links.length) return [];
+  // Collect task IDs that appear as @[mentions] in the content
+  const inlineIds = new Set<string>();
+  const mentionRe = /@\[([^\]]+)\]/g;
+  let m;
+  while ((m = mentionRe.exec(editContent.value || '')) !== null) {
+    const ref = m[1];
+    const linked = links.find((l: any) => l.target_title === ref || l.target_id === ref);
+    if (linked) inlineIds.add(linked.target_id);
+  }
+  // Also exclude carried-forward tasks
+  for (const ct of carriedTasks.value) inlineIds.add(ct.id);
+  return links.filter((l: any) => !inlineIds.has(l.target_id));
 });
 
 // Rendered blocks (markdown + inline tasks)
@@ -234,11 +252,8 @@ async function fetchDateIndicators() {
   try {
     const q: Record<string, string> = {};
     if (activeId.value) q.workspace_id = activeId.value;
-    // Simple approach: check last 7 days
-    const from = new Date(); from.setDate(from.getDate() - 3);
-    const to = new Date(); to.setDate(to.getDate() + 3);
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      const ds = d.toISOString().split('T')[0];
+    for (let i = -3; i <= 3; i++) {
+      const ds = localDateOffset(i);
       try {
         const e = await $fetch<DiaryEntry>(`/api/diary/${ds}`, { query: q });
         if (e?.content?.trim()) entryDates.value.add(ds);
@@ -284,36 +299,39 @@ function handleContentInput() {
   mentionOpen.value = false;
 }
 
-async function convertChecklistToTasks() {
-  if (!entry.value) return;
-  creatingTasks.value = true;
-  try {
-    const items = parseChecklist(editContent.value);
-    if (!items.length) return;
+async function toggleEditMode() {
+  if (editMode.value && hasChecklist(editContent.value) && entry.value) {
+    // Switching to view mode — auto-convert checklists to tasks
+    creatingTasks.value = true;
+    try {
+      const items = parseChecklist(editContent.value);
+      if (items.length) {
+        await $fetch<any[]>('/api/tasks/from-checklist', {
+          method: 'POST',
+          body: {
+            items,
+            source_type: 'diary',
+            source_id: entry.value.id,
+            workspace_id: activeId.value,
+            due_date: selectedDate.value,
+          },
+        });
 
-    await $fetch<any[]>('/api/tasks/from-checklist', {
-      method: 'POST',
-      body: {
-        items,
-        source_type: 'diary',
-        source_id: entry.value.id,
-        workspace_id: activeId.value,
-      },
-    });
+        const rootTitles = items.map(i => i.title);
+        editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
+        saveContent();
 
-    // Replace checklist with @-mentions
-    const rootTitles = items.map(i => i.title);
-    editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
-    saveContent();
-
-    // Reload entry to get updated links
-    const q: Record<string, string> = {};
-    if (activeId.value) q.workspace_id = activeId.value;
-    const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
-    if (full) entry.value = full;
-  } finally {
-    creatingTasks.value = false;
+        // Reload entry to get updated links
+        const q: Record<string, string> = {};
+        if (activeId.value) q.workspace_id = activeId.value;
+        const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
+        if (full) entry.value = full;
+      }
+    } finally {
+      creatingTasks.value = false;
+    }
   }
+  editMode.value = !editMode.value;
 }
 
 async function searchMentions(q: string) { mentionResults.value = await $fetch<any[]>('/api/mention', { query: { q } }); }

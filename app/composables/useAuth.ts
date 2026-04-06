@@ -1,47 +1,27 @@
-export type AppState = 'loading' | 'login' | 'setup' | 'ready';
+export type AppState = 'loading' | 'setup' | 'ready';
 
 export function useAuth() {
   const appState = useState<AppState>('appState', () => 'loading');
   const username = useState<string | null>('username', () => null);
+  const userId = useState<string | null>('userId', () => null);
 
   async function checkAuth() {
     appState.value = 'loading';
     try {
-      const res = await $fetch<{ authenticated: boolean; username: string; configured: boolean }>('/api/auth/check');
+      const res = await $fetch<{ configured: boolean; username: string; user_id: string }>('/api/auth/check');
       username.value = res.username;
+      userId.value = res.user_id;
       appState.value = res.configured ? 'ready' : 'setup';
     } catch {
-      appState.value = 'login';
+      appState.value = 'setup';
     }
-  }
-
-  async function login(password: string): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const res = await $fetch<{ ok: boolean; username: string }>('/api/auth/login', {
-        method: 'POST',
-        body: { password },
-      });
-      username.value = res.username;
-      await checkAuth();
-      return { ok: true };
-    } catch (err: any) {
-      const message = err?.data?.statusMessage || err?.message || 'Login failed';
-      return { ok: false, error: message };
-    }
-  }
-
-  async function logout() {
-    try {
-      await $fetch('/api/auth/logout', { method: 'POST' });
-    } catch {}
-    username.value = null;
-    appState.value = 'login';
   }
 
   async function setup(data: { username: string; motherduck_token: string }): Promise<{ ok: boolean; error?: string }> {
     try {
-      await $fetch('/api/setup', { method: 'POST', body: data });
+      const res = await $fetch<{ ok: boolean; username: string; user_id: string }>('/api/setup', { method: 'POST', body: data });
       username.value = data.username;
+      userId.value = res.user_id;
       appState.value = 'ready';
       return { ok: true };
     } catch (err: any) {
@@ -50,5 +30,5 @@ export function useAuth() {
     }
   }
 
-  return { appState, username, checkAuth, login, logout, setup };
+  return { appState, username, userId, checkAuth, setup };
 }

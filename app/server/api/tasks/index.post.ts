@@ -1,4 +1,4 @@
-import { queryAll } from '~/server/utils/db';
+import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const title = body.title?.trim() || '';
   const description = body.description?.trim() || '';
   const parentId = body.parent_id || null;
-  const workspaceId = body.workspace_id || null;
+  const workspaceId = body.workspace_id || await getDefaultWorkspaceId();
   const tags = Array.isArray(body.tags) ? body.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
   const dueAt = body.due_at || null;
 
@@ -35,10 +35,8 @@ export default defineEventHandler(async (event) => {
   const posRows = await queryAll(posQuery, posParams, posTypes);
   const position = posRows[0]?.next_pos ?? 0;
 
-  // Determine status: 'now' if due today, otherwise 'next'
-  const today = new Date().toISOString().split('T')[0];
-  const isDueToday = dueAt && new Date(dueAt).toISOString().split('T')[0] === today;
-  const status = isDueToday ? 'now' : 'next';
+  // Auto-set status: 'now' if task has a due date, otherwise 'next'
+  const status = dueAt ? 'now' : 'next';
 
   const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status'];
   const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status'];
@@ -69,6 +67,13 @@ export default defineEventHandler(async (event) => {
     params, types
   );
 
+  const task = rows[0];
+
+  // Auto-link task to diary entry for the due date
+  if (dueAt && !parentId) {
+    await linkTaskToDiary(task.id, dueAt, workspaceId).catch(() => {});
+  }
+
   setResponseStatus(event, 201);
-  return rows[0];
+  return task;
 });

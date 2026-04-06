@@ -29,10 +29,20 @@ export function useWorkspace() {
     return ws;
   }
 
-  // Restore from localStorage
+  // Restore from localStorage, fall back to default preference
   if (import.meta.client) {
     const stored = localStorage.getItem('workspace');
-    if (stored) activeId.value = stored;
+    if (stored) {
+      activeId.value = stored;
+    } else {
+      try {
+        const raw = localStorage.getItem('preferences');
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p.defaultWorkspace) activeId.value = p.defaultWorkspace;
+        }
+      } catch {}
+    }
   }
 
   return { workspaces, active, activeId, fetchWorkspaces, setActive, createWorkspace };

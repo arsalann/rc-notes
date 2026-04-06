@@ -1,5 +1,5 @@
-import { saveConfig } from '~/server/utils/config';
-import { resetConnection } from '~/server/utils/db';
+import { saveConfig, generateUserId } from '~/server/utils/config';
+import { resetConnection, useDB } from '~/server/utils/db';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -17,5 +17,11 @@ export default defineEventHandler(async (event) => {
   saveConfig({ username, motherduck_token });
   resetConnection();
 
-  return { ok: true, username };
+  // Generate user_id
+  const userId = generateUserId(username, motherduck_token);
+
+  // Trigger DB init + migrations (creates users table, backfills user_id)
+  await useDB();
+
+  return { ok: true, username, user_id: userId };
 });

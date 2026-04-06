@@ -15,8 +15,6 @@ export default defineEventHandler(async (event) => {
     where += " AND workspace_id = $ws";
     params.ws = workspaceId;
     types.ws = VARCHAR;
-  } else {
-    where += " AND workspace_id IS NULL";
   }
 
   const rows = await queryAll(

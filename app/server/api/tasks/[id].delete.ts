@@ -4,14 +4,21 @@ import { VARCHAR } from '@duckdb/node-api';
 export default defineEventHandler(async (event) => {
   const id = String(getRouterParam(event, 'id'));
 
-  // Delete subtasks first
-  await execute('DELETE FROM tasks WHERE parent_id = $id', { id }, { id: VARCHAR });
+  // Archive subtasks
+  await execute(
+    'UPDATE tasks SET archived = true, updated_at = current_timestamp WHERE parent_id = $id',
+    { id }, { id: VARCHAR }
+  );
 
-  const rows = await queryAll('DELETE FROM tasks WHERE id = $id RETURNING id', { id }, { id: VARCHAR });
+  // Archive the task itself
+  const rows = await queryAll(
+    'UPDATE tasks SET archived = true, updated_at = current_timestamp WHERE id = $id RETURNING *',
+    { id }, { id: VARCHAR }
+  );
 
   if (!rows.length) {
     throw createError({ statusCode: 404, statusMessage: 'Task not found' });
   }
 
-  return { deleted: true };
+  return rows[0];
 });

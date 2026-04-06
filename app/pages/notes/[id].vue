@@ -10,8 +10,8 @@
             Saving
           </div>
         </Transition>
-        <UButton :color="editMode ? 'secondary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'"
-          :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" @click="editMode = !editMode" />
+        <UButton :color="editMode ? 'secondary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
+          :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode" />
         <UButton color="neutral" variant="ghost" :icon="note?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="note?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
         <UButton color="neutral" variant="ghost" icon="i-lucide-trash-2" @click="confirmDelete = true" />
@@ -21,36 +21,24 @@
     <div v-if="loadingNote" class="flex items-center justify-center py-20">
       <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-(--ui-primary)" />
     </div>
-    <div v-else-if="note" class="px-4 pb-8">
+    <div v-else-if="note" class="px-4 pb-12">
       <UBadge color="neutral" variant="subtle" size="xs" class="font-mono mb-1.5">{{ note.display_id }}</UBadge>
       <input v-model="editTitle" @blur="saveField('title', editTitle)" @keydown.enter="($event.target as HTMLInputElement).blur()"
         class="w-full text-2xl font-bold bg-transparent outline-none tracking-tight placeholder:text-(--ui-text-dimmed)" placeholder="Title" />
 
-      <!-- Create tasks from checklist -->
-      <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 translate-y-1" enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0 translate-y-1">
-        <div v-if="editMode && checklistDetected" class="mt-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)">
-          <UIcon name="i-lucide-list-checks" class="size-4 text-(--ui-primary) shrink-0" />
-          <span class="text-xs text-(--ui-text-muted) flex-1">Checklist detected ({{ checklistCount }} item{{ checklistCount > 1 ? 's' : '' }})</span>
-          <UButton size="xs" color="primary" variant="soft" :loading="creatingTasks" @click="convertChecklistToTasks">
-            Create tasks
-          </UButton>
-        </div>
-      </Transition>
-
       <!-- Edit mode: raw textarea -->
       <div v-if="editMode" class="relative mt-4">
         <textarea v-model="editContent" @input="handleContentInput" @blur="saveField('content', editContent)" @keydown.escape="mentionOpen = false" ref="contentRef"
-          class="w-full text-sm leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[300px] placeholder:text-(--ui-text-dimmed) font-mono"
+          class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[200px] placeholder:text-(--ui-text-dimmed) font-mono"
           placeholder="Write in markdown... Type @ to link a task or note" />
         <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
           leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
-          <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto" :ui="{ body: 'sm:p-1' }" style="top:0">
+          <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto overscroll-contain" :ui="{ body: 'p-1' }" style="top:0">
             <button v-for="item in mentionResults" :key="item.id" @mousedown.prevent="insertMention(item)"
-              class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 rounded-md transition-colors hover:bg-(--ui-bg-elevated)">
+              class="w-full px-3 py-3 text-left text-sm flex items-center gap-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
               <UBadge :color="item.type === 'task' ? 'primary' : 'neutral'" variant="subtle" size="xs">{{ item.type === 'task' ? 'Task' : 'Note' }}</UBadge>
               <span class="truncate">{{ item.title }}</span>
-              <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto">{{ item.display_id }}</span>
+              <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto shrink-0">{{ item.display_id }}</span>
             </button>
           </UCard>
         </Transition>
@@ -76,7 +64,7 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Linked</p>
         <div class="space-y-1">
           <NuxtLink v-for="link in note.links" :key="link.link_id" :to="link.target_type === 'task' ? `/tasks/${link.target_id}` : `/notes/${link.target_id}`"
-            class="flex items-center gap-2.5 py-2.5 px-3 -mx-3 rounded-lg text-sm text-(--ui-primary) transition-colors hover:bg-(--ui-bg-elevated)">
+            class="flex items-center gap-2.5 py-3 px-3 -mx-3 rounded-lg text-sm text-(--ui-primary) transition-colors active:bg-(--ui-bg-elevated)">
             <UBadge :color="link.target_type === 'task' ? 'primary' : 'neutral'" variant="subtle" size="xs">{{ link.target_type === 'task' ? 'Task' : 'Note' }}</UBadge>
             {{ link.target_title }}
           </NuxtLink>
@@ -107,9 +95,6 @@ const editTitle = ref(''); const editContent = ref(''); const contentRef = ref<H
 const mentionOpen = ref(false); const mentionResults = ref<any[]>([]);
 const editMode = ref(true);
 const creatingTasks = ref(false);
-
-const checklistDetected = computed(() => hasChecklist(editContent.value));
-const checklistCount = computed(() => parseChecklist(editContent.value).length);
 
 // Parse content into blocks: markdown text + inline task embeds
 const renderedBlocks = computed(() => {
@@ -200,33 +185,35 @@ async function insertMention(item: { id: string; type: string; title: string }) 
   saveField('content', editContent.value);
 }
 
-async function convertChecklistToTasks() {
-  if (!note.value) return;
-  creatingTasks.value = true;
-  try {
-    const items = parseChecklist(editContent.value);
-    if (!items.length) return;
+async function toggleEditMode() {
+  if (editMode.value && hasChecklist(editContent.value) && note.value) {
+    // Switching to view mode — auto-convert checklists to tasks
+    creatingTasks.value = true;
+    try {
+      const items = parseChecklist(editContent.value);
+      if (items.length) {
+        await $fetch<any[]>('/api/tasks/from-checklist', {
+          method: 'POST',
+          body: {
+            items,
+            source_type: 'note',
+            source_id: note.value.id,
+            workspace_id: note.value.workspace_id,
+          },
+        });
 
-    const created = await $fetch<any[]>('/api/tasks/from-checklist', {
-      method: 'POST',
-      body: {
-        items,
-        source_type: 'note',
-        source_id: note.value.id,
-        workspace_id: note.value.workspace_id,
-      },
-    });
+        const rootTitles = items.map(i => i.title);
+        editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
+        saveField('content', editContent.value);
 
-    // Replace checklist in content with @-mentions
-    const rootTitles = items.map(i => i.title);
-    editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
-    await saveField('content', editContent.value);
-
-    // Reload note to get updated links
-    note.value = await $fetch<Note>(`/api/notes/${id}`);
-  } finally {
-    creatingTasks.value = false;
+        // Reload note to get updated links
+        note.value = await $fetch<Note>(`/api/notes/${id}`);
+      }
+    } finally {
+      creatingTasks.value = false;
+    }
   }
+  editMode.value = !editMode.value;
 }
 
 async function handlePin() { if (!note.value) return; const u = await togglePin(id); note.value.pinned = u.pinned; }

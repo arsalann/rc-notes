@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
+import { createHash } from 'crypto';
 
 interface AppConfig {
   username: string;
@@ -44,4 +45,14 @@ export function getUsername(): string | null {
 
 export function isConfigured(): boolean {
   return !!getMotherDuckToken();
+}
+
+export function generateUserId(username: string, token: string): string {
+  return createHash('md5').update(`${username}||${token}`).digest('hex');
+}
+
+export function getUserId(): string | null {
+  const config = getConfig();
+  if (!config?.username || !config?.motherduck_token) return null;
+  return generateUserId(config.username, config.motherduck_token);
 }
