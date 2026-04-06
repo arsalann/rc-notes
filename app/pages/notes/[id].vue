@@ -26,6 +26,18 @@
       <input v-model="editTitle" @blur="saveField('title', editTitle)" @keydown.enter="($event.target as HTMLInputElement).blur()"
         class="w-full text-2xl font-bold bg-transparent outline-none tracking-tight placeholder:text-(--ui-text-dimmed)" placeholder="Title" />
 
+      <!-- Create tasks from checklist -->
+      <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 translate-y-1" enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0 translate-y-1">
+        <div v-if="editMode && checklistDetected" class="mt-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)">
+          <UIcon name="i-lucide-list-checks" class="size-4 text-(--ui-primary) shrink-0" />
+          <span class="text-xs text-(--ui-text-muted) flex-1">Checklist detected ({{ checklistCount }} item{{ checklistCount > 1 ? 's' : '' }})</span>
+          <UButton size="xs" color="primary" variant="soft" :loading="creatingTasks" @click="convertChecklistToTasks">
+            Create tasks
+          </UButton>
+        </div>
+      </Transition>
+
       <!-- Edit mode: raw textarea -->
       <div v-if="editMode" class="relative mt-4">
         <textarea v-model="editContent" @input="handleContentInput" @blur="saveField('content', editContent)" @keydown.escape="mentionOpen = false" ref="contentRef"
@@ -86,6 +98,7 @@
 <script setup lang="ts">
 import { marked } from 'marked';
 import type { Note } from '~/composables/useNotes';
+import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
 
 const route = useRoute(); const id = route.params.id as string;
 const { updateNote, deleteNote, togglePin } = useNotesCrud();
@@ -93,6 +106,10 @@ const note = ref<Note | null>(null); const loadingNote = ref(true); const saving
 const editTitle = ref(''); const editContent = ref(''); const contentRef = ref<HTMLTextAreaElement>();
 const mentionOpen = ref(false); const mentionResults = ref<any[]>([]);
 const editMode = ref(true);
+const creatingTasks = ref(false);
+
+const checklistDetected = computed(() => hasChecklist(editContent.value));
+const checklistCount = computed(() => parseChecklist(editContent.value).length);
 
 // Parse content into blocks: markdown text + inline task embeds
 const renderedBlocks = computed(() => {
@@ -181,6 +198,35 @@ async function insertMention(item: { id: string; type: string; title: string }) 
   await $fetch('/api/links', { method: 'POST', body: { source_type: 'note', source_id: id, target_type: item.type, target_id: item.id } });
   note.value = await $fetch<Note>(`/api/notes/${id}`);
   saveField('content', editContent.value);
+}
+
+async function convertChecklistToTasks() {
+  if (!note.value) return;
+  creatingTasks.value = true;
+  try {
+    const items = parseChecklist(editContent.value);
+    if (!items.length) return;
+
+    const created = await $fetch<any[]>('/api/tasks/from-checklist', {
+      method: 'POST',
+      body: {
+        items,
+        source_type: 'note',
+        source_id: note.value.id,
+        workspace_id: note.value.workspace_id,
+      },
+    });
+
+    // Replace checklist in content with @-mentions
+    const rootTitles = items.map(i => i.title);
+    editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
+    await saveField('content', editContent.value);
+
+    // Reload note to get updated links
+    note.value = await $fetch<Note>(`/api/notes/${id}`);
+  } finally {
+    creatingTasks.value = false;
+  }
 }
 
 async function handlePin() { if (!note.value) return; const u = await togglePin(id); note.value.pinned = u.pinned; }

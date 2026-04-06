@@ -29,6 +29,10 @@
           icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'">
           By space
         </UButton>
+        <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'">
+          By status
+        </UButton>
       </div>
     </div>
     <div class="mt-2">
@@ -63,6 +67,19 @@
               </div>
             </template>
           </draggable>
+        </div>
+        <div class="pb-6" />
+      </template>
+      <!-- Grouped by status -->
+      <template v-else-if="groupBy === 'status'">
+        <div v-for="group in statusGroups" :key="group.status" class="px-4 mt-4">
+          <p class="text-xs font-semibold uppercase tracking-wider mb-2"
+            :class="group.status === 'now' ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'">
+            {{ group.label }}
+          </p>
+          <div class="space-y-2.5">
+            <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+          </div>
         </div>
         <div class="pb-6" />
       </template>
@@ -113,7 +130,7 @@ const { activeId, workspaces } = useWorkspace();
 
 const showDone = ref(true);
 const orderBy = ref<'created' | 'due'>('created');
-const groupBy = ref<'none' | 'workspace' | 'tag'>('workspace');
+const groupBy = ref<'none' | 'workspace' | 'tag' | 'status'>('status');
 
 async function load() { await fetchTasks({ workspace_id: activeId.value }); }
 onMounted(load); watch(activeId, load);
@@ -147,6 +164,19 @@ const sortedTasks = computed(() => {
 // Mutable copy for flat-list drag reorder
 const draggableTasks = ref<Task[]>([]);
 watch(sortedTasks, (val) => { draggableTasks.value = [...val]; }, { immediate: true });
+
+const statusGroups = computed(() => {
+  const order = ['now', 'next', 'done'];
+  const labels: Record<string, string> = { now: 'Now', next: 'Next', done: 'Done' };
+  const groups = new Map<string, Task[]>();
+  for (const s of order) groups.set(s, []);
+  for (const task of sortedTasks.value) {
+    const s = task.status || 'next';
+    if (!groups.has(s)) groups.set(s, []);
+    groups.get(s)!.push(task);
+  }
+  return order.filter(s => groups.get(s)!.length).map(s => ({ label: labels[s] || s, status: s, tasks: groups.get(s)! }));
+});
 
 const tagGroups = computed(() => {
   const groups = new Map<string, Task[]>();
@@ -208,12 +238,17 @@ async function handleReorder() {
   }
 }
 
-async function handleAdd(data: { title: string; due_at?: string; subtasks?: string[] }) {
+async function handleAdd(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[] }) {
   const task = await createTask({ ...data, workspace_id: activeId.value });
   if (data.subtasks?.length) {
     for (const sub of data.subtasks) await createTask({ title: sub, parent_id: task.id, workspace_id: activeId.value });
     await load();
   }
 }
-async function handleToggle(id: string) { await toggleComplete(id); }
+async function handleToggle(id: string) {
+  const updated = await toggleComplete(id);
+  // Update status in local state so grouping reflects the change
+  const idx = tasks.value.findIndex(t => t.id === id);
+  if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...updated };
+}
 </script>

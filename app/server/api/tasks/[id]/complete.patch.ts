@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
     `UPDATE tasks SET
       completed = NOT completed,
       completed_at = CASE WHEN completed THEN NULL ELSE current_timestamp END,
+      status = CASE WHEN completed THEN 'next' ELSE 'done' END,
       updated_at = current_timestamp
      WHERE id = $id RETURNING *`,
     { id },

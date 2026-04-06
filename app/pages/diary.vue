@@ -48,6 +48,18 @@
         </div>
       </div>
 
+      <!-- Create tasks from checklist -->
+      <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 translate-y-1" enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0 translate-y-1">
+        <div v-if="editMode && checklistDetected" class="flex items-center gap-2 px-3 py-2.5 mb-3 rounded-xl bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)">
+          <UIcon name="i-lucide-list-checks" class="size-4 text-(--ui-primary) shrink-0" />
+          <span class="text-xs text-(--ui-text-muted) flex-1">Checklist detected ({{ checklistCount }} item{{ checklistCount > 1 ? 's' : '' }})</span>
+          <UButton size="xs" color="primary" variant="soft" :loading="creatingTasks" @click="convertChecklistToTasks">
+            Create tasks
+          </UButton>
+        </div>
+      </Transition>
+
       <!-- Edit mode -->
       <div v-if="editMode" class="relative">
         <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
@@ -95,6 +107,7 @@
 
 <script setup lang="ts">
 import { marked } from 'marked';
+import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
 
 interface DiaryEntry {
   id: string;
@@ -118,6 +131,10 @@ const entryDates = ref<Set<string>>(new Set());
 const mentionOpen = ref(false);
 const mentionResults = ref<any[]>([]);
 const contentRef = ref<HTMLTextAreaElement>();
+const creatingTasks = ref(false);
+
+const checklistDetected = computed(() => hasChecklist(editContent.value));
+const checklistCount = computed(() => parseChecklist(editContent.value).length);
 
 // Day navigation
 const days = computed(() => {
@@ -265,6 +282,38 @@ function handleContentInput() {
     }
   }
   mentionOpen.value = false;
+}
+
+async function convertChecklistToTasks() {
+  if (!entry.value) return;
+  creatingTasks.value = true;
+  try {
+    const items = parseChecklist(editContent.value);
+    if (!items.length) return;
+
+    await $fetch<any[]>('/api/tasks/from-checklist', {
+      method: 'POST',
+      body: {
+        items,
+        source_type: 'diary',
+        source_id: entry.value.id,
+        workspace_id: activeId.value,
+      },
+    });
+
+    // Replace checklist with @-mentions
+    const rootTitles = items.map(i => i.title);
+    editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
+    saveContent();
+
+    // Reload entry to get updated links
+    const q: Record<string, string> = {};
+    if (activeId.value) q.workspace_id = activeId.value;
+    const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
+    if (full) entry.value = full;
+  } finally {
+    creatingTasks.value = false;
+  }
 }
 
 async function searchMentions(q: string) { mentionResults.value = await $fetch<any[]>('/api/mention', { query: { q } }); }

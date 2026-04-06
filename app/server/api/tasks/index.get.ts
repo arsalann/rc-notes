@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return await queryAll(`
-    SELECT t.id, t.workspace_id, t.title, t.description, t.completed, t.completed_at,
+    SELECT t.id, t.display_id, t.workspace_id, t.title, t.description, t.status, t.completed, t.completed_at,
       t.pinned, t.archived, t.due_at, t.tags, t.position,
       t.created_at, t.updated_at,
       (SELECT count(*)::INTEGER FROM tasks s WHERE s.parent_id = t.id) as subtask_count,

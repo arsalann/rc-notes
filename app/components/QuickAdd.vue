@@ -7,6 +7,9 @@
           class="flex-1 bg-transparent outline-none text-sm placeholder:text-(--ui-text-dimmed)"
           @focus="expanded = true" @keydown.enter.prevent="submit" @keydown.escape="collapse" />
       </div>
+      <div v-if="parsedTags.length" class="flex items-center gap-1.5 px-4 pb-2 -mt-1 flex-wrap">
+        <UBadge v-for="tag in parsedTags" :key="tag" color="primary" variant="subtle" size="xs">{{ tag }}</UBadge>
+      </div>
       <template v-if="expanded">
         <USeparator />
         <div class="px-4 py-3 space-y-3">
@@ -50,17 +53,29 @@
 
 <script setup lang="ts">
 const props = defineProps<{ placeholder?: string; parentId?: string }>();
-const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[] }] }>();
+const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[] }] }>();
 const title = ref(''); const dueAt = ref(''); const subtasks = ref<string[]>([]); const newSubtask = ref('');
 const expanded = ref(false); const showDatePicker = ref(false); const showSubtaskInput = ref(false);
 const titleRef = ref<HTMLInputElement>(); const subtaskRef = ref<HTMLInputElement>();
 const dateShortcuts = computed(() => { const t=new Date(); const tm=new Date(t); tm.setDate(tm.getDate()+1); const nw=new Date(t); nw.setDate(nw.getDate()+7);
   const f=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T09:00`;
   return [{label:'Today',value:f(t)},{label:'Tomorrow',value:f(tm)},{label:'Next week',value:f(nw)}]; });
+
+// Extract #tags from title text
+function extractTags(text: string): { title: string; tags: string[] } {
+  const tags: string[] = [];
+  const cleaned = text.replace(/#(\w[\w-]*)/g, (_, tag) => { tags.push(tag.toLowerCase()); return ''; }).replace(/\s{2,}/g, ' ').trim();
+  return { title: cleaned, tags: [...new Set(tags)] };
+}
+
+// Show inline tag preview
+const parsedTags = computed(() => extractTags(title.value).tags);
+
 function addSubtask() { const t=newSubtask.value.trim(); if(t){subtasks.value.push(t);newSubtask.value='';} }
 function collapse() { expanded.value=false; showDatePicker.value=false; showSubtaskInput.value=false; }
 function submit() { const t=title.value.trim(); if(!t)return;
-  emit('add',{title:t,parent_id:props.parentId,due_at:dueAt.value?new Date(dueAt.value).toISOString():undefined,subtasks:subtasks.value.length?[...subtasks.value]:undefined});
+  const { title: cleanTitle, tags } = extractTags(t);
+  emit('add',{title:cleanTitle,parent_id:props.parentId,due_at:dueAt.value?new Date(dueAt.value).toISOString():undefined,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:tags.length?tags:undefined});
   title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;collapse(); }
 function formatDate(s:string){return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 </script>
