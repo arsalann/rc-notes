@@ -57,6 +57,20 @@ export default defineEventHandler(async (event) => {
       types.workspace_id = VARCHAR;
     }
   }
+  if (body.status !== undefined && ['next', 'now', 'done'].includes(body.status)) {
+    sets.push('status = $status');
+    params.status = body.status;
+    types.status = VARCHAR;
+    // Sync completed flag with status
+    sets.push('completed = $status_completed');
+    params.status_completed = body.status === 'done';
+    types.status_completed = BOOLEAN;
+    if (body.status === 'done') {
+      sets.push("completed_at = COALESCE(completed_at, current_timestamp)");
+    } else {
+      sets.push('completed_at = NULL');
+    }
+  }
 
   if (!sets.length) {
     throw createError({ statusCode: 400, statusMessage: 'No fields to update' });

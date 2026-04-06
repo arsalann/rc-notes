@@ -25,6 +25,15 @@
             </UButton>
           </UDropdownMenu>
         </div>
+        <!-- Status pills -->
+        <div class="flex items-center gap-1.5 mb-2">
+          <UButton v-for="s in statusOptions" :key="s.value" size="xs"
+            :color="task.status === s.value ? s.color : 'neutral'"
+            :variant="task.status === s.value ? 'solid' : 'outline'"
+            @click="setStatus(s.value)">
+            {{ s.label }}
+          </UButton>
+        </div>
         <div class="flex items-start gap-3">
         <UCheckbox :model-value="task.completed" @update:model-value="handleToggleComplete" size="lg" class="mt-1" />
         <input v-model="editTitle" @blur="saveTitle" @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -143,6 +152,12 @@ const linkedNoteContent = ref('');
 const subtasksDone = computed(() => subtasks.value.filter(s => s.completed).length);
 const linkedNote = computed(() => taskLinks.value.find(l => l.target_type === 'note'));
 
+const statusOptions = [
+  { value: 'next', label: 'Next', color: 'neutral' as const },
+  { value: 'now', label: 'Now', color: 'primary' as const },
+  { value: 'done', label: 'Done', color: 'success' as const },
+];
+
 const currentWorkspaceName = computed(() => {
   if (!task.value?.workspace_id) return 'No workspace';
   const ws = workspaces.value.find(w => w.id === task.value!.workspace_id);
@@ -200,12 +215,29 @@ async function fetchLinks() {
   } catch { /* no links API, fetch from note detail */ }
 }
 
-async function saveTitle() { if (!task.value || editTitle.value.trim() === task.value.title) return; task.value = await updateTask(id, { title: editTitle.value.trim() }); }
+function extractTags(text: string): { title: string; tags: string[] } {
+  const tags: string[] = [];
+  const cleaned = text.replace(/#(\w[\w-]*)/g, (_, tag) => { tags.push(tag.toLowerCase()); return ''; }).replace(/\s{2,}/g, ' ').trim();
+  return { title: cleaned, tags: [...new Set(tags)] };
+}
+
+async function saveTitle() {
+  if (!task.value || editTitle.value.trim() === task.value.title) return;
+  const { title: cleanTitle, tags: newTags } = extractTags(editTitle.value.trim());
+  const mergedTags = [...new Set([...editTags.value, ...newTags])];
+  editTitle.value = cleanTitle;
+  editTags.value = mergedTags;
+  task.value = await updateTask(id, { title: cleanTitle, tags: mergedTags } as any);
+}
 async function saveDescription() { if (!task.value || editDescription.value === task.value.description) return; task.value = await updateTask(id, { description: editDescription.value }); }
 async function saveDue(v: string) { task.value = await updateTask(id, { due_at: v ? new Date(v).toISOString() : null } as any); editDue.value = v; }
 function addTag() { const t = newTag.value.replace(',', '').trim(); if (t && !editTags.value.includes(t)) { editTags.value.push(t); updateTask(id, { tags: editTags.value } as any); } newTag.value = ''; }
 function removeTag(i: number) { editTags.value.splice(i, 1); updateTask(id, { tags: editTags.value } as any); }
-async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) task.value.completed = u.completed; }
+async function setStatus(status: string) {
+  if (!task.value) return;
+  task.value = await updateTask(id, { status } as any);
+}
+async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) { task.value.completed = u.completed; task.value.status = u.status; } }
 async function handlePin() { const u = await togglePin(id); if (task.value) task.value.pinned = u.pinned; }
 async function handleArchive() { await toggleArchive(id); navigateTo('/'); }
 async function handleDelete() { await deleteTask(id); navigateTo('/'); }

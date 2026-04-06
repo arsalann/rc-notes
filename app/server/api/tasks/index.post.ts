@@ -35,10 +35,15 @@ export default defineEventHandler(async (event) => {
   const posRows = await queryAll(posQuery, posParams, posTypes);
   const position = posRows[0]?.next_pos ?? 0;
 
-  const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id'];
-  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id'];
-  const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId };
-  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR };
+  // Determine status: 'now' if due today, otherwise 'next'
+  const today = new Date().toISOString().split('T')[0];
+  const isDueToday = dueAt && new Date(dueAt).toISOString().split('T')[0] === today;
+  const status = isDueToday ? 'now' : 'next';
+
+  const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status'];
+  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status'];
+  const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId, status };
+  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR, status: VARCHAR };
 
   if (parentId) {
     cols.push('parent_id');

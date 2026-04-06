@@ -66,7 +66,7 @@ export function useDB() {
           parent_id VARCHAR DEFAULT NULL,
           title VARCHAR NOT NULL DEFAULT '',
           description TEXT NOT NULL DEFAULT '',
-          status VARCHAR NOT NULL DEFAULT 'open',
+          status VARCHAR DEFAULT 'next',
           priority INTEGER NOT NULL DEFAULT 0,
           completed BOOLEAN NOT NULL DEFAULT false,
           completed_at TIMESTAMP DEFAULT NULL,
@@ -168,12 +168,18 @@ export function useDB() {
       await migrate("ALTER TABLE workspaces ADD COLUMN color VARCHAR DEFAULT NULL");
       await migrate("ALTER TABLE workspaces ADD COLUMN archived BOOLEAN NOT NULL DEFAULT false");
       await migrate("ALTER TABLE workspaces ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp");
-      await migrate("ALTER TABLE tasks ADD COLUMN status VARCHAR NOT NULL DEFAULT 'open'");
+      await migrate("ALTER TABLE tasks ADD COLUMN status VARCHAR DEFAULT 'next'");
       await migrate("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0");
       await migrate("ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
       await migrate("ALTER TABLE tasks ADD COLUMN reminder_at TIMESTAMP DEFAULT NULL");
       await migrate("ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
       await migrate("ALTER TABLE diary_entries ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
+
+      // v3: ensure status column exists (retry without NOT NULL constraint if needed)
+      await migrate("ALTER TABLE tasks ADD COLUMN status VARCHAR DEFAULT 'next'");
+      // backfill status from 'open' to 'next'/'done'
+      await migrate("UPDATE tasks SET status = 'done' WHERE (status = 'open' OR status IS NULL) AND completed = true");
+      await migrate("UPDATE tasks SET status = 'next' WHERE (status = 'open' OR status IS NULL) AND completed = false");
 
       // Backfill empty display_ids with a short id derived from existing data
       const emptyTasks = await connection.runAndReadAll(
