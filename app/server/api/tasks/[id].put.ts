@@ -1,4 +1,4 @@
-import { queryAll } from '~/server/utils/db';
+import { queryAll, linkTaskToDiary } from '~/server/utils/db';
 import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -46,6 +46,10 @@ export default defineEventHandler(async (event) => {
       sets.push('due_at = $due_at::TIMESTAMP');
       params.due_at = body.due_at;
       types.due_at = VARCHAR;
+      // Auto-set status to 'now' when a due date is added (unless already done or explicitly setting status)
+      if (body.status === undefined) {
+        sets.push("status = CASE WHEN status = 'done' THEN 'done' ELSE 'now' END");
+      }
     }
   }
   if (body.workspace_id !== undefined) {
@@ -88,5 +92,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Task not found' });
   }
 
-  return rows[0];
+  const task = rows[0];
+
+  // Auto-link task to diary entry for the due date
+  if (body.due_at && body.due_at !== null) {
+    await linkTaskToDiary(id, body.due_at, task.workspace_id).catch(() => {});
+  }
+
+  return task;
 });

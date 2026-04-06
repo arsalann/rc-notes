@@ -1,4 +1,4 @@
-import { queryAll } from '~/server/utils/db';
+import { queryAll, getDefaultWorkspaceId } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
@@ -13,7 +13,8 @@ export default defineEventHandler(async (event) => {
   const items: ChecklistItem[] = body.items;
   const sourceType: string = body.source_type; // 'note' or 'diary'
   const sourceId: string = body.source_id;
-  const workspaceId: string | null = body.workspace_id || null;
+  const workspaceId: string | null = body.workspace_id || await getDefaultWorkspaceId();
+  const dueDate: string | null = body.due_date || null;
 
   if (!items?.length) throw createError({ statusCode: 400, statusMessage: 'No checklist items' });
   if (!sourceType || !sourceId) throw createError({ statusCode: 400, statusMessage: 'Source is required' });
@@ -30,12 +31,12 @@ export default defineEventHandler(async (event) => {
     );
     const position = posRows[0]?.next_pos ?? 0;
 
-    const status = item.checked ? 'done' : 'next';
+    const status = item.checked ? 'done' : (dueDate ? 'now' : 'next');
     const cols = ['id', 'title', 'completed', 'status', 'tags', 'position', 'display_id'];
     const vals = ['uuid()::VARCHAR', '$title', '$completed', '$status', '$tags', '$position', '$display_id'];
     const params: Record<string, any> = {
       title: item.title,
-      completed: item.checked,
+      completed: String(item.checked),
       status,
       tags: listValue([]),
       position,
@@ -55,6 +56,13 @@ export default defineEventHandler(async (event) => {
       vals.push('$workspace_id');
       params.workspace_id = workspaceId;
       types.workspace_id = VARCHAR;
+    }
+
+    if (dueDate) {
+      cols.push('due_at');
+      vals.push('$due_date::TIMESTAMP');
+      params.due_date = `${dueDate}T12:00:00`;
+      types.due_date = VARCHAR;
     }
 
     if (item.checked) {
@@ -90,7 +98,7 @@ export default defineEventHandler(async (event) => {
       const subVals = ['uuid()::VARCHAR', '$title', '$completed', '$subStatus', '$parent_id', '$tags', '$position', '$display_id'];
       const subParams: Record<string, any> = {
         title: child.title,
-        completed: child.checked,
+        completed: String(child.checked),
         subStatus,
         parent_id: parentTask.id,
         tags: listValue([]),

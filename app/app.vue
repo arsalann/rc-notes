@@ -5,15 +5,12 @@
       <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-(--ui-text-dimmed)" />
     </div>
 
-    <!-- Login -->
-    <Login v-else-if="appState === 'login'" />
-
     <!-- Onboarding -->
     <Setup v-else-if="appState === 'setup'" />
 
     <!-- App -->
     <template v-else>
-      <div class="min-h-screen pb-36">
+      <div class="min-h-screen pb-40">
         <NuxtPage />
         <BottomNav />
       </div>
@@ -24,7 +21,6 @@
 </template>
 
 <script setup lang="ts">
-import Login from '~/pages/login.vue';
 import Setup from '~/pages/setup.vue';
 
 const { appState, checkAuth } = useAuth();

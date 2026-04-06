@@ -5,7 +5,7 @@ export interface ChecklistItem {
   children: ChecklistItem[];
 }
 
-const CHECKLIST_RE = /^(\s*)- \[([ xX])\] (.+)$/;
+const CHECKLIST_RE = /^(\s*)- \[([ xX])\] (.+)$/m;
 
 /**
  * Parse markdown content and extract checklist items as a tree.

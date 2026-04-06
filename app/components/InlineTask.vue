@@ -1,5 +1,5 @@
 <template>
-  <div v-if="task" class="my-3 rounded-xl ring-1 ring-(--ui-border) bg-(--ui-bg-elevated) overflow-hidden">
+  <div v-if="task" class="my-3 rounded-xl ring-2 ring-teal-600/60 bg-teal-900/80 overflow-hidden">
     <div class="flex items-center gap-2.5 px-3 py-2.5">
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
       <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
@@ -8,9 +8,9 @@
       <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ task.display_id }}</UBadge>
     </div>
     <div v-if="subtasks.length" class="border-t border-(--ui-border) px-3 py-1.5">
-      <div v-for="sub in subtasks" :key="sub.id" class="flex items-center gap-2 py-1 pl-4">
-        <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub.id)" size="xs" />
-        <span class="text-xs" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
+      <div v-for="sub in subtasks" :key="sub.id" class="flex items-center gap-2 py-1.5 pl-4">
+        <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub.id)" />
+        <span class="text-sm" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
       </div>
     </div>
   </div>

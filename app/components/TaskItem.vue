@@ -1,6 +1,6 @@
 <template>
   <div>
-    <UCard class="transition-all duration-200 hover:ring-(--ui-primary)/20" :class="task.completed && 'opacity-50'" :ui="{ body: 'sm:p-4' }">
+    <UCard class="transition-all duration-200 active:scale-[0.98]" :class="task.completed && 'opacity-50'" :ui="{ body: 'p-3.5' }">
       <div class="flex items-start gap-3">
         <UCheckbox
           :model-value="task.completed"
@@ -14,11 +14,11 @@
             </span>
             <UIcon v-if="task.pinned" name="i-lucide-pin" class="size-3.5 text-(--ui-text-dimmed)" />
           </div>
-          <p v-if="task.description" class="text-xs text-(--ui-text-muted) mt-0.5 line-clamp-1">{{ task.description }}</p>
-          <div v-if="hasMeta" class="flex items-center gap-2 mt-2 flex-wrap">
+          <p v-if="task.description" class="text-xs text-(--ui-text-muted) mt-1 line-clamp-1">{{ task.description }}</p>
+          <div v-if="hasMeta" class="flex items-center gap-1.5 mt-2 flex-wrap">
             <UBadge v-if="statusLabel" :color="statusColor" variant="subtle" size="xs">{{ statusLabel }}</UBadge>
             <UBadge v-if="task.due_at" :color="isOverdue ? 'error' : 'neutral'" variant="subtle" size="xs">
-              <UIcon name="i-lucide-clock" class="size-3 mr-1" />
+              <UIcon :name="isOverdue ? 'i-lucide-alert-triangle' : 'i-lucide-clock'" class="size-3 mr-1" />
               {{ formatDue(task.due_at) }}
             </UBadge>
             <UBadge v-if="task.subtask_count && !expanded" color="neutral" variant="subtle" size="xs">
@@ -30,17 +30,17 @@
             </UBadge>
           </div>
         </NuxtLink>
-        <UButton v-if="task.subtask_count" color="neutral" variant="ghost" size="xs"
+        <UButton v-if="task.subtask_count" color="neutral" variant="ghost" size="sm"
           :icon="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-          @click.prevent="toggleExpand" class="shrink-0 mt-0.5" />
+          @click.prevent="toggleExpand" class="shrink-0" />
       </div>
     </UCard>
 
     <!-- Inline subtasks tree -->
     <div v-if="expanded && subtasks.length" class="ml-8 pl-3 border-l border-(--ui-border) mt-1 mb-1 space-y-0.5">
       <div v-for="sub in subtasks" :key="sub.id"
-        class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-colors hover:bg-(--ui-bg-elevated)">
-        <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub)" size="xs" />
+        class="flex items-center gap-2.5 py-2.5 px-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
+        <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub)" />
         <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0 text-sm transition-all duration-200"
           :class="sub.completed && 'line-through text-(--ui-text-muted)'">
           {{ sub.title }}
@@ -64,7 +64,9 @@ const loadingSubs = ref(false);
 
 const { toggleComplete } = useTasks();
 
-const isOverdue = computed(() => { if (!props.task.due_at || props.task.completed) return false; return new Date(props.task.due_at) < new Date(); });
+import { formatDue, isOverdue as checkOverdue } from '~/composables/useDate';
+
+const isOverdue = computed(() => { if (!props.task.due_at || props.task.completed) return false; return checkOverdue(props.task.due_at); });
 const statusLabel = computed(() => { const s = props.task.status; if (s === 'now') return 'Now'; if (s === 'next') return 'Next'; return ''; });
 const statusColor = computed(() => props.task.status === 'now' ? 'primary' as const : 'neutral' as const);
 const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.tags?.length || statusLabel.value);
@@ -88,5 +90,4 @@ async function handleSubToggle(sub: Task) {
   if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u };
 }
 
-function formatDue(dateStr: string) { const d = new Date(dateStr); const now = new Date(); const days = Math.ceil((d.getTime()-now.getTime())/86400000); if (days<0) return `${Math.abs(days)}d overdue`; if (days===0) return 'Today'; if (days===1) return 'Tomorrow'; if (days<7) return `${days}d`; return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 </script>

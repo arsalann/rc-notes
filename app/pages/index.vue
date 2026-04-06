@@ -1,41 +1,48 @@
 <template>
   <div class="max-w-lg mx-auto">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
-      <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-bold tracking-tight">Tasks</h1>
-        <WorkspaceSwitcher />
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold tracking-tight">{{ showArchived ? 'Archived' : 'Tasks' }}</h1>
+          <WorkspaceSwitcher />
+        </div>
+        <div class="flex items-center gap-1">
+          <UButton :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'" color="neutral"
+            :variant="showArchived ? 'soft' : 'ghost'" size="sm" @click="toggleArchived" />
+          <UButton icon="i-lucide-calendar" color="neutral" variant="ghost" size="sm" to="/calendar" />
+        </div>
       </div>
       <!-- Toolbar -->
-      <div class="flex items-center gap-2 mt-3 overflow-x-auto no-scrollbar">
+      <div class="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
         <UButton :color="showDone ? 'primary' : 'neutral'" :variant="showDone ? 'soft' : 'outline'" size="xs"
-          :icon="showDone ? 'i-lucide-eye' : 'i-lucide-eye-off'" @click="showDone = !showDone">
+          :icon="showDone ? 'i-lucide-eye' : 'i-lucide-eye-off'" @click="showDone = !showDone" class="shrink-0">
           Done
         </UButton>
-        <USeparator orientation="vertical" class="h-4" />
+        <USeparator orientation="vertical" class="h-4 shrink-0" />
         <UButton :color="orderBy === 'created' ? 'primary' : 'neutral'" :variant="orderBy === 'created' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-clock" @click="orderBy = 'created'">
+          icon="i-lucide-clock" @click="orderBy = 'created'" class="shrink-0">
           Newest
         </UButton>
         <UButton :color="orderBy === 'due' ? 'primary' : 'neutral'" :variant="orderBy === 'due' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-calendar" @click="orderBy = 'due'">
-          Due date
+          icon="i-lucide-calendar" @click="orderBy = 'due'" class="shrink-0">
+          Due
         </UButton>
-        <USeparator orientation="vertical" class="h-4" />
+        <USeparator orientation="vertical" class="h-4 shrink-0" />
         <UButton :color="groupBy === 'tag' ? 'primary' : 'neutral'" :variant="groupBy === 'tag' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'">
-          By tag
+          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0">
+          Tag
         </UButton>
         <UButton :color="groupBy === 'workspace' ? 'primary' : 'neutral'" :variant="groupBy === 'workspace' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'">
-          By space
+          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0">
+          Space
         </UButton>
         <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'">
-          By status
+          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0">
+          Status
         </UButton>
       </div>
     </div>
-    <div class="mt-2">
+    <div v-if="!showArchived" class="mt-2">
       <QuickAdd placeholder="What needs to be done?" @add="handleAdd" />
     </div>
     <div v-if="loading" class="px-4 mt-4 space-y-3">
@@ -57,9 +64,9 @@
             class="space-y-2.5 min-h-8"
             @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
             <template #item="{ element }">
-              <div class="flex items-start gap-1">
-                <div class="drag-handle cursor-grab active:cursor-grabbing pt-4 px-1 text-(--ui-text-dimmed) hover:text-(--ui-text-muted) transition-colors">
-                  <UIcon name="i-lucide-grip-vertical" class="size-4" />
+              <div class="flex items-start gap-0">
+                <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
+                  <UIcon name="i-lucide-grip-vertical" class="size-5" />
                 </div>
                 <div class="flex-1 min-w-0">
                   <TaskItem :task="element" @toggle="handleToggle" />
@@ -105,9 +112,9 @@
           class="space-y-2.5"
           @end="handleReorder">
           <template #item="{ element }">
-            <div class="flex items-start gap-1">
-              <div class="drag-handle cursor-grab active:cursor-grabbing pt-4 px-1 text-(--ui-text-dimmed) hover:text-(--ui-text-muted) transition-colors">
-                <UIcon name="i-lucide-grip-vertical" class="size-4" />
+            <div class="flex items-start gap-0">
+              <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
+                <UIcon name="i-lucide-grip-vertical" class="size-5" />
               </div>
               <div class="flex-1 min-w-0">
                 <TaskItem :task="element" @toggle="handleToggle" />
@@ -117,23 +124,27 @@
         </draggable>
       </div>
     </template>
-    <EmptyState v-else :message="showDone ? 'No tasks yet — add one above.' : 'No open tasks. Toggle &quot;Done&quot; to see completed.'" icon="i-lucide-circle-check" />
+    <EmptyState v-else :message="showArchived ? 'No archived tasks.' : showDone ? 'No tasks yet — add one above.' : 'No open tasks. Toggle &quot;Done&quot; to see completed.'" :icon="showArchived ? 'i-lucide-archive' : 'i-lucide-circle-check'" />
   </div>
 </template>
 
 <script setup lang="ts">
 import draggable from 'vuedraggable';
 import type { Task } from '~/composables/useNotes';
+import { parseUTC } from '~/composables/useDate';
 
 const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask } = useTasks();
 const { activeId, workspaces } = useWorkspace();
+const { prefs } = usePreferences();
 
-const showDone = ref(true);
-const orderBy = ref<'created' | 'due'>('created');
-const groupBy = ref<'none' | 'workspace' | 'tag' | 'status'>('status');
+const showDone = ref(prefs.value.taskShowDone);
+const orderBy = ref<'created' | 'due'>(prefs.value.taskOrderBy);
+const groupBy = ref<'none' | 'workspace' | 'tag' | 'status'>(prefs.value.taskGroupBy);
+const showArchived = ref(false);
 
-async function load() { await fetchTasks({ workspace_id: activeId.value }); }
+async function load() { await fetchTasks({ workspace_id: activeId.value, archived: showArchived.value }); }
 onMounted(load); watch(activeId, load);
+function toggleArchived() { showArchived.value = !showArchived.value; load(); }
 
 // Step 1: filter
 const filteredTasks = computed(() => {
@@ -150,14 +161,14 @@ const sortedTasks = computed(() => {
       if (!a.due_at && !b.due_at) return 0;
       if (!a.due_at) return 1;
       if (!b.due_at) return -1;
-      return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
+      return parseUTC(a.due_at).getTime() - parseUTC(b.due_at).getTime();
     });
   }
   // 'created' — incomplete first, pinned first, then newest
   return list.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime();
   });
 });
 

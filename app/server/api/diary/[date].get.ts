@@ -13,8 +13,6 @@ export default defineEventHandler(async (event) => {
     where += " AND workspace_id = $ws";
     params.ws = workspace_id;
     types.ws = VARCHAR;
-  } else {
-    where += " AND workspace_id IS NULL";
   }
 
   const rows = await queryAll(`SELECT * FROM diary_entries WHERE ${where}`, params, types);
@@ -32,6 +30,20 @@ export default defineEventHandler(async (event) => {
       END as target_title
     FROM links l WHERE l.source_type = 'diary' AND l.source_id = $id
   `, { id: entry.id }, { id: VARCHAR });
+
+  // Auto-set due_at on linked tasks that don't have one yet
+  const taskLinks = links.filter((l: any) => l.target_type === 'task');
+  if (taskLinks.length) {
+    const dueAt = `${date}T12:00:00`;
+    for (const link of taskLinks) {
+      await queryAll(
+        `UPDATE tasks SET due_at = $due_at::TIMESTAMP, updated_at = now()
+         WHERE id = $tid AND due_at IS NULL`,
+        { due_at: dueAt, tid: link.target_id },
+        { due_at: VARCHAR, tid: VARCHAR }
+      ).catch(() => {});
+    }
+  }
 
   return { ...entry, links };
 });

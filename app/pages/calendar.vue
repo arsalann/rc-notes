@@ -2,15 +2,16 @@
   <div class="max-w-lg mx-auto">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-3">
+        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/" />
         <h1 class="text-2xl font-bold tracking-tight">Calendar</h1>
         <WorkspaceSwitcher />
       </div>
     </div>
 
     <!-- Day selector -->
-    <div class="flex gap-2 px-4 mt-3 no-scrollbar overflow-x-auto">
+    <div class="flex gap-2 px-4 mt-3">
       <button v-for="day in days" :key="day.date" @click="selectedDate = day.date"
-        class="flex flex-col items-center flex-1 min-w-16 px-2 py-3 rounded-2xl transition-all duration-200 active:scale-95"
+        class="flex flex-col items-center flex-1 min-w-0 px-2 py-3 rounded-2xl transition-all duration-200 active:scale-95"
         :class="selectedDate === day.date
           ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
           : day.isToday
@@ -45,15 +46,16 @@
 
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
+import { todayLocal, localDateOffset } from '~/composables/useDate';
 const { activeId } = useWorkspace(); const { toggleComplete } = useTasks();
-const loading = ref(true); const calendarData = ref<{ date: string; tasks: Task[] }[]>([]); const selectedDate = ref(new Date().toISOString().split('T')[0]);
-const days = computed(() => { const r: any[] = []; const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; const td = new Date().toISOString().split('T')[0];
-  for (let i = -2; i <= 2; i++) { const d = new Date(); d.setDate(d.getDate() + i); const ds = d.toISOString().split('T')[0]; const dd = calendarData.value.find(c => c.date === ds);
+const loading = ref(true); const calendarData = ref<{ date: string; tasks: Task[] }[]>([]); const selectedDate = ref(todayLocal());
+const days = computed(() => { const r: any[] = []; const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; const td = todayLocal();
+  for (let i = -2; i <= 2; i++) { const ds = localDateOffset(i); const d = new Date(ds + 'T12:00:00'); const dd = calendarData.value.find(c => c.date === ds);
     r.push({ date: ds, dayName: dn[d.getDay()], dayNum: d.getDate(), isToday: ds === td, taskCount: dd?.tasks?.length || 0 }); } return r; });
 const selectedTasks = computed(() => calendarData.value.find(d => d.date === selectedDate.value)?.tasks || []);
-const selectedDayLabel = computed(() => { const td = new Date().toISOString().split('T')[0]; if (selectedDate.value === td) return 'Today';
-  const y = new Date(); y.setDate(y.getDate() - 1); if (selectedDate.value === y.toISOString().split('T')[0]) return 'Yesterday';
-  const t = new Date(); t.setDate(t.getDate() + 1); if (selectedDate.value === t.toISOString().split('T')[0]) return 'Tomorrow';
+const selectedDayLabel = computed(() => { const td = todayLocal(); if (selectedDate.value === td) return 'Today';
+  if (selectedDate.value === localDateOffset(-1)) return 'Yesterday';
+  if (selectedDate.value === localDateOffset(1)) return 'Tomorrow';
   return new Date(selectedDate.value + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); });
 async function fetchCalendar() { loading.value = true; try { const q: Record<string, string> = {}; if (activeId.value) q.workspace_id = activeId.value; calendarData.value = await $fetch<any[]>('/api/calendar', { query: q }); } finally { loading.value = false; } }
 onMounted(fetchCalendar); watch(activeId, fetchCalendar);

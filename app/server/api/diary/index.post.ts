@@ -18,24 +18,29 @@ export default defineEventHandler(async (event) => {
     where += " AND workspace_id = $ws";
     params.ws = workspaceId;
     types.ws = VARCHAR;
-  } else {
-    where += " AND workspace_id IS NULL";
   }
 
   const existing = await queryAll(`SELECT * FROM diary_entries WHERE ${where}`, params, types);
   if (existing.length) return existing[0];
 
-  // Create new entry
-  const cols = ['id', 'entry_date', 'content'];
-  const vals = ['uuid()::VARCHAR', '$date::DATE', '$content'];
+  // Create new entry — default to Work workspace
+  const cols = ['id', 'entry_date', 'content', 'workspace_id'];
+  const vals = ['uuid()::VARCHAR', '$date::DATE', '$content', '$ws'];
   const insertParams: Record<string, any> = { date: entryDate, content };
   const insertTypes: Record<string, any> = { date: VARCHAR, content: VARCHAR };
 
-  if (workspaceId) {
-    cols.push('workspace_id');
-    vals.push('$ws');
-    insertParams.ws = workspaceId;
+  // Use provided workspace or look up Work workspace
+  let wsId = workspaceId;
+  if (!wsId) {
+    const { getDefaultWorkspaceId } = await import('~/server/utils/db');
+    wsId = await getDefaultWorkspaceId();
+  }
+  if (wsId) {
+    insertParams.ws = wsId;
     insertTypes.ws = VARCHAR;
+  } else {
+    cols.pop();
+    vals.pop();
   }
 
   const rows = await queryAll(
@@ -53,8 +58,6 @@ export default defineEventHandler(async (event) => {
     prevWhere += " AND workspace_id = $ws";
     prevParams.ws = workspaceId;
     prevTypes.ws = VARCHAR;
-  } else {
-    prevWhere += " AND workspace_id IS NULL";
   }
 
   const prevEntries = await queryAll(

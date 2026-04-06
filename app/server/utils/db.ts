@@ -1,7 +1,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import { resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { getMotherDuckToken } from '~/server/utils/config';
+import { getMotherDuckToken, getUserId, getUsername } from '~/server/utils/config';
 
 let connectionPromise: Promise<any> | null = null;
 
@@ -143,6 +143,14 @@ export function useDB() {
         )
       `);
 
+      await connection.run(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR PRIMARY KEY,
+          username VARCHAR NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+        )
+      `);
+
       // --- Migrations (for existing databases) ---
       const migrate = async (sql: string) => { try { await connection.run(sql); } catch {} };
 
@@ -216,6 +224,71 @@ export function useDB() {
         await connection.run("INSERT INTO workspaces (id, name, emoji, position) VALUES (uuid()::VARCHAR, 'Work', '💼', 1)");
       }
 
+      // v4: populate user_id for existing single-user data
+      const userId = getUserId();
+      const userName = getUsername();
+      if (userId) {
+        await migrate(`INSERT INTO users (id, username) VALUES ('${userId}', '${userName || 'user'}') ON CONFLICT (id) DO NOTHING`);
+        for (const table of ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'event_log']) {
+          await migrate(`UPDATE ${table} SET user_id = '${userId}' WHERE user_id IS NULL`);
+        }
+        for (const table of ['workspaces', 'tasks', 'notes', 'diary_entries', 'event_log']) {
+          await migrate(`UPDATE ${table} SET user_name = '${userName || 'user'}' WHERE user_name IS NULL`);
+        }
+      }
+
+      // v5: backfill tasks/notes/diary with no workspace to "Work"
+      const workWs = await connection.runAndReadAll("SELECT id FROM workspaces WHERE name = 'Work' LIMIT 1");
+      const workWsId = workWs.getRowObjectsJson()[0]?.id;
+      if (workWsId) {
+        await migrate(`UPDATE tasks SET workspace_id = '${workWsId}' WHERE workspace_id IS NULL`);
+        await migrate(`UPDATE notes SET workspace_id = '${workWsId}' WHERE workspace_id IS NULL`);
+        await migrate(`UPDATE diary_entries SET workspace_id = '${workWsId}' WHERE workspace_id IS NULL`);
+      }
+
+      // v6: auto-set status to 'now' for tasks with a due date that aren't done
+      await migrate(`UPDATE tasks SET status = 'now' WHERE due_at IS NOT NULL AND status != 'done' AND status != 'now'`);
+
+      // v7: backfill diary links for tasks with due dates that aren't already linked
+      try {
+        const unlinkedTasks = await connection.runAndReadAll(`
+          SELECT t.id, t.due_at, t.workspace_id
+          FROM tasks t
+          WHERE t.due_at IS NOT NULL
+            AND t.parent_id IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM links l
+              WHERE l.target_type = 'task' AND l.target_id = t.id
+                AND l.source_type = 'diary'
+            )
+        `);
+        const rows = unlinkedTasks.getRowObjectsJson();
+        for (const task of rows) {
+          const dateStr = String(task.due_at).slice(0, 10);
+          // Find or create diary entry
+          let diaryResult = await connection.runAndReadAll(
+            `SELECT id FROM diary_entries WHERE entry_date = '${dateStr}'::DATE LIMIT 1`
+          );
+          let diaryRows = diaryResult.getRowObjectsJson();
+          if (!diaryRows.length) {
+            const wsClause = task.workspace_id ? `'${task.workspace_id}'` : 'NULL';
+            diaryResult = await connection.runAndReadAll(
+              `INSERT INTO diary_entries (id, entry_date, content, workspace_id)
+               VALUES (uuid()::VARCHAR, '${dateStr}'::DATE, '', ${wsClause}) RETURNING id`
+            );
+            diaryRows = diaryResult.getRowObjectsJson();
+          }
+          if (diaryRows.length) {
+            await connection.run(
+              `INSERT INTO links (id, source_type, source_id, target_type, target_id)
+               VALUES (uuid()::VARCHAR, 'diary', '${diaryRows[0].id}', 'task', '${task.id}')`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('v7 diary link backfill warning:', e);
+      }
+
       return connection;
     })();
   }
@@ -232,6 +305,61 @@ export async function queryAll(
     ? await db.runAndReadAll(sql, params, types)
     : await db.runAndReadAll(sql, params);
   return reader.getRowObjectsJson();
+}
+
+export async function getDefaultWorkspaceId(): Promise<string | null> {
+  const rows = await queryAll(
+    "SELECT id FROM workspaces WHERE name = 'Work' ORDER BY position LIMIT 1"
+  );
+  return rows[0]?.id || null;
+}
+
+/**
+ * Find or create a diary entry for the given date, then link the task to it.
+ */
+export async function linkTaskToDiary(taskId: string, dueAt: string, workspaceId?: string | null) {
+  const { VARCHAR } = await import('@duckdb/node-api');
+  // Extract YYYY-MM-DD from the due_at timestamp
+  const dateStr = dueAt.slice(0, 10);
+
+  // Find existing diary entry for this date
+  let diaryRows = await queryAll(
+    'SELECT id FROM diary_entries WHERE entry_date = $date::DATE LIMIT 1',
+    { date: dateStr }, { date: VARCHAR }
+  );
+
+  // Create diary entry if it doesn't exist
+  if (!diaryRows.length) {
+    const wsId = workspaceId || await getDefaultWorkspaceId();
+    const cols = ['id', 'entry_date', 'content'];
+    const vals = ['uuid()::VARCHAR', '$date::DATE', "''"];
+    const p: Record<string, any> = { date: dateStr };
+    const t: Record<string, any> = { date: VARCHAR };
+    if (wsId) {
+      cols.push('workspace_id');
+      vals.push('$ws');
+      p.ws = wsId;
+      t.ws = VARCHAR;
+    }
+    diaryRows = await queryAll(
+      `INSERT INTO diary_entries (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING id`,
+      p, t
+    );
+  }
+
+  if (!diaryRows.length) return;
+  const diaryId = diaryRows[0].id;
+
+  // Create link if not already linked
+  await queryAll(
+    `INSERT INTO links (id, source_type, source_id, target_type, target_id)
+     SELECT uuid()::VARCHAR, 'diary', $did, 'task', $tid
+     WHERE NOT EXISTS (
+       SELECT 1 FROM links WHERE source_type = 'diary' AND source_id = $did AND target_type = 'task' AND target_id = $tid
+     )`,
+    { did: diaryId, tid: taskId },
+    { did: VARCHAR, tid: VARCHAR }
+  );
 }
 
 export async function execute(sql: string, params: Record<string, any> = {}, types?: Record<string, any>) {

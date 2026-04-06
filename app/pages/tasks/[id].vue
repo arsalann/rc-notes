@@ -5,29 +5,28 @@
       <div class="flex items-center gap-1">
         <UButton color="neutral" variant="ghost" :icon="task?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="task?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
-        <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="handleArchive" />
-        <UButton color="neutral" variant="ghost" icon="i-lucide-trash-2" @click="confirmDelete = true" />
+        <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="confirmArchive = true" />
       </div>
     </div>
 
     <div v-if="loadingTask" class="flex items-center justify-center py-20">
       <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-(--ui-primary)" />
     </div>
-    <div v-else-if="task" class="px-4 pb-8 space-y-5">
+    <div v-else-if="task" class="px-4 pb-12 space-y-5">
       <!-- ID + Workspace -->
       <div>
         <div class="flex items-center gap-2 mb-1.5">
           <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ task.display_id }}</UBadge>
           <UDropdownMenu :items="workspaceMenuItems" :ui="{ content: 'min-w-44' }">
-            <UButton color="neutral" variant="ghost" size="xs" trailing-icon="i-lucide-chevron-down" class="text-xs">
-              <UIcon name="i-lucide-folder" class="size-3" />
+            <UButton color="neutral" variant="ghost" size="sm" trailing-icon="i-lucide-chevron-down">
+              <UIcon name="i-lucide-folder" class="size-3.5" />
               {{ currentWorkspaceName }}
             </UButton>
           </UDropdownMenu>
         </div>
         <!-- Status pills -->
-        <div class="flex items-center gap-1.5 mb-2">
-          <UButton v-for="s in statusOptions" :key="s.value" size="xs"
+        <div class="flex items-center gap-2 mb-2">
+          <UButton v-for="s in statusOptions" :key="s.value" size="sm"
             :color="task.status === s.value ? s.color : 'neutral'"
             :variant="task.status === s.value ? 'solid' : 'outline'"
             @click="setStatus(s.value)">
@@ -50,17 +49,17 @@
         </div>
         <div class="border-l-2 border-(--ui-border) pl-3 space-y-0.5">
           <div v-for="sub in subtasks" :key="sub.id"
-            class="group flex items-center gap-2.5 py-2 px-2 -mx-2 rounded-lg transition-colors hover:bg-(--ui-bg-elevated)">
+            class="flex items-center gap-2.5 py-2.5 px-2 -mx-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
             <UCheckbox :model-value="sub.completed" @update:model-value="toggleSubtask(sub.id)" />
             <span class="text-sm flex-1 transition-all duration-200" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
-            <UBadge color="neutral" variant="subtle" size="xs" class="font-mono opacity-0 group-hover:opacity-100 transition-opacity">{{ sub.display_id }}</UBadge>
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x"
-              class="opacity-0 group-hover:opacity-100 transition-opacity" @click="deleteSubtask(sub.id)" />
+            <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ sub.display_id }}</UBadge>
+            <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-archive"
+              @click="archiveSubtask(sub.id)" />
           </div>
-          <form @submit.prevent="addSubtask" class="flex items-center gap-2.5 py-2 px-2 -mx-2 rounded-lg">
+          <form @submit.prevent="addSubtask" class="flex items-center gap-2.5 py-2.5 px-2 -mx-2 rounded-lg">
             <UIcon name="i-lucide-circle-dashed" class="size-4 text-(--ui-text-dimmed) shrink-0" />
             <input v-model="newSubtask" placeholder="Add a subtask..."
-              class="flex-1 text-sm bg-transparent outline-none text-(--ui-text-muted) placeholder:text-(--ui-text-dimmed)" />
+              class="flex-1 bg-transparent outline-none text-(--ui-text-muted) placeholder:text-(--ui-text-dimmed)" />
             <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 scale-90" enter-to-class="opacity-100 scale-100"
               leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-90">
               <UButton v-if="newSubtask.trim()" type="submit" color="primary" variant="ghost" size="xs">Add</UButton>
@@ -71,34 +70,34 @@
 
       <!-- Description -->
       <textarea v-model="editDescription" @blur="saveDescription" placeholder="Add details..."
-        class="w-full text-sm leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[60px] placeholder:text-(--ui-text-dimmed)" />
+        class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[80px] placeholder:text-(--ui-text-dimmed)" />
 
       <!-- Due Date -->
       <UCard>
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Due Date</p>
         <div class="flex items-center gap-2 flex-wrap">
           <UButton v-for="opt in dateShortcuts" :key="opt.label" :color="isDueMatch(opt.value) ? 'primary' : 'neutral'"
-            :variant="isDueMatch(opt.value) ? 'solid' : 'soft'" size="xs" @click="saveDue(opt.value)">
+            :variant="isDueMatch(opt.value) ? 'solid' : 'soft'" size="sm" @click="saveDue(opt.value)">
             {{ opt.label }}
           </UButton>
           <label class="inline-flex">
-            <UButton color="neutral" variant="soft" size="xs" as="span">Pick...</UButton>
+            <UButton color="neutral" variant="soft" size="sm" as="span">Pick...</UButton>
             <input type="datetime-local" :value="editDue" @change="saveDue(($event.target as HTMLInputElement).value)" class="sr-only" />
           </label>
-          <UButton v-if="task.due_at" color="neutral" variant="ghost" size="xs" icon="i-lucide-x" @click="saveDue('')" />
+          <UButton v-if="task.due_at" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" @click="saveDue('')" />
         </div>
       </UCard>
 
       <!-- Tags -->
       <UCard>
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Tags</p>
-        <div class="flex items-center gap-1.5 flex-wrap">
-          <UBadge v-for="(tag, i) in editTags" :key="i" color="neutral" variant="subtle" size="sm" class="gap-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <UBadge v-for="(tag, i) in editTags" :key="i" color="neutral" variant="subtle" size="sm" class="gap-1.5 py-1">
             {{ tag }}
-            <button @click="removeTag(i)" class="opacity-50 hover:opacity-100 transition-opacity ml-0.5">&times;</button>
+            <button @click="removeTag(i)" class="p-0.5 -mr-0.5 rounded-full active:bg-white/10 transition-colors">&times;</button>
           </UBadge>
           <input v-model="newTag" @keydown.enter.prevent="addTag" @keydown.comma.prevent="addTag"
-            placeholder="+ add tag" class="text-xs bg-transparent outline-none w-20 text-(--ui-text-muted) py-1 placeholder:text-(--ui-text-dimmed)" />
+            placeholder="+ add tag" class="bg-transparent outline-none w-24 text-(--ui-text-muted) py-1.5 placeholder:text-(--ui-text-dimmed)" />
         </div>
       </UCard>
 
@@ -110,7 +109,7 @@
             <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-external-link">Open</UButton>
           </NuxtLink>
         </div>
-        <UCard :ui="{ body: 'sm:p-3' }">
+        <UCard :ui="{ body: 'p-3' }">
           <p class="text-sm font-medium">{{ linkedNote.target_title }}</p>
           <div v-if="linkedNoteContent" class="mt-2 prose prose-invert prose-sm max-w-none text-(--ui-text-muted)
             prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted)
@@ -124,11 +123,11 @@
       </UButton>
     </div>
 
-    <UModal v-model:open="confirmDelete" title="Delete task?" description="This will also delete all subtasks.">
+    <UModal v-model:open="confirmArchive" title="Archive task?" description="This task and its subtasks will be archived.">
       <template #footer>
         <div class="flex gap-3 w-full">
-          <UButton color="neutral" variant="soft" class="flex-1" @click="confirmDelete = false">Cancel</UButton>
-          <UButton color="error" class="flex-1" @click="handleDelete">Delete</UButton>
+          <UButton color="neutral" variant="soft" class="flex-1" @click="confirmArchive = false">Cancel</UButton>
+          <UButton color="warning" class="flex-1" @click="handleArchiveTask">Archive</UButton>
         </div>
       </template>
     </UModal>
@@ -138,13 +137,14 @@
 <script setup lang="ts">
 import { marked } from 'marked';
 import type { Task } from '~/composables/useNotes';
+import { parseUTC, todayLocal, localDateOffset } from '~/composables/useDate';
 
 const route = useRoute(); const id = route.params.id as string;
-const { updateTask, deleteTask, toggleComplete, togglePin, toggleArchive, createTask } = useTasks();
+const { updateTask, deleteTask, toggleComplete, togglePin, createTask } = useTasks();
 const { createNote } = useNotesCrud();
 const { workspaces } = useWorkspace();
 
-const task = ref<Task | null>(null); const subtasks = ref<Task[]>([]); const loadingTask = ref(true); const confirmDelete = ref(false);
+const task = ref<Task | null>(null); const subtasks = ref<Task[]>([]); const loadingTask = ref(true); const confirmArchive = ref(false);
 const newSubtask = ref(''); const newTag = ref(''); const editTitle = ref(''); const editDescription = ref(''); const editTags = ref<string[]>([]); const editDue = ref('');
 const taskLinks = ref<any[]>([]);
 const linkedNoteContent = ref('');
@@ -184,17 +184,32 @@ async function changeWorkspace(wsId: string | null) {
   task.value = await updateTask(id, { workspace_id: wsId } as any);
 }
 
-const dateShortcuts = computed(() => { const t = new Date(); const tm = new Date(t); tm.setDate(tm.getDate() + 1); const nw = new Date(t); nw.setDate(nw.getDate() + 7);
-  const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T09:00`;
-  return [{ label: 'Today', value: f(t) }, { label: 'Tomorrow', value: f(tm) }, { label: 'Next week', value: f(nw) }]; });
-function isDueMatch(v: string) { if (!task.value?.due_at) return false; return task.value.due_at.startsWith(v.split('T')[0]); }
+const dateShortcuts = computed(() => {
+  return [
+    { label: 'Today', value: `${todayLocal()}T09:00` },
+    { label: 'Tomorrow', value: `${localDateOffset(1)}T09:00` },
+    { label: 'Next week', value: `${localDateOffset(7)}T09:00` },
+  ];
+});
+function isDueMatch(v: string) {
+  if (!task.value?.due_at) return false;
+  const d = parseUTC(task.value.due_at);
+  const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return localDate === v.split('T')[0];
+}
 
 onMounted(async () => {
   try {
     const d = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`);
     task.value = d; subtasks.value = d.subtasks || [];
     editTitle.value = d.title; editDescription.value = d.description;
-    editTags.value = [...(d.tags || [])]; editDue.value = d.due_at ? d.due_at.slice(0, 16) : '';
+    editTags.value = [...(d.tags || [])];
+    if (d.due_at) {
+      const local = parseUTC(d.due_at);
+      editDue.value = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}T${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}`;
+    } else {
+      editDue.value = '';
+    }
     // Fetch links for this task
     await fetchLinks();
   } finally { loadingTask.value = false; }
@@ -239,11 +254,10 @@ async function setStatus(status: string) {
 }
 async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) { task.value.completed = u.completed; task.value.status = u.status; } }
 async function handlePin() { const u = await togglePin(id); if (task.value) task.value.pinned = u.pinned; }
-async function handleArchive() { await toggleArchive(id); navigateTo('/'); }
-async function handleDelete() { await deleteTask(id); navigateTo('/'); }
+async function handleArchiveTask() { await deleteTask(id); navigateTo('/'); }
 async function addSubtask() { const t = newSubtask.value.trim(); if (!t) return; const s = await createTask({ title: t, parent_id: id }); subtasks.value.push(s); newSubtask.value = ''; }
 async function toggleSubtask(sid: string) { const u = await toggleComplete(sid); const i = subtasks.value.findIndex(s => s.id === sid); if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u }; }
-async function deleteSubtask(sid: string) { await deleteTask(sid); subtasks.value = subtasks.value.filter(s => s.id !== sid); }
+async function archiveSubtask(sid: string) { await deleteTask(sid); subtasks.value = subtasks.value.filter(s => s.id !== sid); }
 
 async function handleAddNote() {
   if (!task.value) return;
