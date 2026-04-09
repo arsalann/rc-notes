@@ -22,6 +22,10 @@
             <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Role</p>
             <p class="text-sm font-medium mt-0.5">{{ user?.is_admin ? 'Admin' : 'User' }}</p>
           </div>
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">User ID</p>
+            <p class="text-xs font-mono text-(--ui-text-muted) mt-0.5 select-all">{{ user?.id || '—' }}</p>
+          </div>
           <UButton
             color="neutral"
             variant="outline"

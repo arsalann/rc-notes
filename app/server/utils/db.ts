@@ -231,6 +231,9 @@ export function useDB() {
       await migrate("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false");
       await migrate("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT current_timestamp");
 
+      // v9: unique username constraint
+      await migrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)");
+
       // v5: backfill tasks/notes/diary with no workspace to "Work"
       const workWs = await connection.runAndReadAll("SELECT id FROM workspaces WHERE name = 'Work' LIMIT 1");
       const workWsId = workWs.getRowObjectsJson()[0]?.id;
