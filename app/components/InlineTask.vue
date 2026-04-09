@@ -23,14 +23,15 @@
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
 
-const props = defineProps<{ taskId: string }>();
+const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] } }>();
 const { toggleComplete } = useTasks();
 
-const task = ref<Task | null>(null);
-const subtasks = ref<Task[]>([]);
-const loading = ref(true);
+const task = ref<Task | null>(props.initialData || null);
+const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
+const loading = ref(!props.initialData);
 
 onMounted(async () => {
+  if (props.initialData) return;
   try {
     const data = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${props.taskId}`);
     task.value = data;

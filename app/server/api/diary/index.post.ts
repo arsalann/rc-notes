@@ -75,17 +75,31 @@ export default defineEventHandler(async (event) => {
       WHERE l.source_type = 'diary' AND l.source_id = $pid AND l.target_type = 'task' AND t.completed = false
     `, { pid: prevId }, { pid: VARCHAR });
 
-    for (const task of undone) {
-      // Create link from new entry to undone task
+    if (undone.length) {
+      // Batch insert all carry-forward links in one query
+      const valuesClauses = undone.map((task: any) =>
+        `(uuid()::VARCHAR, 'diary', '${(newEntry.id as string).replace(/'/g, "''")}', 'task', '${(task.target_id as string).replace(/'/g, "''")}')`
+      ).join(', ');
       await queryAll(
-        "INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES (uuid()::VARCHAR, 'diary', $sid, 'task', $tid) RETURNING *",
-        { sid: newEntry.id, tid: task.target_id },
-        { sid: VARCHAR, tid: VARCHAR }
-      );
-      carriedTasks.push({ id: task.target_id, title: task.title });
+        `INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES ${valuesClauses}`
+      ).catch(() => {});
+
+      for (const task of undone) {
+        carriedTasks.push({ id: task.target_id, title: task.title });
+      }
     }
   }
 
+  // Fetch links so the client doesn't need a follow-up GET
+  const links = await queryAll(`
+    SELECT l.id as link_id, l.target_type, l.target_id,
+      COALESCE(t.title, n.title) as target_title
+    FROM links l
+    LEFT JOIN tasks t ON l.target_type = 'task' AND t.id = l.target_id
+    LEFT JOIN notes n ON l.target_type = 'note' AND n.id = l.target_id
+    WHERE l.source_type = 'diary' AND l.source_id = $id
+  `, { id: newEntry.id }, { id: VARCHAR });
+
   setResponseStatus(event, 201);
-  return { ...newEntry, carried_tasks: carriedTasks };
+  return { ...newEntry, links, carried_tasks: carriedTasks };
 });

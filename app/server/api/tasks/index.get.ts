@@ -20,9 +20,17 @@ export default defineEventHandler(async (event) => {
     SELECT t.id, t.display_id, t.workspace_id, t.title, t.description, t.status, t.completed, t.completed_at,
       t.pinned, t.archived, t.due_at, t.tags, t.position,
       t.created_at, t.updated_at,
-      (SELECT count(*)::INTEGER FROM tasks s WHERE s.parent_id = t.id) as subtask_count,
-      (SELECT count(*)::INTEGER FROM tasks s WHERE s.parent_id = t.id AND s.completed = true) as subtask_done
+      COALESCE(sc.subtask_count, 0)::INTEGER as subtask_count,
+      COALESCE(sc.subtask_done, 0)::INTEGER as subtask_done
     FROM tasks t
+    LEFT JOIN (
+      SELECT parent_id,
+        count(*)::INTEGER as subtask_count,
+        count(*) FILTER (WHERE completed = true)::INTEGER as subtask_done
+      FROM tasks
+      WHERE parent_id IS NOT NULL
+      GROUP BY parent_id
+    ) sc ON sc.parent_id = t.id
     ${where}
     ORDER BY t.completed ASC, t.pinned DESC, t.position ASC, t.created_at DESC
   `, params, types);
