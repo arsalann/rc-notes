@@ -229,7 +229,7 @@ async function fetchEntry() {
       return;
     }
 
-    // Create new entry (triggers carry-forward)
+    // Create new entry (triggers carry-forward) — POST now returns links
     const created = await $fetch<DiaryEntry & { carried_tasks?: { id: string; title: string }[] }>('/api/diary', {
       method: 'POST',
       body: { entry_date: selectedDate.value, workspace_id: activeId.value },
@@ -238,27 +238,20 @@ async function fetchEntry() {
     editContent.value = created.content;
     carriedTasks.value = created.carried_tasks || [];
     editMode.value = true;
-
-    // Reload entry to get links
-    const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
-    if (full) entry.value = full;
   } finally {
     loading.value = false;
   }
 }
 
-// Track which dates have content (for dot indicators)
+// Track which dates have content (batch endpoint)
 async function fetchDateIndicators() {
   try {
-    const q: Record<string, string> = {};
+    const fromDate = localDateOffset(-3);
+    const toDate = localDateOffset(3);
+    const q: Record<string, string> = { from: fromDate, to: toDate };
     if (activeId.value) q.workspace_id = activeId.value;
-    for (let i = -3; i <= 3; i++) {
-      const ds = localDateOffset(i);
-      try {
-        const e = await $fetch<DiaryEntry>(`/api/diary/${ds}`, { query: q });
-        if (e?.content?.trim()) entryDates.value.add(ds);
-      } catch {}
-    }
+    const dates = await $fetch<string[]>('/api/diary/dates', { query: q });
+    entryDates.value = new Set(dates);
   } catch {}
 }
 
@@ -286,6 +279,13 @@ function saveContent() {
   }, 300);
 }
 
+// Debounced mention search
+let mentionTimer: ReturnType<typeof setTimeout>;
+function debouncedSearchMentions(q: string) {
+  clearTimeout(mentionTimer);
+  mentionTimer = setTimeout(() => searchMentions(q), 200);
+}
+
 function handleContentInput() {
   saveContent();
   const el = contentRef.value; if (!el) return;
@@ -293,7 +293,7 @@ function handleContentInput() {
   if (at >= 0 && (at === 0 || text[at - 1] === ' ' || text[at - 1] === '\n')) {
     const q = text.substring(at + 1);
     if (q.length > 0 && !q.includes(' ') && !q.includes('\n')) {
-      mentionOpen.value = true; searchMentions(q); return;
+      mentionOpen.value = true; debouncedSearchMentions(q); return;
     }
   }
   mentionOpen.value = false;
@@ -343,11 +343,13 @@ async function insertMention(item: { id: string; type: string; title: string }) 
   mentionOpen.value = false;
   if (entry.value) {
     await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: item.type, target_id: item.id } });
-    // Reload to get updated links
-    const q: Record<string, string> = {};
-    if (activeId.value) q.workspace_id = activeId.value;
-    const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
-    if (full) entry.value = full;
+    // Optimistically add link to local state
+    const newLink = { link_id: '', target_type: item.type, target_id: item.id, target_title: item.title };
+    if (entry.value.links) {
+      entry.value.links.push(newLink);
+    } else {
+      entry.value.links = [newLink];
+    }
   }
   saveContent();
 }

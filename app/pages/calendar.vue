@@ -59,5 +59,16 @@ const selectedDayLabel = computed(() => { const td = todayLocal(); if (selectedD
   return new Date(selectedDate.value + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); });
 async function fetchCalendar() { loading.value = true; try { const q: Record<string, string> = {}; if (activeId.value) q.workspace_id = activeId.value; calendarData.value = await $fetch<any[]>('/api/calendar', { query: q }); } finally { loading.value = false; } }
 onMounted(fetchCalendar); watch(activeId, fetchCalendar);
-async function handleToggle(id: string) { await toggleComplete(id); await fetchCalendar(); }
+async function handleToggle(id: string) {
+  // Optimistic update: toggle locally first
+  for (const day of calendarData.value) {
+    const task = day.tasks.find((t: any) => t.id === id);
+    if (task) {
+      task.completed = !task.completed;
+      task.status = task.completed ? 'done' : 'now';
+      break;
+    }
+  }
+  await toggleComplete(id);
+}
 </script>

@@ -200,7 +200,11 @@ function isDueMatch(v: string) {
 
 onMounted(async () => {
   try {
-    const d = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`);
+    // Parallelize task + links fetch
+    const [d, links] = await Promise.all([
+      $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`),
+      $fetch<any[]>(`/api/task-links/${id}`).catch(() => []),
+    ]);
     task.value = d; subtasks.value = d.subtasks || [];
     editTitle.value = d.title; editDescription.value = d.description;
     editTags.value = [...(d.tags || [])];
@@ -210,24 +214,28 @@ onMounted(async () => {
     } else {
       editDue.value = '';
     }
-    // Fetch links for this task
-    await fetchLinks();
-  } finally { loadingTask.value = false; }
-});
-
-async function fetchLinks() {
-  try {
-    // Reuse the mention/links by fetching through search
-    const links = await $fetch<any[]>(`/api/task-links/${id}`).catch(() => []);
     taskLinks.value = links;
-    // Load linked note content
+    // Load linked note content if present
     if (linkedNote.value) {
       const noteData = await $fetch<any>(`/api/notes/${linkedNote.value.target_id}`).catch(() => null);
       if (noteData?.content) {
         linkedNoteContent.value = marked.parse(noteData.content) as string;
       }
     }
-  } catch { /* no links API, fetch from note detail */ }
+  } finally { loadingTask.value = false; }
+});
+
+async function fetchLinks() {
+  try {
+    const links = await $fetch<any[]>(`/api/task-links/${id}`).catch(() => []);
+    taskLinks.value = links;
+    if (linkedNote.value) {
+      const noteData = await $fetch<any>(`/api/notes/${linkedNote.value.target_id}`).catch(() => null);
+      if (noteData?.content) {
+        linkedNoteContent.value = marked.parse(noteData.content) as string;
+      }
+    }
+  } catch {}
 }
 
 function extractTags(text: string): { title: string; tags: string[] } {

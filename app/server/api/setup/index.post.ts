@@ -32,31 +32,48 @@ export default defineEventHandler(async (event) => {
 
   const hash = await hashPassword(password);
 
-  // Generate UUID for new user
-  const idRows = await queryAll("SELECT uuid()::VARCHAR as id");
-  const userId = idRows[0].id as string;
-
-  // Insert the first user as admin
-  await execute(
-    'INSERT INTO users (id, username, password_hash, is_admin) VALUES ($id, $username, $hash, true)',
-    { id: userId, username, hash },
-    { id: VARCHAR, username: VARCHAR, hash: VARCHAR }
+  // Check if a legacy user with this username exists (no password set)
+  const legacyUsers = await queryAll(
+    'SELECT id FROM users WHERE username = $username AND password_hash IS NULL',
+    { username }, { username: VARCHAR }
   );
 
-  // Reassign any existing content rows (from old auth system) to new user
-  for (const table of ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'event_log']) {
+  let userId: string;
+
+  if (legacyUsers.length) {
+    // Upgrade legacy user: set password and make admin
+    userId = legacyUsers[0].id as string;
     await execute(
-      `UPDATE ${table} SET user_id = $uid WHERE user_id IS NOT NULL AND user_id != $uid`,
-      { uid: userId },
-      { uid: VARCHAR }
+      'UPDATE users SET password_hash = $hash, is_admin = true, updated_at = current_timestamp WHERE id = $id',
+      { id: userId, hash },
+      { id: VARCHAR, hash: VARCHAR }
     );
-  }
-  for (const table of ['workspaces', 'tasks', 'notes', 'diary_entries', 'event_log']) {
+  } else {
+    // Create new user
+    const idRows = await queryAll("SELECT uuid()::VARCHAR as id");
+    userId = idRows[0].id as string;
+
     await execute(
-      `UPDATE ${table} SET user_name = $uname WHERE user_name IS NOT NULL AND user_name != $uname`,
-      { uname: username },
-      { uname: VARCHAR }
+      'INSERT INTO users (id, username, password_hash, is_admin) VALUES ($id, $username, $hash, true)',
+      { id: userId, username, hash },
+      { id: VARCHAR, username: VARCHAR, hash: VARCHAR }
     );
+
+    // Reassign any existing content rows (from old auth system) to new user
+    for (const table of ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'event_log']) {
+      await execute(
+        `UPDATE ${table} SET user_id = $uid WHERE user_id IS NOT NULL AND user_id != $uid`,
+        { uid: userId },
+        { uid: VARCHAR }
+      );
+    }
+    for (const table of ['workspaces', 'tasks', 'notes', 'diary_entries', 'event_log']) {
+      await execute(
+        `UPDATE ${table} SET user_name = $uname WHERE user_name IS NOT NULL AND user_name != $uname`,
+        { uname: username },
+        { uname: VARCHAR }
+      );
+    }
   }
 
   // Auto-login: create session

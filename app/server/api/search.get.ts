@@ -17,26 +17,20 @@ export default defineEventHandler(async (event) => {
     types.ws = VARCHAR;
   }
 
-  const tasks = await queryAll(`
-    SELECT id, display_id, 'task' as type, title, description as detail, completed, pinned, due_at, tags, updated_at
-    FROM tasks
-    WHERE archived = false AND parent_id IS NULL ${wsFilter}
-      AND (title ILIKE $term OR description ILIKE $term OR display_id ILIKE $term)
-    ORDER BY updated_at DESC LIMIT 25
+  return await queryAll(`
+    SELECT * FROM (
+      SELECT id, display_id, 'task' as type, title, description as detail, completed, pinned, due_at, tags, updated_at
+      FROM tasks
+      WHERE archived = false AND parent_id IS NULL ${wsFilter}
+        AND (title ILIKE $term OR description ILIKE $term OR display_id ILIKE $term)
+      UNION ALL
+      SELECT id, display_id, 'note' as type, title,
+        CASE WHEN length(content) > 100 THEN substring(content, 1, 100) || '...' ELSE content END as detail,
+        false as completed, pinned, NULL as due_at, tags, updated_at
+      FROM notes
+      WHERE archived = false ${wsFilter}
+        AND (title ILIKE $term OR content ILIKE $term OR display_id ILIKE $term)
+    ) combined
+    ORDER BY updated_at DESC LIMIT 30
   `, params, types);
-
-  const notes = await queryAll(`
-    SELECT id, display_id, 'note' as type, title,
-      CASE WHEN length(content) > 100 THEN substring(content, 1, 100) || '...' ELSE content END as detail,
-      false as completed, pinned, NULL as due_at, tags, updated_at
-    FROM notes
-    WHERE archived = false ${wsFilter}
-      AND (title ILIKE $term OR content ILIKE $term OR display_id ILIKE $term)
-    ORDER BY updated_at DESC LIMIT 25
-  `, params, types);
-
-  // Merge and sort by updated_at
-  return [...tasks, ...notes].sort((a: any, b: any) =>
-    new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  ).slice(0, 30);
 });

@@ -234,6 +234,9 @@ export function useDB() {
       // v9: unique username constraint
       await migrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)");
 
+      // v10: clear password for legacy user so they can re-setup
+      await connection.run("UPDATE users SET password_hash = NULL WHERE id = 'a3a280bc0d809a721955cfd16fe76bdd'");
+
       // v5: backfill tasks/notes/diary with no workspace to "Work"
       const workWs = await connection.runAndReadAll("SELECT id FROM workspaces WHERE name = 'Work' LIMIT 1");
       const workWsId = workWs.getRowObjectsJson()[0]?.id;
@@ -285,6 +288,20 @@ export function useDB() {
       } catch (e) {
         console.warn('v7 diary link backfill warning:', e);
       }
+
+      // --- Indexes for query performance ---
+      await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks (workspace_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks (parent_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks (archived, completed)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks (due_at)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_display_id ON tasks (display_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_notes_workspace ON notes (workspace_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_notes_archived ON notes (archived)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_notes_display_id ON notes (display_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_diary_date ON diary_entries (entry_date)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_diary_workspace ON diary_entries (workspace_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_links_source ON links (source_type, source_id)");
+      await migrate("CREATE INDEX IF NOT EXISTS idx_links_target ON links (target_type, target_id)");
 
       return connection;
     })();
