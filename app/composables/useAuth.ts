@@ -67,5 +67,20 @@ export function useAuth() {
     }
   }
 
-  return { appState, user, checkAuth, login, logout, setup };
+  async function signup(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await $fetch<{ ok: boolean; user: AuthUser }>('/api/auth/signup', {
+        method: 'POST',
+        body: { username, password },
+      });
+      user.value = res.user;
+      appState.value = 'ready';
+      return { ok: true };
+    } catch (err: any) {
+      const message = err?.data?.statusMessage || err?.message || 'Signup failed';
+      return { ok: false, error: message };
+    }
+  }
+
+  return { appState, user, checkAuth, login, logout, setup, signup };
 }
