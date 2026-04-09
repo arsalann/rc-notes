@@ -1,27 +1,64 @@
-export type AppState = 'loading' | 'setup' | 'ready';
+export type AppState = 'loading' | 'setup' | 'login' | 'ready';
+
+interface AuthUser {
+  id: string;
+  username: string;
+  is_admin: boolean;
+}
 
 export function useAuth() {
   const appState = useState<AppState>('appState', () => 'loading');
-  const username = useState<string | null>('username', () => null);
-  const userId = useState<string | null>('userId', () => null);
+  const user = useState<AuthUser | null>('authUser', () => null);
 
   async function checkAuth() {
     appState.value = 'loading';
     try {
-      const res = await $fetch<{ configured: boolean; username: string; user_id: string }>('/api/auth/check');
-      username.value = res.username;
-      userId.value = res.user_id;
-      appState.value = res.configured ? 'ready' : 'setup';
+      const res = await $fetch<{ configured: boolean; user: AuthUser | null }>('/api/auth/check');
+      if (!res.configured) {
+        appState.value = 'setup';
+      } else if (!res.user) {
+        appState.value = 'login';
+      } else {
+        user.value = res.user;
+        appState.value = 'ready';
+      }
     } catch {
       appState.value = 'setup';
     }
   }
 
-  async function setup(data: { username: string; motherduck_token: string }): Promise<{ ok: boolean; error?: string }> {
+  async function login(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
     try {
-      const res = await $fetch<{ ok: boolean; username: string; user_id: string }>('/api/setup', { method: 'POST', body: data });
-      username.value = data.username;
-      userId.value = res.user_id;
+      const res = await $fetch<{ ok: boolean; user: AuthUser }>('/api/auth/login', {
+        method: 'POST',
+        body: { username, password },
+      });
+      user.value = res.user;
+      appState.value = 'ready';
+      return { ok: true };
+    } catch (err: any) {
+      const message = err?.data?.statusMessage || err?.message || 'Login failed';
+      return { ok: false, error: message };
+    }
+  }
+
+  async function logout() {
+    try {
+      await $fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Clear client state even if server call fails
+    }
+    user.value = null;
+    appState.value = 'login';
+  }
+
+  async function setup(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await $fetch<{ ok: boolean; user: AuthUser }>('/api/setup', {
+        method: 'POST',
+        body: { username, password },
+      });
+      user.value = res.user;
       appState.value = 'ready';
       return { ok: true };
     } catch (err: any) {
@@ -30,5 +67,5 @@ export function useAuth() {
     }
   }
 
-  return { appState, username, userId, checkAuth, setup };
+  return { appState, user, checkAuth, login, logout, setup };
 }

@@ -80,10 +80,10 @@
             :variant="isDueMatch(opt.value) ? 'solid' : 'soft'" size="sm" @click="saveDue(opt.value)">
             {{ opt.label }}
           </UButton>
-          <label class="inline-flex">
-            <UButton color="neutral" variant="soft" size="sm" as="span">Pick...</UButton>
-            <input type="datetime-local" :value="editDue" @change="saveDue(($event.target as HTMLInputElement).value)" class="sr-only" />
-          </label>
+          <span class="inline-flex">
+            <UButton color="neutral" variant="soft" size="sm" @click="($refs.duePicker as HTMLInputElement)?.showPicker()">Pick...</UButton>
+            <input ref="duePicker" type="datetime-local" :value="editDue" @change="saveDue(($event.target as HTMLInputElement).value)" class="sr-only" />
+          </span>
           <UButton v-if="task.due_at" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" @click="saveDue('')" />
         </div>
       </UCard>

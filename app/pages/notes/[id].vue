@@ -14,7 +14,7 @@
           :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode" />
         <UButton color="neutral" variant="ghost" :icon="note?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="note?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
-        <UButton color="neutral" variant="ghost" icon="i-lucide-trash-2" @click="confirmDelete = true" />
+        <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="confirmDelete = true" />
       </div>
     </div>
 
@@ -72,11 +72,11 @@
       </div>
     </div>
 
-    <UModal v-model:open="confirmDelete" title="Delete note?" description="This can't be undone.">
+    <UModal v-model:open="confirmDelete" title="Archive note?" description="You can find archived notes later.">
       <template #footer>
         <div class="flex gap-3 w-full">
           <UButton color="neutral" variant="soft" class="flex-1" @click="confirmDelete = false">Cancel</UButton>
-          <UButton color="error" class="flex-1" @click="handleDelete">Delete</UButton>
+          <UButton color="error" class="flex-1" @click="handleDelete">Archive</UButton>
         </div>
       </template>
     </UModal>

@@ -8,6 +8,9 @@
     <!-- Onboarding -->
     <Setup v-else-if="appState === 'setup'" />
 
+    <!-- Login -->
+    <Login v-else-if="appState === 'login'" />
+
     <!-- App -->
     <template v-else>
       <div class="min-h-screen pb-40">
@@ -22,6 +25,7 @@
 
 <script setup lang="ts">
 import Setup from '~/pages/setup.vue';
+import Login from '~/pages/login.vue';
 
 const { appState, checkAuth } = useAuth();
 const { fetchWorkspaces } = useWorkspace();

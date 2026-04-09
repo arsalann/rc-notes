@@ -1,7 +1,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import { resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { getMotherDuckToken, getUserId, getUsername } from '~/server/utils/config';
+import { getMotherDuckToken } from '~/server/utils/config';
 
 let connectionPromise: Promise<any> | null = null;
 
@@ -224,18 +224,12 @@ export function useDB() {
         await connection.run("INSERT INTO workspaces (id, name, emoji, position) VALUES (uuid()::VARCHAR, 'Work', '💼', 1)");
       }
 
-      // v4: populate user_id for existing single-user data
-      const userId = getUserId();
-      const userName = getUsername();
-      if (userId) {
-        await migrate(`INSERT INTO users (id, username) VALUES ('${userId}', '${userName || 'user'}') ON CONFLICT (id) DO NOTHING`);
-        for (const table of ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'event_log']) {
-          await migrate(`UPDATE ${table} SET user_id = '${userId}' WHERE user_id IS NULL`);
-        }
-        for (const table of ['workspaces', 'tasks', 'notes', 'diary_entries', 'event_log']) {
-          await migrate(`UPDATE ${table} SET user_name = '${userName || 'user'}' WHERE user_name IS NULL`);
-        }
-      }
+      // v4: (legacy) user_id backfill — previously used config.json, now handled by setup flow
+
+      // v8: auth — add password_hash, is_admin, updated_at to users table
+      await migrate("ALTER TABLE users ADD COLUMN password_hash VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false");
+      await migrate("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT current_timestamp");
 
       // v5: backfill tasks/notes/diary with no workspace to "Work"
       const workWs = await connection.runAndReadAll("SELECT id FROM workspaces WHERE name = 'Work' LIMIT 1");

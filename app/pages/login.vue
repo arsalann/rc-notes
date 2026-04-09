@@ -2,30 +2,27 @@
   <div class="min-h-screen flex items-center justify-center px-6">
     <div class="w-full max-w-sm space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold tracking-tight">Welcome to rc-notes</h1>
-        <p class="mt-2 text-sm text-(--ui-text-dimmed)">Create your admin account</p>
+        <h1 class="text-3xl font-bold tracking-tight">rc-notes</h1>
+        <p class="mt-2 text-sm text-(--ui-text-dimmed)">Sign in to continue</p>
       </div>
 
-      <form @submit.prevent="handleSetup" class="space-y-5">
+      <form @submit.prevent="handleLogin" class="space-y-5">
         <UFormField label="Username">
           <UInput
             v-model="form.username"
-            placeholder="e.g. arsalan"
+            placeholder="Your username"
             size="lg"
             autofocus
             :disabled="submitting"
             icon="i-lucide-user"
           />
-          <template #hint>
-            <span class="text-xs text-(--ui-text-dimmed)">2-30 characters, letters, numbers, underscore</span>
-          </template>
         </UFormField>
 
         <UFormField label="Password">
           <UInput
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
-            placeholder="At least 8 characters"
+            placeholder="Your password"
             size="lg"
             :disabled="submitting"
             icon="i-lucide-lock"
@@ -43,25 +40,14 @@
           </UInput>
         </UFormField>
 
-        <UFormField label="Confirm Password">
-          <UInput
-            v-model="form.confirmPassword"
-            type="password"
-            placeholder="Repeat your password"
-            size="lg"
-            :disabled="submitting"
-            icon="i-lucide-lock"
-          />
-        </UFormField>
-
         <UButton
           type="submit"
           block
           size="lg"
           :loading="submitting"
-          :disabled="!canSubmit"
+          :disabled="!form.username || !form.password"
         >
-          Get Started
+          Sign In
         </UButton>
 
         <p v-if="error" class="text-sm text-red-400 text-center">{{ error }}</p>
@@ -71,33 +57,21 @@
 </template>
 
 <script setup lang="ts">
-const { setup } = useAuth();
+const { login } = useAuth();
 
-const form = reactive({ username: '', password: '', confirmPassword: '' });
+const form = reactive({ username: '', password: '' });
 const showPassword = ref(false);
 const error = ref('');
 const submitting = ref(false);
 
-const canSubmit = computed(() =>
-  form.username.length >= 2 &&
-  form.password.length >= 8 &&
-  form.password === form.confirmPassword
-);
-
-async function handleSetup() {
-  if (!canSubmit.value) return;
-
-  if (form.password !== form.confirmPassword) {
-    error.value = 'Passwords do not match';
-    return;
-  }
-
+async function handleLogin() {
+  if (!form.username || !form.password) return;
   submitting.value = true;
   error.value = '';
-  const result = await setup(form.username, form.password);
+  const result = await login(form.username, form.password);
   submitting.value = false;
   if (!result.ok) {
-    error.value = result.error || 'Setup failed';
+    error.value = result.error || 'Login failed';
   }
 }
 </script>
