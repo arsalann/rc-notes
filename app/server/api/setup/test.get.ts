@@ -1,10 +1,4 @@
-import { isConfigured } from '~/server/utils/config';
-
 export default defineEventHandler(async () => {
-  if (!isConfigured()) {
-    throw createError({ statusCode: 400, statusMessage: 'Not configured yet' });
-  }
-
   try {
     const { useDB } = await import('~/server/utils/db');
     const db = await useDB();

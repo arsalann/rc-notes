@@ -1,22 +1,41 @@
-import { isConfigured, getUsername, getUserId } from '~/server/utils/config';
+import { useSession } from 'h3';
+import { getSessionConfig, type SessionUser } from '~/server/utils/auth';
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const path = getRequestURL(event).pathname;
 
   // Only protect API routes
   if (!path.startsWith('/api/')) return;
 
-  // Skip setup and auth check routes (they need to work before config exists)
+  // Skip auth and setup routes (they handle their own auth)
   if (path.startsWith('/api/auth/')) return;
   if (path.startsWith('/api/setup')) return;
 
-  if (!isConfigured()) {
-    throw createError({ statusCode: 401, statusMessage: 'Not configured' });
+  // CSRF: verify Origin header on mutating requests
+  const method = event.method.toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const origin = getRequestHeader(event, 'origin');
+    const host = getRequestHeader(event, 'host');
+    if (origin && host) {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) {
+        throw createError({ statusCode: 403, statusMessage: 'CSRF: origin mismatch' });
+      }
+    }
+  }
+
+  // Session-based authentication
+  let session;
+  try {
+    session = await useSession<{ user?: SessionUser }>(event, getSessionConfig());
+  } catch {
+    throw createError({ statusCode: 401, statusMessage: 'Not authenticated' });
+  }
+
+  if (!session.data.user) {
+    throw createError({ statusCode: 401, statusMessage: 'Not authenticated' });
   }
 
   // Attach user to event context
-  event.context.user = {
-    username: getUsername() || 'anonymous',
-    user_id: getUserId() || null,
-  };
+  event.context.user = session.data.user;
 });

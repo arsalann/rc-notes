@@ -68,6 +68,7 @@ const { toggleComplete } = useTasks();
 
 const items = [
   { to: '/', label: 'Tasks', icon: 'i-lucide-circle-check' },
+  { to: '/diary', label: 'Diary', icon: 'i-lucide-calendar-heart' },
   { to: '/notes', label: 'Notebook', icon: 'i-lucide-book-open' },
   { to: '/settings', label: 'Settings', icon: 'i-lucide-settings' },
 ];

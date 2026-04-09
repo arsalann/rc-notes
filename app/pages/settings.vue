@@ -5,7 +5,7 @@
     </div>
 
     <div class="px-4 mt-4 space-y-6 pb-36">
-      <!-- User info -->
+      <!-- Account -->
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
@@ -13,68 +13,127 @@
             <span class="font-semibold">Account</span>
           </div>
         </template>
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div>
             <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Username</p>
-            <p class="text-sm font-medium mt-0.5">{{ username || 'Not set' }}</p>
+            <p class="text-sm font-medium mt-0.5">{{ user?.username || 'Unknown' }}</p>
           </div>
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Role</p>
+            <p class="text-sm font-medium mt-0.5">{{ user?.is_admin ? 'Admin' : 'User' }}</p>
+          </div>
+          <UButton
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-log-out"
+            @click="handleLogout"
+          >
+            Sign Out
+          </UButton>
         </div>
       </UCard>
 
-      <!-- MotherDuck connection -->
+      <!-- Change Password -->
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-database" class="size-5" />
-            <span class="font-semibold">Database Connection</span>
+            <UIcon name="i-lucide-lock" class="size-5" />
+            <span class="font-semibold">Change Password</span>
+          </div>
+        </template>
+        <form @submit.prevent="changePassword" class="space-y-4">
+          <UFormField label="Current Password">
+            <UInput
+              v-model="pw.current"
+              type="password"
+              placeholder="Enter current password"
+              size="md"
+              icon="i-lucide-key"
+            />
+          </UFormField>
+          <UFormField label="New Password">
+            <UInput
+              v-model="pw.newPw"
+              type="password"
+              placeholder="At least 8 characters"
+              size="md"
+              icon="i-lucide-key"
+            />
+          </UFormField>
+          <UFormField label="Confirm New Password">
+            <UInput
+              v-model="pw.confirm"
+              type="password"
+              placeholder="Repeat new password"
+              size="md"
+              icon="i-lucide-key"
+            />
+          </UFormField>
+          <UButton
+            type="submit"
+            size="md"
+            :loading="pwSaving"
+            :disabled="!pw.current || pw.newPw.length < 8 || pw.newPw !== pw.confirm"
+          >
+            Update Password
+          </UButton>
+        </form>
+      </UCard>
+
+      <!-- User Management (admin only) -->
+      <UCard v-if="user?.is_admin">
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-users" class="size-5" />
+            <span class="font-semibold">Users</span>
           </div>
         </template>
         <div class="space-y-4">
-          <UFormField label="MotherDuck Token">
-            <UInput
-              v-model="newToken"
-              :type="showToken ? 'text' : 'password'"
-              placeholder="Update your token"
-              size="md"
-              icon="i-lucide-key"
-            >
-              <template #trailing>
-                <UButton
-                  :icon="showToken ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                  color="neutral"
-                  variant="link"
-                  size="sm"
-                  @click="showToken = !showToken"
-                  :padded="false"
-                />
-              </template>
-            </UInput>
-          </UFormField>
-
-          <div class="flex gap-2 flex-wrap">
+          <!-- Existing users -->
+          <div v-for="u in users" :key="u.id" class="flex items-center justify-between py-2">
+            <div>
+              <span class="text-sm font-medium">{{ u.username }}</span>
+              <UBadge v-if="u.is_admin" color="primary" variant="subtle" size="xs" class="ml-2">Admin</UBadge>
+            </div>
             <UButton
-              size="md"
-              variant="soft"
-              icon="i-lucide-plug"
-              :loading="testing"
-              @click="testConnection"
-            >
-              Test Connection
-            </UButton>
-            <UButton
-              v-if="newToken"
-              size="md"
-              icon="i-lucide-save"
-              :loading="saving"
-              @click="updateToken"
-            >
-              Save Token
-            </UButton>
+              v-if="u.id !== user?.id"
+              color="error"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-trash-2"
+              @click="deleteUser(u.id)"
+            />
           </div>
 
-          <p v-if="connectionStatus" class="text-sm" :class="connectionOk ? 'text-green-400' : 'text-red-400'">
-            {{ connectionStatus }}
-          </p>
+          <!-- Add user form -->
+          <div class="border-t border-(--ui-border) pt-4">
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-3">Add User</p>
+            <form @submit.prevent="addUser" class="space-y-3">
+              <UInput
+                v-model="newUser.username"
+                placeholder="Username"
+                size="md"
+                icon="i-lucide-user"
+              />
+              <UInput
+                v-model="newUser.password"
+                type="password"
+                placeholder="Password (min 8 chars)"
+                size="md"
+                icon="i-lucide-lock"
+              />
+              <UButton
+                type="submit"
+                size="md"
+                variant="soft"
+                :loading="addingUser"
+                :disabled="!newUser.username || newUser.password.length < 8"
+                icon="i-lucide-user-plus"
+              >
+                Add User
+              </UButton>
+            </form>
+          </div>
         </div>
       </UCard>
 
@@ -156,12 +215,86 @@
 </template>
 
 <script setup lang="ts">
-const { username } = useAuth();
+const { user, logout } = useAuth();
 const { workspaces, fetchWorkspaces, setActive } = useWorkspace();
 const { prefs, set } = usePreferences();
+const toast = useToast();
 
-onMounted(() => fetchWorkspaces());
+onMounted(() => {
+  fetchWorkspaces();
+  if (user.value?.is_admin) loadUsers();
+});
 
+// --- Logout ---
+async function handleLogout() {
+  await logout();
+}
+
+// --- Change Password ---
+const pw = reactive({ current: '', newPw: '', confirm: '' });
+const pwSaving = ref(false);
+
+async function changePassword() {
+  if (pw.newPw !== pw.confirm) {
+    toast.add({ title: 'Passwords do not match', color: 'error' });
+    return;
+  }
+  pwSaving.value = true;
+  try {
+    await $fetch('/api/auth/password', {
+      method: 'PUT',
+      body: { current_password: pw.current, new_password: pw.newPw },
+    });
+    toast.add({ title: 'Password updated', color: 'success' });
+    pw.current = '';
+    pw.newPw = '';
+    pw.confirm = '';
+  } catch (err: any) {
+    toast.add({ title: 'Failed', description: err?.data?.statusMessage || 'Could not update password', color: 'error' });
+  }
+  pwSaving.value = false;
+}
+
+// --- User Management ---
+const users = ref<any[]>([]);
+const newUser = reactive({ username: '', password: '' });
+const addingUser = ref(false);
+
+async function loadUsers() {
+  try {
+    users.value = await $fetch<any[]>('/api/users');
+  } catch {}
+}
+
+async function addUser() {
+  if (!newUser.username || newUser.password.length < 8) return;
+  addingUser.value = true;
+  try {
+    await $fetch('/api/users', {
+      method: 'POST',
+      body: { username: newUser.username, password: newUser.password },
+    });
+    toast.add({ title: `User "${newUser.username}" created`, color: 'success' });
+    newUser.username = '';
+    newUser.password = '';
+    await loadUsers();
+  } catch (err: any) {
+    toast.add({ title: 'Failed', description: err?.data?.statusMessage || 'Could not add user', color: 'error' });
+  }
+  addingUser.value = false;
+}
+
+async function deleteUser(id: string) {
+  try {
+    await $fetch(`/api/users/${id}`, { method: 'DELETE' });
+    toast.add({ title: 'User deleted', color: 'success' });
+    await loadUsers();
+  } catch (err: any) {
+    toast.add({ title: 'Failed', description: err?.data?.statusMessage || 'Could not delete user', color: 'error' });
+  }
+}
+
+// --- Preferences ---
 const groupOptions = [
   { value: 'status' as const, label: 'Status', icon: 'i-lucide-circle-dot' },
   { value: 'workspace' as const, label: 'Space', icon: 'i-lucide-folder' },
@@ -178,44 +311,4 @@ function setDefaultWorkspace(id: string | null) {
   set('defaultWorkspace', id);
   setActive(id);
 }
-
-const newToken = ref('');
-const showToken = ref(false);
-const testing = ref(false);
-const saving = ref(false);
-const connectionStatus = ref('');
-const connectionOk = ref(false);
-
-const toast = useToast();
-
-async function testConnection() {
-  testing.value = true;
-  connectionStatus.value = '';
-  try {
-    await $fetch('/api/setup/test');
-    connectionStatus.value = 'Connection successful';
-    connectionOk.value = true;
-  } catch (err: any) {
-    connectionStatus.value = err?.data?.statusMessage || 'Connection failed';
-    connectionOk.value = false;
-  }
-  testing.value = false;
-}
-
-async function updateToken() {
-  if (!newToken.value) return;
-  saving.value = true;
-  try {
-    await $fetch('/api/setup', {
-      method: 'POST',
-      body: { username: username.value, motherduck_token: newToken.value },
-    });
-    toast.add({ title: 'Token updated', description: 'Database connection has been reset.', color: 'success' });
-    newToken.value = '';
-  } catch (err: any) {
-    toast.add({ title: 'Update failed', description: err?.data?.statusMessage || 'Failed to save token', color: 'error' });
-  }
-  saving.value = false;
-}
-
 </script>
