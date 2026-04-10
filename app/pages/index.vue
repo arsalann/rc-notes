@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-lg mx-auto">
+  <div class="max-w-lg mx-auto md:max-w-6xl">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -27,17 +27,17 @@
           icon="i-lucide-calendar" @click="orderBy = 'due'" class="shrink-0">
           Due
         </UButton>
-        <USeparator orientation="vertical" class="h-4 shrink-0" />
+        <USeparator orientation="vertical" class="h-4 shrink-0 md:hidden" />
         <UButton :color="groupBy === 'tag' ? 'primary' : 'neutral'" :variant="groupBy === 'tag' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0">
+          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0 md:hidden">
           Tag
         </UButton>
         <UButton :color="groupBy === 'workspace' ? 'primary' : 'neutral'" :variant="groupBy === 'workspace' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0">
+          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0 md:hidden">
           Space
         </UButton>
         <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0">
+          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0 md:hidden">
           Status
         </UButton>
       </div>
@@ -48,83 +48,118 @@
     <div v-if="loading" class="px-4 mt-4 space-y-3">
       <USkeleton v-for="i in 4" :key="i" class="h-18 w-full" />
     </div>
-    <template v-else-if="sortedTasks.length">
-      <!-- Grouped by workspace (draggable between groups) -->
-      <template v-if="groupBy === 'workspace'">
-        <div v-for="group in workspaceGroupsLive.filter(g => g.tasks.length)" :key="group.wsId ?? '__none__'" class="px-4 mt-4">
-          <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
-          <draggable
-            :list="group.tasks"
-            :group="{ name: 'workspace-tasks', pull: true, put: true }"
-            item-key="id"
-            :animation="200"
-            ghost-class="opacity-30"
-            drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
-            handle=".drag-handle"
-            class="space-y-2.5 min-h-8"
-            @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
-            <template #item="{ element }">
-              <div class="flex items-start gap-0">
-                <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
-                  <UIcon name="i-lucide-grip-vertical" class="size-5" />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <TaskItem :task="element" @toggle="handleToggle" />
-                </div>
-              </div>
-            </template>
-          </draggable>
-        </div>
-        <div class="pb-6" />
-      </template>
-      <!-- Grouped by status -->
-      <template v-else-if="groupBy === 'status'">
-        <div v-for="group in statusGroups" :key="group.status" class="px-4 mt-4">
-          <p class="text-xs font-semibold uppercase tracking-wider mb-2"
-            :class="group.status === 'now' ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'">
-            {{ group.label }}
-          </p>
-          <div class="space-y-2.5">
-            <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
-          </div>
-        </div>
-        <div class="pb-6" />
-      </template>
-      <!-- Grouped by tag -->
-      <template v-else-if="groupBy === 'tag'">
-        <div v-for="group in tagGroups" :key="group.label" class="px-4 mt-4">
-          <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
-          <div class="space-y-2.5">
-            <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
-          </div>
-        </div>
-        <div class="pb-6" />
-      </template>
-      <!-- Flat list (draggable for reorder) -->
-      <div v-else class="px-4 mt-4 pb-6">
-        <draggable
-          :list="draggableTasks"
-          item-key="id"
-          :animation="200"
-          ghost-class="opacity-30"
-          drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
-          handle=".drag-handle"
-          class="space-y-2.5"
-          @end="handleReorder">
-          <template #item="{ element }">
-            <div class="flex items-start gap-0">
-              <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
-                <UIcon name="i-lucide-grip-vertical" class="size-5" />
-              </div>
-              <div class="flex-1 min-w-0">
+    <template v-else>
+      <!-- Desktop Kanban Board -->
+      <div class="hidden md:block mt-4 px-4 pb-6">
+        <div class="grid grid-cols-3 gap-4">
+          <div v-for="col in kanbanColumns" :key="col.status"
+            class="bg-(--ui-bg-elevated)/30 rounded-2xl p-3 min-h-[60vh]">
+            <div class="flex items-center gap-2 mb-3 px-1">
+              <div class="size-2 rounded-full"
+                :class="col.status === 'now' ? 'bg-purple-500' : col.status === 'done' ? 'bg-emerald-500' : 'bg-zinc-500'" />
+              <span class="text-sm font-semibold"
+                :class="col.status === 'now' ? 'text-(--ui-primary)' : col.status === 'done' ? 'text-emerald-400' : 'text-(--ui-text-dimmed)'">
+                {{ col.label }}
+              </span>
+              <span class="text-xs text-(--ui-text-muted)">{{ col.tasks.length }}</span>
+            </div>
+            <draggable
+              :list="col.tasks"
+              :group="{ name: 'kanban', pull: true, put: true }"
+              item-key="id"
+              :animation="200"
+              ghost-class="opacity-30"
+              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              class="space-y-2 min-h-12"
+              @change="(e: any) => handleKanbanDrop(e, col.status)">
+              <template #item="{ element }">
                 <TaskItem :task="element" @toggle="handleToggle" />
+              </template>
+            </draggable>
+          </div>
+        </div>
+      </div>
+      <!-- Mobile List Views -->
+      <div class="md:hidden">
+        <template v-if="sortedTasks.length">
+          <!-- Grouped by workspace (draggable between groups) -->
+          <template v-if="groupBy === 'workspace'">
+            <div v-for="group in workspaceGroupsLive.filter(g => g.tasks.length)" :key="group.wsId ?? '__none__'" class="px-4 mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
+              <draggable
+                :list="group.tasks"
+                :group="{ name: 'workspace-tasks', pull: true, put: true }"
+                item-key="id"
+                :animation="200"
+                ghost-class="opacity-30"
+                drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+                handle=".drag-handle"
+                class="space-y-2.5 min-h-8"
+                @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
+                <template #item="{ element }">
+                  <div class="flex items-start gap-0">
+                    <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
+                      <UIcon name="i-lucide-grip-vertical" class="size-5" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <TaskItem :task="element" @toggle="handleToggle" />
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+            </div>
+            <div class="pb-6" />
+          </template>
+          <!-- Grouped by status -->
+          <template v-else-if="groupBy === 'status'">
+            <div v-for="group in statusGroups" :key="group.status" class="px-4 mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider mb-2"
+                :class="group.status === 'now' ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'">
+                {{ group.label }}
+              </p>
+              <div class="space-y-2.5">
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
               </div>
             </div>
+            <div class="pb-6" />
           </template>
-        </draggable>
+          <!-- Grouped by tag -->
+          <template v-else-if="groupBy === 'tag'">
+            <div v-for="group in tagGroups" :key="group.label" class="px-4 mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
+              <div class="space-y-2.5">
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+              </div>
+            </div>
+            <div class="pb-6" />
+          </template>
+          <!-- Flat list (draggable for reorder) -->
+          <div v-else class="px-4 mt-4 pb-6">
+            <draggable
+              :list="draggableTasks"
+              item-key="id"
+              :animation="200"
+              ghost-class="opacity-30"
+              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              handle=".drag-handle"
+              class="space-y-2.5"
+              @end="handleReorder">
+              <template #item="{ element }">
+                <div class="flex items-start gap-0">
+                  <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
+                    <UIcon name="i-lucide-grip-vertical" class="size-5" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <TaskItem :task="element" @toggle="handleToggle" />
+                  </div>
+                </div>
+              </template>
+            </draggable>
+          </div>
+        </template>
+        <EmptyState v-else :message="showArchived ? 'No archived tasks.' : showDone ? 'No tasks yet — add one above.' : 'No open tasks. Toggle &quot;Done&quot; to see completed.'" :icon="showArchived ? 'i-lucide-archive' : 'i-lucide-circle-check'" />
       </div>
     </template>
-    <EmptyState v-else :message="showArchived ? 'No archived tasks.' : showDone ? 'No tasks yet — add one above.' : 'No open tasks. Toggle &quot;Done&quot; to see completed.'" :icon="showArchived ? 'i-lucide-archive' : 'i-lucide-circle-check'" />
   </div>
 </template>
 
@@ -175,6 +210,35 @@ const sortedTasks = computed(() => {
 // Mutable copy for flat-list drag reorder
 const draggableTasks = ref<Task[]>([]);
 watch(sortedTasks, (val) => { draggableTasks.value = [...val]; }, { immediate: true });
+
+// Desktop kanban columns (mutable for drag-drop)
+const kanbanColumns = ref<{ status: string; label: string; tasks: Task[] }[]>([]);
+
+function buildKanbanColumns() {
+  const cols: { status: string; label: string; tasks: Task[] }[] = [
+    { status: 'next', label: 'Next', tasks: [] },
+    { status: 'now', label: 'Now', tasks: [] },
+    { status: 'done', label: 'Done', tasks: [] },
+  ];
+  for (const task of sortedTasks.value) {
+    const s = task.status || 'next';
+    const col = cols.find(c => c.status === s);
+    if (col) col.tasks.push({ ...task });
+  }
+  kanbanColumns.value = cols;
+}
+
+watch(sortedTasks, buildKanbanColumns, { immediate: true });
+
+async function handleKanbanDrop(e: any, targetStatus: string) {
+  if (!e.added) return;
+  const task = e.added.element;
+  await updateTask(task.id, { status: targetStatus } as any);
+  const idx = tasks.value.findIndex(t => t.id === task.id);
+  if (idx >= 0) {
+    tasks.value[idx] = { ...tasks.value[idx], status: targetStatus, completed: targetStatus === 'done' };
+  }
+}
 
 const statusGroups = computed(() => {
   const order = ['now', 'next', 'done'];
