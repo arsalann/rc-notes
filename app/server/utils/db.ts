@@ -234,8 +234,7 @@ export function useDB() {
       // v9: unique username constraint
       await migrate("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)");
 
-      // v10: clear password for legacy user so they can re-setup
-      await connection.run("UPDATE users SET password_hash = NULL WHERE id = 'a3a280bc0d809a721955cfd16fe76bdd'");
+      // v10: removed — was a one-time legacy cleanup that ran on every restart, nuking the password
 
       // v5: backfill tasks/notes/diary with no workspace to "Work"
       const workWs = await connection.runAndReadAll("SELECT id FROM workspaces WHERE name = 'Work' LIMIT 1");
