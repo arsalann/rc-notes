@@ -363,6 +363,17 @@ export async function linkTaskToDiary(taskId: string, dueAt: string, workspaceId
   if (!diaryRows.length) return;
   const diaryId = diaryRows[0].id;
 
+  // Remove stale diary→task links pointing at a different day than the current due date.
+  // Without this, changing a task's due_at leaves the task visible on its previous day's diary.
+  await queryAll(
+    `DELETE FROM links
+     WHERE source_type = 'diary' AND target_type = 'task' AND target_id = $tid
+       AND source_id <> $did
+       AND source_id IN (SELECT id FROM diary_entries WHERE entry_date <> $date::DATE)`,
+    { tid: taskId, did: diaryId, date: dateStr },
+    { tid: VARCHAR, did: VARCHAR, date: VARCHAR }
+  );
+
   // Create link if not already linked
   await queryAll(
     `INSERT INTO links (id, source_type, source_id, target_type, target_id)
