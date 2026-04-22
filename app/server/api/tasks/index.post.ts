@@ -1,5 +1,6 @@
 import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
+import { isWithinNextDays } from '~/server/utils/dates';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -35,8 +36,8 @@ export default defineEventHandler(async (event) => {
   const posRows = await queryAll(posQuery, posParams, posTypes);
   const position = posRows[0]?.next_pos ?? 0;
 
-  // Auto-set status: 'now' if task has a due date, otherwise 'next'
-  const status = dueAt ? 'now' : 'next';
+  // Auto-set status: 'now' if due within next 7 days, otherwise 'next'
+  const status = dueAt && isWithinNextDays(dueAt, 7) ? 'now' : 'next';
 
   const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status'];
   const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status'];

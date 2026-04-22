@@ -2,7 +2,7 @@
   <div class="max-w-lg mx-auto">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-3">
-        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/" />
+        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/tasks" />
         <h1 class="text-2xl font-bold tracking-tight">Calendar</h1>
         <WorkspaceSwitcher />
       </div>

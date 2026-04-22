@@ -1,4 +1,5 @@
 import { queryAll, linkTaskToDiary } from '~/server/utils/db';
+import { isWithinNextDays } from '~/server/utils/dates';
 import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -46,10 +47,19 @@ export default defineEventHandler(async (event) => {
       sets.push('due_at = $due_at::TIMESTAMP');
       params.due_at = body.due_at;
       types.due_at = VARCHAR;
-      // Auto-set status to 'now' when a due date is added (unless already done or explicitly setting status)
-      if (body.status === undefined) {
+      // Auto-set status to 'now' when due within next 7 days (unless already done or explicitly setting status)
+      if (body.status === undefined && isWithinNextDays(body.due_at, 7)) {
         sets.push("status = CASE WHEN status = 'done' THEN 'done' ELSE 'now' END");
       }
+    }
+  }
+  if (body.parent_id !== undefined) {
+    if (body.parent_id === null) {
+      sets.push('parent_id = NULL');
+    } else {
+      sets.push('parent_id = $parent_id');
+      params.parent_id = body.parent_id;
+      types.parent_id = VARCHAR;
     }
   }
   if (body.workspace_id !== undefined) {
