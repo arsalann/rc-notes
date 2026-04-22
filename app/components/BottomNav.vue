@@ -67,12 +67,12 @@ const { activeId } = useWorkspace();
 const { toggleComplete } = useTasks();
 
 const items = [
-  { to: '/', label: 'Tasks', icon: 'i-lucide-circle-check' },
   { to: '/diary', label: 'Diary', icon: 'i-lucide-calendar-heart' },
+  { to: '/tasks', label: 'Tasks', icon: 'i-lucide-circle-check' },
   { to: '/notes', label: 'Notebook', icon: 'i-lucide-book-open' },
   { to: '/settings', label: 'Settings', icon: 'i-lucide-settings' },
 ];
-function isActive(path: string) { if (path === '/') return route.path === '/'; return route.path.startsWith(path); }
+function isActive(path: string) { return route.path === path || route.path.startsWith(path + '/'); }
 
 const query = ref('');
 const results = ref<any[]>([]);

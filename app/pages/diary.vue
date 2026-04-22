@@ -28,10 +28,20 @@
     <!-- Day label + edit toggle -->
     <div class="px-4 mt-5 flex items-center justify-between">
       <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">{{ selectedDayLabel }}</p>
-      <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
-        :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode">
-        {{ editMode ? 'Preview' : 'Edit' }}
-      </UButton>
+      <div class="flex items-center gap-1">
+        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
+          Task
+        </UButton>
+        <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
+          :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode">
+          {{ editMode ? 'Preview' : 'Edit' }}
+        </UButton>
+      </div>
+    </div>
+
+    <!-- Quick add task -->
+    <div v-if="showAddTask" class="mt-3 -mx-0">
+      <QuickAdd placeholder="Add a task for this day..." @add="handleAddTask" />
     </div>
 
     <!-- Loading -->
@@ -39,71 +49,56 @@
       <USkeleton class="h-40 w-full" />
     </div>
 
-    <div v-else class="px-4 mt-3 pb-8">
-      <!-- Carried forward items -->
-      <div v-if="carriedTasks.length && !entry?.content?.trim()" class="mb-4">
-        <p class="text-xs font-medium text-(--ui-text-dimmed) mb-2">
-          <UIcon name="i-lucide-arrow-right-from-line" class="size-3 inline mr-1" />
-          Carried from previous day
-        </p>
-        <div class="space-y-1.5">
-          <InlineTask v-for="ct in carriedTasks" :key="ct.id" :task-id="ct.id" />
+    <div v-else class="px-4 mt-3 pb-8 space-y-6">
+      <!-- Notes section -->
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Notes</p>
+
+        <!-- Edit mode -->
+        <div v-if="editMode" class="relative">
+          <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <div v-if="saving" class="absolute top-2 right-2 flex items-center gap-1.5 text-xs text-(--ui-text-dimmed)">
+              <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" /> Saving
+            </div>
+          </Transition>
+          <textarea v-model="editContent" @input="handleContentInput" @blur="saveContent" @keydown.escape="mentionOpen = false" ref="contentRef"
+            class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[160px] placeholder:text-(--ui-text-dimmed) font-mono"
+            placeholder="Write about your day... Type @ to link a task or note" />
+          <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
+            <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto overscroll-contain" :ui="{ body: 'p-1' }" style="top:0">
+              <button v-for="item in mentionResults" :key="item.id" @mousedown.prevent="insertMention(item)"
+                class="w-full px-3 py-3 text-left text-sm flex items-center gap-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
+                <UBadge :color="item.type === 'task' ? 'primary' : 'neutral'" variant="subtle" size="xs">{{ item.type === 'task' ? 'Task' : 'Note' }}</UBadge>
+                <span class="truncate">{{ item.title }}</span>
+                <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto shrink-0">{{ item.display_id }}</span>
+              </button>
+            </UCard>
+          </Transition>
         </div>
-      </div>
 
-      <!-- Edit mode -->
-      <div v-if="editMode" class="relative">
-        <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
-          leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-          <div v-if="saving" class="absolute top-2 right-2 flex items-center gap-1.5 text-xs text-(--ui-text-dimmed)">
-            <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" /> Saving
-          </div>
-        </Transition>
-        <textarea v-model="editContent" @input="handleContentInput" @blur="saveContent" @keydown.escape="mentionOpen = false" ref="contentRef"
-          class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[200px] placeholder:text-(--ui-text-dimmed) font-mono"
-          placeholder="Write about your day... Type @ to link a task or note" />
-        <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
-          leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
-          <UCard v-if="mentionOpen && mentionResults.length" class="absolute left-0 right-0 z-50 max-h-48 overflow-y-auto overscroll-contain" :ui="{ body: 'p-1' }" style="top:0">
-            <button v-for="item in mentionResults" :key="item.id" @mousedown.prevent="insertMention(item)"
-              class="w-full px-3 py-3 text-left text-sm flex items-center gap-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
-              <UBadge :color="item.type === 'task' ? 'primary' : 'neutral'" variant="subtle" size="xs">{{ item.type === 'task' ? 'Task' : 'Note' }}</UBadge>
-              <span class="truncate">{{ item.title }}</span>
-              <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto shrink-0">{{ item.display_id }}</span>
-            </button>
-          </UCard>
-        </Transition>
-      </div>
-
-      <!-- Preview mode -->
-      <div v-else>
-        <template v-for="(block, i) in renderedBlocks" :key="i">
-          <InlineTask v-if="block.type === 'task'" :task-id="block.taskId" />
-          <div v-else class="prose prose-invert prose-sm max-w-none
+        <!-- Preview mode -->
+        <div v-else>
+          <div v-if="notesHtml" class="prose prose-invert prose-sm max-w-none
             prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted) prose-p:leading-7
             prose-a:text-(--ui-primary) prose-strong:text-(--ui-text)
             prose-code:text-(--ui-primary) prose-code:bg-(--ui-bg-elevated) prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
             prose-pre:bg-(--ui-bg-elevated) prose-pre:border prose-pre:border-(--ui-border)
             prose-li:text-(--ui-text-muted) prose-blockquote:border-(--ui-border) prose-blockquote:text-(--ui-text-dimmed)
             prose-hr:border-(--ui-border)"
-            v-html="block.html" />
-        </template>
-
-        <!-- Linked tasks not mentioned inline -->
-        <div v-if="extraLinkedTasks.length" class="mt-4">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="h-px flex-1 bg-(--ui-border)" />
-            <span class="text-[10px] uppercase tracking-wider text-(--ui-text-dimmed) font-medium">Due this day</span>
-            <div class="h-px flex-1 bg-(--ui-border)" />
-          </div>
-          <div class="space-y-1.5">
-            <InlineTask v-for="lt in extraLinkedTasks" :key="lt.target_id" :task-id="lt.target_id" />
-          </div>
+            v-html="notesHtml" />
+          <p v-else class="text-sm text-(--ui-text-dimmed) italic">No notes yet. Tap the pencil to write.</p>
         </div>
+      </div>
 
-        <p v-if="!editContent?.trim() && !carriedTasks.length && !extraLinkedTasks.length" class="text-sm text-(--ui-text-dimmed) italic">
-          Nothing written yet. Tap the pencil to start writing.
-        </p>
+      <!-- Tasks section -->
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Tasks</p>
+        <div v-if="allTaskIds.length" class="space-y-1.5">
+          <InlineTask v-for="id in allTaskIds" :key="id" :task-id="id" />
+        </div>
+        <p v-else class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
       </div>
     </div>
   </div>
@@ -123,13 +118,15 @@ interface DiaryEntry {
 }
 
 const { activeId } = useWorkspace();
+const { createTask } = useTasks();
 
 const selectedDate = ref(todayLocal());
+const showAddTask = ref(false);
 const entry = ref<DiaryEntry | null>(null);
 const editContent = ref('');
 const loading = ref(false);
 const saving = ref(false);
-const editMode = ref(true);
+const editMode = ref(false);
 const carriedTasks = ref<{ id: string; title: string }[]>([]);
 const entryDates = ref<Set<string>>(new Set());
 
@@ -159,53 +156,32 @@ const selectedDayLabel = computed(() => {
   return new Date(selectedDate.value + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 });
 
-// Linked tasks not already rendered inline via @[mentions]
-const extraLinkedTasks = computed(() => {
-  const links = entry.value?.links?.filter((l: any) => l.target_type === 'task') || [];
-  if (!links.length) return [];
-  // Collect task IDs that appear as @[mentions] in the content
-  const inlineIds = new Set<string>();
+// Aggregate all task IDs relevant to this day: carried + linked + mentioned
+const allTaskIds = computed(() => {
+  const ids = new Set<string>();
+  for (const ct of carriedTasks.value) ids.add(ct.id);
+  const taskLinks = entry.value?.links?.filter((l: any) => l.target_type === 'task') || [];
+  for (const l of taskLinks) ids.add(l.target_id);
   const mentionRe = /@\[([^\]]+)\]/g;
   let m;
   while ((m = mentionRe.exec(editContent.value || '')) !== null) {
     const ref = m[1];
-    const linked = links.find((l: any) => l.target_title === ref || l.target_id === ref);
-    if (linked) inlineIds.add(linked.target_id);
+    const linked = taskLinks.find((l: any) => l.target_title === ref || l.target_id === ref);
+    if (linked) ids.add(linked.target_id);
   }
-  // Also exclude carried-forward tasks
-  for (const ct of carriedTasks.value) inlineIds.add(ct.id);
-  return links.filter((l: any) => !inlineIds.has(l.target_id));
+  return [...ids];
 });
 
-// Rendered blocks (markdown + inline tasks)
-const renderedBlocks = computed(() => {
-  if (!editContent.value) return [];
-  const blocks: { type: 'html' | 'task'; html?: string; taskId?: string }[] = [];
-  const regex = /@\[([^\]]+)\]/g;
-  let lastIndex = 0;
-  let match;
-  const content = editContent.value;
-
-  while ((match = regex.exec(content)) !== null) {
-    const before = content.slice(lastIndex, match.index);
-    if (before.trim()) blocks.push({ type: 'html', html: marked.parse(before) as string });
-    const ref = match[1];
-    const linkedTask = entry.value?.links?.find(
-      l => l.target_type === 'task' && (l.target_title === ref || l.target_id === ref)
-    );
-    if (linkedTask) {
-      blocks.push({ type: 'task', taskId: linkedTask.target_id });
-    } else if (ref.startsWith('T') || ref.match(/^[a-z]{5}\d{3}/)) {
-      blocks.push({ type: 'task', taskId: ref });
-    } else {
-      blocks.push({ type: 'html', html: marked.parse(`@[${ref}]`) as string });
-    }
-    lastIndex = match.index + match[0].length;
-  }
-
-  const remaining = content.slice(lastIndex);
-  if (remaining.trim()) blocks.push({ type: 'html', html: marked.parse(remaining) as string });
-  return blocks;
+// Notes body: markdown of content with @[...] mentions stripped (tasks shown in Tasks section)
+const notesHtml = computed(() => {
+  if (!editContent.value) return '';
+  const cleaned = editContent.value
+    .replace(/@\[[^\]]+\]/g, '')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!cleaned) return '';
+  return marked.parse(cleaned) as string;
 });
 
 async function selectDay(date: string) {
@@ -225,7 +201,7 @@ async function fetchEntry() {
     if (data) {
       entry.value = data;
       editContent.value = data.content;
-      editMode.value = !data.content?.trim();
+      editMode.value = false;
       return;
     }
 
@@ -237,7 +213,7 @@ async function fetchEntry() {
     entry.value = created;
     editContent.value = created.content;
     carriedTasks.value = created.carried_tasks || [];
-    editMode.value = true;
+    editMode.value = false;
   } finally {
     loading.value = false;
   }
@@ -332,6 +308,24 @@ async function toggleEditMode() {
     }
   }
   editMode.value = !editMode.value;
+}
+
+async function handleAddTask(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[] }) {
+  const dueAt = data.due_at || new Date(`${selectedDate.value}T09:00`).toISOString();
+  const task = await createTask({ title: data.title, due_at: dueAt, tags: data.tags, workspace_id: activeId.value });
+  if (data.subtasks?.length) {
+    for (const sub of data.subtasks) await createTask({ title: sub, parent_id: task.id, workspace_id: activeId.value });
+  }
+  const mention = `@[${task.title}]`;
+  editContent.value = editContent.value?.trim() ? `${editContent.value}\n${mention}` : mention;
+  if (entry.value) {
+    await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: 'task', target_id: task.id } }).catch(() => {});
+    const newLink = { link_id: '', target_type: 'task', target_id: task.id, target_title: task.title };
+    entry.value.links = [...(entry.value.links || []), newLink];
+  }
+  entryDates.value.add(selectedDate.value);
+  saveContent();
+  showAddTask.value = false;
 }
 
 async function searchMentions(q: string) { mentionResults.value = await $fetch<any[]>('/api/mention', { query: { q } }); }

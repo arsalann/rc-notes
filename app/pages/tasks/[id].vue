@@ -1,8 +1,9 @@
 <template>
   <div class="max-w-lg mx-auto min-h-screen">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg flex items-center justify-between px-4 py-3 safe-top">
-      <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" @click="navigateTo('/')" />
+      <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" @click="goBack" />
       <div class="flex items-center gap-1">
+        <UButton color="neutral" variant="ghost" :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'" @click="copyAsMarkdown" />
         <UButton color="neutral" variant="ghost" :icon="task?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="task?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
         <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="confirmArchive = true" />
@@ -56,14 +57,26 @@
             <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-archive"
               @click="archiveSubtask(sub.id)" />
           </div>
-          <form @submit.prevent="addSubtask" class="flex items-center gap-2.5 py-2.5 px-2 -mx-2 rounded-lg">
+          <form @submit.prevent="addSubtask" class="flex items-center gap-2.5 py-2.5 px-2 -mx-2 rounded-lg relative">
             <UIcon name="i-lucide-circle-dashed" class="size-4 text-(--ui-text-dimmed) shrink-0" />
-            <input v-model="newSubtask" placeholder="Add a subtask..."
+            <input v-model="newSubtask" @input="handleSubtaskInput" @keydown.escape="mentionOpen = false"
+              placeholder="Add a subtask or @link an existing task..."
               class="flex-1 bg-transparent outline-none text-(--ui-text-muted) placeholder:text-(--ui-text-dimmed)" />
             <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 scale-90" enter-to-class="opacity-100 scale-100"
               leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-90">
-              <UButton v-if="newSubtask.trim()" type="submit" color="primary" variant="ghost" size="xs">Add</UButton>
+              <UButton v-if="newSubtask.trim() && !mentionOpen" type="submit" color="primary" variant="ghost" size="xs">Add</UButton>
             </Transition>
+            <UCard v-if="mentionOpen && mentionResults.length"
+              class="absolute left-0 right-0 bottom-full mb-1 z-40 max-h-48 overflow-y-auto overscroll-contain"
+              :ui="{ body: 'p-1' }">
+              <button v-for="item in mentionResults" :key="item.id" type="button"
+                @mousedown.prevent="attachAsSubtask(item)"
+                class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
+                <UBadge color="primary" variant="subtle" size="xs">Task</UBadge>
+                <span class="truncate">{{ item.title }}</span>
+                <span class="text-xs text-(--ui-text-dimmed) font-mono ml-auto shrink-0">{{ item.display_id }}</span>
+              </button>
+            </UCard>
           </form>
         </div>
       </div>
@@ -139,12 +152,19 @@ import { marked } from 'marked';
 import type { Task } from '~/composables/useNotes';
 import { parseUTC, todayLocal, localDateOffset } from '~/composables/useDate';
 
-const route = useRoute(); const id = route.params.id as string;
+const route = useRoute(); const router = useRouter(); const id = route.params.id as string;
+
+function goBack() {
+  if (window.history.length > 1) router.back();
+  else navigateTo('/tasks');
+}
 const { updateTask, deleteTask, toggleComplete, togglePin, createTask } = useTasks();
 const { createNote } = useNotesCrud();
 const { workspaces } = useWorkspace();
 
+const toast = useToast();
 const task = ref<Task | null>(null); const subtasks = ref<Task[]>([]); const loadingTask = ref(true); const confirmArchive = ref(false);
+const copied = ref(false);
 const newSubtask = ref(''); const newTag = ref(''); const editTitle = ref(''); const editDescription = ref(''); const editTags = ref<string[]>([]); const editDue = ref('');
 const taskLinks = ref<any[]>([]);
 const linkedNoteContent = ref('');
@@ -262,10 +282,57 @@ async function setStatus(status: string) {
 }
 async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) { task.value.completed = u.completed; task.value.status = u.status; } }
 async function handlePin() { const u = await togglePin(id); if (task.value) task.value.pinned = u.pinned; }
-async function handleArchiveTask() { await deleteTask(id); navigateTo('/'); }
+async function handleArchiveTask() { await deleteTask(id); navigateTo('/tasks'); }
+const mentionOpen = ref(false);
+const mentionResults = ref<any[]>([]);
+let mentionTimer: ReturnType<typeof setTimeout>;
+
+function handleSubtaskInput() {
+  const text = newSubtask.value;
+  const at = text.lastIndexOf('@');
+  if (at < 0 || (at > 0 && text[at - 1] !== ' ' && text[at - 1] !== '\n')) {
+    mentionOpen.value = false; return;
+  }
+  const q = text.substring(at + 1);
+  if (!q.length || q.includes(' ') || q.includes('\n')) { mentionOpen.value = false; return; }
+  mentionOpen.value = true;
+  clearTimeout(mentionTimer);
+  mentionTimer = setTimeout(async () => {
+    const res = await $fetch<any[]>('/api/mention', { query: { q } });
+    mentionResults.value = res.filter((r: any) => r.type === 'task' && r.id !== id);
+  }, 200);
+}
+
+async function attachAsSubtask(item: { id: string; title: string }) {
+  mentionOpen.value = false;
+  newSubtask.value = '';
+  await updateTask(item.id, { parent_id: id } as any);
+  const full = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`);
+  subtasks.value = full.subtasks || [];
+}
+
 async function addSubtask() { const t = newSubtask.value.trim(); if (!t) return; const s = await createTask({ title: t, parent_id: id }); subtasks.value.push(s); newSubtask.value = ''; }
 async function toggleSubtask(sid: string) { const u = await toggleComplete(sid); const i = subtasks.value.findIndex(s => s.id === sid); if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u }; }
 async function archiveSubtask(sid: string) { await deleteTask(sid); subtasks.value = subtasks.value.filter(s => s.id !== sid); }
+
+async function copyAsMarkdown() {
+  if (!task.value) return;
+  const check = (c: boolean) => c ? 'x' : ' ';
+  const lines = [`- [${check(task.value.completed)}] ${task.value.title}`];
+  if (task.value.description?.trim()) {
+    for (const l of task.value.description.split('\n')) lines.push(`  ${l}`);
+  }
+  for (const s of subtasks.value) lines.push(`  - [${check(s.completed)}] ${s.title}`);
+  const md = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(md);
+    copied.value = true;
+    toast.add({ title: 'Copied as markdown', color: 'success' });
+    setTimeout(() => { copied.value = false; }, 1500);
+  } catch {
+    toast.add({ title: 'Copy failed', color: 'error' });
+  }
+}
 
 async function handleAddNote() {
   if (!task.value) return;
