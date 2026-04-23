@@ -107,6 +107,13 @@ export default defineEventHandler(async (event) => {
   // Auto-link task to diary entry for the due date
   if (body.due_at && body.due_at !== null) {
     await linkTaskToDiary(id, body.due_at, task.workspace_id).catch(() => {});
+  } else if (body.due_at === null) {
+    // Clearing the due date: drop diary→task links so the task doesn't get re-pulled
+    // into a diary view (and its due_at silently re-set) on the next GET.
+    await queryAll(
+      `DELETE FROM links WHERE source_type = 'diary' AND target_type = 'task' AND target_id = $tid`,
+      { tid: id }, { tid: VARCHAR }
+    ).catch(() => {});
   }
 
   return task;
