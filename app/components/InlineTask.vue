@@ -24,6 +24,7 @@
 import type { Task } from '~/composables/useNotes';
 
 const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] } }>();
+const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete } = useTasks();
 
 const task = ref<Task | null>(props.initialData || null);
@@ -31,11 +32,15 @@ const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
 const loading = ref(!props.initialData);
 
 onMounted(async () => {
-  if (props.initialData) return;
+  if (props.initialData) {
+    emit('update:completed', { id: props.taskId, completed: !!props.initialData.completed });
+    return;
+  }
   try {
     const data = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${props.taskId}`);
     task.value = data;
     subtasks.value = data.subtasks || [];
+    emit('update:completed', { id: props.taskId, completed: !!data.completed });
   } catch { /* task may not exist */ }
   finally { loading.value = false; }
 });
@@ -44,6 +49,7 @@ async function handleToggle() {
   if (!task.value) return;
   const u = await toggleComplete(task.value.id);
   task.value = { ...task.value, ...u };
+  emit('update:completed', { id: props.taskId, completed: !!task.value.completed });
 }
 
 async function handleSubToggle(sid: string) {

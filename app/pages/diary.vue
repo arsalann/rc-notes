@@ -95,10 +95,26 @@
       <!-- Tasks section -->
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Tasks</p>
-        <div v-if="allTaskIds.length" class="space-y-1.5">
-          <InlineTask v-for="id in allTaskIds" :key="id" :task-id="id" />
+        <div v-if="pendingTaskIds.length" class="space-y-1.5">
+          <InlineTask v-for="id in pendingTaskIds" :key="id" :task-id="id"
+            @update:completed="onTaskStatus" />
         </div>
-        <p v-else class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
+        <p v-else-if="!allTaskIds.length" class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
+        <p v-else class="text-sm text-(--ui-text-dimmed) italic">All tasks done for this day.</p>
+      </div>
+
+      <!-- Done section (collapsed by default) -->
+      <div v-if="doneTaskIds.length">
+        <button @click="doneOpen = !doneOpen"
+          class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
+          <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
+          <span>Done</span>
+          <span class="text-(--ui-text-dimmed) font-mono normal-case">({{ doneTaskIds.length }})</span>
+        </button>
+        <div v-if="doneOpen" class="space-y-1.5">
+          <InlineTask v-for="id in doneTaskIds" :key="id" :task-id="id"
+            @update:completed="onTaskStatus" />
+        </div>
       </div>
     </div>
   </div>
@@ -134,6 +150,12 @@ const mentionOpen = ref(false);
 const mentionResults = ref<any[]>([]);
 const contentRef = ref<HTMLTextAreaElement>();
 const creatingTasks = ref(false);
+const doneOpen = ref(false);
+const taskCompleted = ref<Record<string, boolean>>({});
+
+function onTaskStatus(payload: { id: string; completed: boolean }) {
+  taskCompleted.value = { ...taskCompleted.value, [payload.id]: payload.completed };
+}
 
 // Day navigation
 const days = computed(() => {
@@ -171,6 +193,9 @@ const allTaskIds = computed(() => {
   }
   return [...ids];
 });
+
+const pendingTaskIds = computed(() => allTaskIds.value.filter(id => !taskCompleted.value[id]));
+const doneTaskIds = computed(() => allTaskIds.value.filter(id => taskCompleted.value[id]));
 
 // Notes body: markdown of content with @[...] mentions stripped (tasks shown in Tasks section)
 const notesHtml = computed(() => {
