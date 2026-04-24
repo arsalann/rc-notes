@@ -13,7 +13,23 @@
       <template v-if="expanded">
         <USeparator />
         <div class="px-4 py-3.5 space-y-3">
-          <div class="flex items-center gap-2">
+          <!-- Quick attribute row: priority, status, due date -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <!-- Priority -->
+            <UDropdownMenu :items="priorityMenuItems" :ui="{ content: 'min-w-36' }">
+              <UButton :color="currentPriority?.color || 'neutral'" variant="soft" size="sm"
+                :icon="currentPriority?.icon || 'i-lucide-flag'" trailing-icon="i-lucide-chevron-down">
+                {{ currentPriority?.label || 'Priority' }}
+              </UButton>
+            </UDropdownMenu>
+            <!-- Status -->
+            <UDropdownMenu :items="statusMenuItems" :ui="{ content: 'min-w-32' }">
+              <UButton :color="currentStatus.color" variant="soft" size="sm"
+                icon="i-lucide-circle-dot" trailing-icon="i-lucide-chevron-down">
+                {{ currentStatus.label }}
+              </UButton>
+            </UDropdownMenu>
+            <!-- Due date -->
             <UButton :color="dueAt ? 'primary' : 'neutral'" variant="soft" size="sm" icon="i-lucide-calendar"
               @click="showDatePicker = !showDatePicker">
               {{ dueAt ? formatDate(dueAt) : 'Due date' }}
@@ -52,33 +68,62 @@
 </template>
 
 <script setup lang="ts">
+import { PRIORITY_OPTIONS, getPriorityOption, type PriorityValue } from '~/composables/usePriority';
+import { parseHashtags } from '~/composables/useHashtagParse';
+
 const props = defineProps<{ placeholder?: string; parentId?: string }>();
-const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[] }] }>();
+const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }] }>();
 const title = ref(''); const dueAt = ref(''); const subtasks = ref<string[]>([]); const newSubtask = ref('');
+const priority = ref<PriorityValue>(2);
+const status = ref<'next' | 'now' | 'done'>('next');
 const expanded = ref(false); const showDatePicker = ref(false); const showSubtaskInput = ref(false);
 const titleRef = ref<HTMLInputElement>(); const subtaskRef = ref<HTMLInputElement>();
 import { todayLocal, localDateOffset } from '~/composables/useDate';
+
+const currentPriority = computed(() => getPriorityOption(priority.value));
+const priorityMenuItems = computed(() => [
+  [
+    ...PRIORITY_OPTIONS.map(p => ({
+      label: p.label,
+      icon: p.icon,
+      onSelect: () => { priority.value = p.value; },
+    })),
+    { label: 'None', icon: 'i-lucide-minus', onSelect: () => { priority.value = 0; } },
+  ],
+]);
+
+const statusOptions = [
+  { value: 'next' as const, label: 'Next', color: 'neutral' as const },
+  { value: 'now' as const,  label: 'Now',  color: 'primary' as const },
+  { value: 'done' as const, label: 'Done', color: 'success' as const },
+];
+const currentStatus = computed(() => statusOptions.find(s => s.value === status.value)!);
+const statusMenuItems = computed(() => [
+  statusOptions.map(s => ({ label: s.label, onSelect: () => { status.value = s.value; } })),
+]);
 const dateShortcuts = computed(() => [
   { label: 'Today', value: `${todayLocal()}T09:00` },
   { label: 'Tomorrow', value: `${localDateOffset(1)}T09:00` },
   { label: 'Next week', value: `${localDateOffset(7)}T09:00` },
 ]);
 
-// Extract #tags from title text
-function extractTags(text: string): { title: string; tags: string[] } {
-  const tags: string[] = [];
-  const cleaned = text.replace(/#(\w[\w-]*)/g, (_, tag) => { tags.push(tag.toLowerCase()); return ''; }).replace(/\s{2,}/g, ' ').trim();
-  return { title: cleaned, tags: [...new Set(tags)] };
-}
+// Reactive parse — drives preview and auto-applies recognized hashtags to the buttons.
+const parsed = computed(() => parseHashtags(title.value));
+const parsedTags = computed(() => parsed.value.tags);
 
-// Show inline tag preview
-const parsedTags = computed(() => extractTags(title.value).tags);
+// When the user types a recognized priority/status/date hashtag, update the corresponding button.
+watch(() => parsed.value.priority, v => { if (v !== undefined) priority.value = v as PriorityValue; });
+watch(() => parsed.value.status, v => { if (v) status.value = v as 'next' | 'now' | 'done'; });
+watch(() => parsed.value.due_at, v => { if (v) dueAt.value = v; });
 
 function addSubtask() { const t=newSubtask.value.trim(); if(t){subtasks.value.push(t);newSubtask.value='';} }
 function collapse() { expanded.value=false; showDatePicker.value=false; showSubtaskInput.value=false; }
 function submit() { const t=title.value.trim(); if(!t)return;
-  const { title: cleanTitle, tags } = extractTags(t);
-  emit('add',{title:cleanTitle,parent_id:props.parentId,due_at:dueAt.value?new Date(dueAt.value).toISOString():undefined,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:tags.length?tags:undefined});
-  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;collapse(); }
+  const p = parseHashtags(t);
+  const finalDue = p.due_at ? new Date(p.due_at).toISOString() : (dueAt.value ? new Date(dueAt.value).toISOString() : undefined);
+  const finalPriority = p.priority !== undefined ? p.priority : priority.value;
+  const finalStatus = p.status || status.value;
+  emit('add',{title:p.title,parent_id:props.parentId,due_at:finalDue,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:p.tags.length?p.tags:undefined,priority:finalPriority,status:finalStatus});
+  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;priority.value=2;status.value='next';collapse(); }
 function formatDate(s:string){return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 </script>

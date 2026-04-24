@@ -71,6 +71,13 @@ export default defineEventHandler(async (event) => {
       types.workspace_id = VARCHAR;
     }
   }
+  if (body.priority !== undefined) {
+    const p = Number(body.priority);
+    const safe = [0, 1, 2, 3].includes(p) ? p : 0;
+    sets.push('priority = $priority');
+    params.priority = safe;
+    types.priority = INTEGER;
+  }
   if (body.status !== undefined && ['next', 'now', 'done'].includes(body.status)) {
     sets.push('status = $status');
     params.status = body.status;

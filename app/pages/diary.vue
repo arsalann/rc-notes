@@ -39,6 +39,29 @@
       </div>
     </div>
 
+    <!-- Task sort/group toolbar -->
+    <div class="flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
+      <span class="text-[10px] uppercase font-semibold tracking-wide text-(--ui-text-dimmed) shrink-0 mr-1">Sort</span>
+      <UButton :color="taskSort === 'created' ? 'primary' : 'neutral'" :variant="taskSort === 'created' ? 'soft' : 'outline'" size="xs"
+        icon="i-lucide-clock" @click="taskSort = 'created'" class="shrink-0">
+        Newest
+      </UButton>
+      <UButton :color="taskSort === 'priority' ? 'primary' : 'neutral'" :variant="taskSort === 'priority' ? 'soft' : 'outline'" size="xs"
+        icon="i-lucide-flame" @click="taskSort = 'priority'" class="shrink-0">
+        Priority
+      </UButton>
+      <USeparator orientation="vertical" class="h-4 shrink-0" />
+      <span class="text-[10px] uppercase font-semibold tracking-wide text-(--ui-text-dimmed) shrink-0 mr-1">Group</span>
+      <UButton :color="taskGroup === 'created' ? 'primary' : 'neutral'" :variant="taskGroup === 'created' ? 'soft' : 'outline'" size="xs"
+        icon="i-lucide-calendar-days" @click="taskGroup = taskGroup === 'created' ? 'none' : 'created'" class="shrink-0">
+        Created
+      </UButton>
+      <UButton :color="taskGroup === 'priority' ? 'primary' : 'neutral'" :variant="taskGroup === 'priority' ? 'soft' : 'outline'" size="xs"
+        icon="i-lucide-flame" @click="taskGroup = taskGroup === 'priority' ? 'none' : 'priority'" class="shrink-0">
+        Priority
+      </UButton>
+    </div>
+
     <!-- Quick add task -->
     <div v-if="showAddTask" class="mt-3 -mx-0">
       <QuickAdd placeholder="Add a task for this day..." @add="handleAddTask" />
@@ -95,10 +118,21 @@
       <!-- Tasks section -->
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Tasks</p>
-        <div v-if="pendingTaskIds.length" class="space-y-1.5">
-          <InlineTask v-for="id in pendingTaskIds" :key="id" :task-id="id"
-            @update:completed="onTaskStatus" />
-        </div>
+        <template v-if="pendingGroups.length">
+          <div v-for="group in pendingGroups" :key="group.key" class="mb-4 last:mb-0">
+            <p v-if="taskGroup !== 'none'" class="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
+              :class="group.labelClass || 'text-(--ui-text-dimmed)'">
+              <UIcon v-if="group.icon" :name="group.icon" class="size-3.5 mr-1 align-[-2px]" />
+              {{ group.label }}
+              <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ group.ids.length }})</span>
+            </p>
+            <div class="space-y-1.5">
+              <InlineTask v-for="id in group.ids" :key="id" :task-id="id"
+                :initial-data="taskCache[id]"
+                @update:completed="onTaskStatus" />
+            </div>
+          </div>
+        </template>
         <p v-else-if="!allTaskIds.length" class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
         <p v-else class="text-sm text-(--ui-text-dimmed) italic">All tasks done for this day.</p>
       </div>
@@ -112,7 +146,8 @@
           <span class="text-(--ui-text-dimmed) font-mono normal-case">({{ doneTaskIds.length }})</span>
         </button>
         <div v-if="doneOpen" class="space-y-1.5">
-          <InlineTask v-for="id in doneTaskIds" :key="id" :task-id="id"
+          <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
+            :initial-data="taskCache[id]"
             @update:completed="onTaskStatus" />
         </div>
       </div>
@@ -123,7 +158,10 @@
 <script setup lang="ts">
 import { marked } from 'marked';
 import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
-import { todayLocal, localDateOffset } from '~/composables/useDate';
+import { parseHashtags } from '~/composables/useHashtagParse';
+import { todayLocal, localDateOffset, parseUTC } from '~/composables/useDate';
+import { PRIORITY_OPTIONS } from '~/composables/usePriority';
+import type { Task } from '~/composables/useNotes';
 
 interface DiaryEntry {
   id: string;
@@ -152,6 +190,9 @@ const contentRef = ref<HTMLTextAreaElement>();
 const creatingTasks = ref(false);
 const doneOpen = ref(false);
 const taskCompleted = ref<Record<string, boolean>>({});
+const taskCache = ref<Record<string, Task & { subtasks?: Task[] }>>({});
+const taskSort = ref<'created' | 'priority'>('created');
+const taskGroup = ref<'none' | 'created' | 'priority'>('none');
 
 function onTaskStatus(payload: { id: string; completed: boolean }) {
   taskCompleted.value = { ...taskCompleted.value, [payload.id]: payload.completed };
@@ -196,6 +237,92 @@ const allTaskIds = computed(() => {
 
 const pendingTaskIds = computed(() => allTaskIds.value.filter(id => !taskCompleted.value[id]));
 const doneTaskIds = computed(() => allTaskIds.value.filter(id => taskCompleted.value[id]));
+
+// Fetch task metadata for sorting/grouping (dedupes + parallelizes)
+watch(allTaskIds, async (ids) => {
+  const missing = ids.filter(id => !taskCache.value[id]);
+  if (!missing.length) return;
+  const results = await Promise.all(
+    missing.map(id => $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`).catch(() => null))
+  );
+  const next = { ...taskCache.value };
+  results.forEach((r, i) => { if (r) next[missing[i]] = r; });
+  taskCache.value = next;
+}, { immediate: true });
+
+function sortIds(ids: string[]): string[] {
+  const cache = taskCache.value;
+  const arr = [...ids];
+  if (taskSort.value === 'priority') {
+    arr.sort((a, b) => {
+      const pa = cache[a]?.priority ?? 0;
+      const pb = cache[b]?.priority ?? 0;
+      if (pa !== pb) return pb - pa;
+      const ta = cache[a]?.created_at ? parseUTC(cache[a]!.created_at).getTime() : 0;
+      const tb = cache[b]?.created_at ? parseUTC(cache[b]!.created_at).getTime() : 0;
+      return tb - ta;
+    });
+  } else {
+    arr.sort((a, b) => {
+      const ta = cache[a]?.created_at ? parseUTC(cache[a]!.created_at).getTime() : 0;
+      const tb = cache[b]?.created_at ? parseUTC(cache[b]!.created_at).getTime() : 0;
+      return tb - ta;
+    });
+  }
+  return arr;
+}
+
+const sortedPendingTaskIds = computed(() => sortIds(pendingTaskIds.value));
+const sortedDoneTaskIds = computed(() => sortIds(doneTaskIds.value));
+
+interface TaskGroup { key: string; label: string; ids: string[]; icon?: string; labelClass?: string; }
+
+const pendingGroups = computed<TaskGroup[]>(() => {
+  const ids = sortedPendingTaskIds.value;
+  if (!ids.length) return [];
+  if (taskGroup.value === 'none') {
+    return [{ key: 'all', label: '', ids }];
+  }
+  if (taskGroup.value === 'priority') {
+    const groups = new Map<number, string[]>();
+    for (const id of ids) {
+      const p = taskCache.value[id]?.priority ?? 0;
+      if (!groups.has(p)) groups.set(p, []);
+      groups.get(p)!.push(id);
+    }
+    const out: TaskGroup[] = [];
+    for (const opt of PRIORITY_OPTIONS) {
+      const list = groups.get(opt.value);
+      if (list?.length) out.push({ key: `p${opt.value}`, label: opt.label, ids: list, icon: opt.icon, labelClass: opt.textClass });
+    }
+    const none = groups.get(0);
+    if (none?.length) out.push({ key: 'p0', label: 'No priority', ids: none, icon: 'i-lucide-minus' });
+    return out;
+  }
+  // group by created date
+  const groups = new Map<string, string[]>();
+  for (const id of ids) {
+    const ca = taskCache.value[id]?.created_at;
+    const key = ca ? String(ca).slice(0, 10) : 'unknown';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(id);
+  }
+  const today = todayLocal();
+  return [...groups.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, list]) => {
+      let label = key;
+      if (key === today) label = 'Today';
+      else if (key === localDateOffset(-1)) label = 'Yesterday';
+      else if (key !== 'unknown') {
+        const d = new Date(key + 'T12:00:00');
+        label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      } else {
+        label = 'Unknown';
+      }
+      return { key, label, ids: list, icon: 'i-lucide-calendar' };
+    });
+});
 
 // Notes body: markdown of content with @[...] mentions stripped (tasks shown in Tasks section)
 const notesHtml = computed(() => {
@@ -307,10 +434,25 @@ async function toggleEditMode() {
     try {
       const items = parseChecklist(editContent.value);
       if (items.length) {
+        // Apply hashtag parsing recursively to every checklist item
+        const applyParse = (it: any): any => {
+          const p = parseHashtags(it.title);
+          return {
+            title: p.title,
+            checked: it.checked,
+            tags: p.tags,
+            priority: p.priority,
+            status: p.status,
+            due_at: p.due_at ? new Date(p.due_at).toISOString() : undefined,
+            children: (it.children || []).map(applyParse),
+          };
+        };
+        const parsedItems = items.map(applyParse);
+
         await $fetch<any[]>('/api/tasks/from-checklist', {
           method: 'POST',
           body: {
-            items,
+            items: parsedItems,
             source_type: 'diary',
             source_id: entry.value.id,
             workspace_id: activeId.value,
@@ -318,8 +460,8 @@ async function toggleEditMode() {
           },
         });
 
-        const rootTitles = items.map(i => i.title);
-        editContent.value = replaceChecklistWithMentions(editContent.value, rootTitles);
+        const rootPairs = items.map((orig, idx) => ({ original: orig.title.trim(), clean: parsedItems[idx].title }));
+        editContent.value = replaceChecklistWithMentions(editContent.value, rootPairs);
         saveContent();
 
         // Reload entry to get updated links
@@ -335,9 +477,9 @@ async function toggleEditMode() {
   editMode.value = !editMode.value;
 }
 
-async function handleAddTask(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[] }) {
+async function handleAddTask(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }) {
   const dueAt = data.due_at || new Date(`${selectedDate.value}T09:00`).toISOString();
-  const task = await createTask({ title: data.title, due_at: dueAt, tags: data.tags, workspace_id: activeId.value });
+  const task = await createTask({ title: data.title, due_at: dueAt, tags: data.tags, workspace_id: activeId.value, priority: data.priority, status: data.status });
   if (data.subtasks?.length) {
     for (const sub of data.subtasks) await createTask({ title: sub, parent_id: task.id, workspace_id: activeId.value });
   }

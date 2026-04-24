@@ -11,6 +11,9 @@ export default defineEventHandler(async (event) => {
   const workspaceId = body.workspace_id || await getDefaultWorkspaceId();
   const tags = Array.isArray(body.tags) ? body.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
   const dueAt = body.due_at || null;
+  const priority = body.priority !== undefined && [0, 1, 2, 3].includes(Number(body.priority))
+    ? Number(body.priority)
+    : 2;
 
   if (!title) throw createError({ statusCode: 400, statusMessage: 'Title is required' });
 
@@ -36,13 +39,15 @@ export default defineEventHandler(async (event) => {
   const posRows = await queryAll(posQuery, posParams, posTypes);
   const position = posRows[0]?.next_pos ?? 0;
 
-  // Auto-set status: 'now' if due within next 7 days, otherwise 'next'
-  const status = dueAt && isWithinNextDays(dueAt, 7) ? 'now' : 'next';
+  // Accept explicit status from client, otherwise auto-set: 'now' if due within next 7 days, else 'next'
+  const status = ['next', 'now', 'done'].includes(body.status)
+    ? body.status
+    : (dueAt && isWithinNextDays(dueAt, 7) ? 'now' : 'next');
 
-  const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status'];
-  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status'];
-  const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId, status };
-  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR, status: VARCHAR };
+  const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status', 'priority'];
+  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
+  const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId, status, priority };
+  const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR, status: VARCHAR, priority: INTEGER };
 
   if (parentId) {
     cols.push('parent_id');

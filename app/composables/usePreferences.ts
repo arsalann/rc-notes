@@ -1,6 +1,6 @@
 export interface Preferences {
   defaultWorkspace: string | null;
-  taskGroupBy: 'none' | 'workspace' | 'tag' | 'status';
+  taskGroupBy: 'none' | 'workspace' | 'tag' | 'status' | 'priority';
   taskOrderBy: 'created' | 'due';
   taskShowDone: boolean;
 }

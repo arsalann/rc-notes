@@ -6,6 +6,10 @@ interface ChecklistItem {
   title: string;
   checked: boolean;
   children: ChecklistItem[];
+  tags?: string[];
+  priority?: number;
+  status?: string;
+  due_at?: string;
 }
 
 export default defineEventHandler(async (event) => {
@@ -31,14 +35,19 @@ export default defineEventHandler(async (event) => {
     );
     const position = posRows[0]?.next_pos ?? 0;
 
-    const status = item.checked ? 'done' : (dueDate ? 'now' : 'next');
-    const cols = ['id', 'title', 'completed', 'status', 'tags', 'position', 'display_id'];
-    const vals = ['uuid()::VARCHAR', '$title', '$completed', '$status', '$tags', '$position', '$display_id'];
+    const itemStatus = ['next', 'now', 'done'].includes(item.status || '')
+      ? item.status!
+      : (item.checked ? 'done' : (dueDate || item.due_at ? 'now' : 'next'));
+    const itemPriority = [0, 1, 2, 3].includes(Number(item.priority)) ? Number(item.priority) : 2;
+    const itemTags = Array.isArray(item.tags) ? item.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
+    const cols = ['id', 'title', 'completed', 'status', 'priority', 'tags', 'position', 'display_id'];
+    const vals = ['uuid()::VARCHAR', '$title', '$completed', '$status', '$priority', '$tags', '$position', '$display_id'];
     const params: Record<string, any> = {
       title: item.title,
       completed: String(item.checked),
-      status,
-      tags: listValue([]),
+      status: itemStatus,
+      priority: itemPriority,
+      tags: listValue(itemTags),
       position,
       display_id: displayId,
     };
@@ -46,6 +55,7 @@ export default defineEventHandler(async (event) => {
       title: VARCHAR,
       completed: VARCHAR, // DuckDB casts
       status: VARCHAR,
+      priority: INTEGER,
       tags: LIST(VARCHAR),
       position: INTEGER,
       display_id: VARCHAR,
@@ -58,10 +68,11 @@ export default defineEventHandler(async (event) => {
       types.workspace_id = VARCHAR;
     }
 
-    if (dueDate) {
+    const itemDue = item.due_at || (dueDate ? `${dueDate}T12:00:00` : null);
+    if (itemDue) {
       cols.push('due_at');
       vals.push('$due_date::TIMESTAMP');
-      params.due_date = `${dueDate}T12:00:00`;
+      params.due_date = itemDue;
       types.due_date = VARCHAR;
     }
 
@@ -93,15 +104,20 @@ export default defineEventHandler(async (event) => {
       const child = item.children[i];
       const subDisplayId = await generateSubtaskDisplayId(displayId, parentTask.id);
 
-      const subStatus = child.checked ? 'done' : 'next';
-      const subCols = ['id', 'title', 'completed', 'status', 'parent_id', 'tags', 'position', 'display_id'];
-      const subVals = ['uuid()::VARCHAR', '$title', '$completed', '$subStatus', '$parent_id', '$tags', '$position', '$display_id'];
+      const subStatus = ['next', 'now', 'done'].includes(child.status || '')
+        ? child.status!
+        : (child.checked ? 'done' : 'next');
+      const subPriority = [0, 1, 2, 3].includes(Number(child.priority)) ? Number(child.priority) : 2;
+      const subTags = Array.isArray(child.tags) ? child.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
+      const subCols = ['id', 'title', 'completed', 'status', 'priority', 'parent_id', 'tags', 'position', 'display_id'];
+      const subVals = ['uuid()::VARCHAR', '$title', '$completed', '$subStatus', '$subPriority', '$parent_id', '$tags', '$position', '$display_id'];
       const subParams: Record<string, any> = {
         title: child.title,
         completed: String(child.checked),
         subStatus,
+        subPriority,
         parent_id: parentTask.id,
-        tags: listValue([]),
+        tags: listValue(subTags),
         position: i,
         display_id: subDisplayId,
       };
@@ -109,6 +125,7 @@ export default defineEventHandler(async (event) => {
         title: VARCHAR,
         completed: VARCHAR,
         subStatus: VARCHAR,
+        subPriority: INTEGER,
         parent_id: VARCHAR,
         tags: LIST(VARCHAR),
         position: INTEGER,

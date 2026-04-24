@@ -27,18 +27,22 @@
           icon="i-lucide-calendar" @click="orderBy = 'due'" class="shrink-0">
           Due
         </UButton>
-        <USeparator orientation="vertical" class="h-4 shrink-0 md:hidden" />
+        <USeparator orientation="vertical" class="h-4 shrink-0" />
         <UButton :color="groupBy === 'tag' ? 'primary' : 'neutral'" :variant="groupBy === 'tag' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0 md:hidden">
+          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0">
           Tag
         </UButton>
         <UButton :color="groupBy === 'workspace' ? 'primary' : 'neutral'" :variant="groupBy === 'workspace' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0 md:hidden">
+          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0">
           Space
         </UButton>
         <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0 md:hidden">
+          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0">
           Status
+        </UButton>
+        <UButton :color="groupBy === 'priority' ? 'primary' : 'neutral'" :variant="groupBy === 'priority' ? 'soft' : 'outline'" size="xs"
+          icon="i-lucide-flame" @click="groupBy = groupBy === 'priority' ? 'none' : 'priority'" class="shrink-0">
+          Priority
         </UButton>
       </div>
     </div>
@@ -49,8 +53,8 @@
       <USkeleton v-for="i in 4" :key="i" class="h-18 w-full" />
     </div>
     <template v-else>
-      <!-- Desktop Kanban Board -->
-      <div class="hidden md:block mt-4 px-4 pb-6">
+      <!-- Desktop Status Kanban -->
+      <div v-if="groupBy === 'none' || groupBy === 'status'" class="hidden md:block mt-4 px-4 pb-6">
         <div class="grid grid-cols-3 gap-4">
           <div v-for="col in kanbanColumns" :key="col.status"
             class="bg-(--ui-bg-elevated)/30 rounded-2xl p-3 min-h-[60vh]">
@@ -79,8 +83,34 @@
           </div>
         </div>
       </div>
-      <!-- Mobile List Views -->
-      <div class="md:hidden">
+      <!-- Desktop Priority Kanban -->
+      <div v-else-if="groupBy === 'priority'" class="hidden md:block mt-4 px-4 pb-6">
+        <div class="grid grid-cols-4 gap-4">
+          <div v-for="col in priorityKanbanColumns" :key="col.key"
+            class="bg-(--ui-bg-elevated)/30 rounded-2xl p-3 min-h-[60vh]">
+            <div class="flex items-center gap-2 mb-3 px-1">
+              <UIcon :name="col.icon" class="size-3.5" :class="col.textClass" />
+              <span class="text-sm font-semibold" :class="col.textClass">{{ col.label }}</span>
+              <span class="text-xs text-(--ui-text-muted)">{{ col.tasks.length }}</span>
+            </div>
+            <draggable
+              :list="col.tasks"
+              :group="{ name: 'priority-kanban', pull: true, put: true }"
+              item-key="id"
+              :animation="200"
+              ghost-class="opacity-30"
+              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              class="space-y-2 min-h-12"
+              @change="(e: any) => handlePriorityDrop(e, col.value)">
+              <template #item="{ element }">
+                <TaskItem :task="element" @toggle="handleToggle" />
+              </template>
+            </draggable>
+          </div>
+        </div>
+      </div>
+      <!-- List Views — always visible on mobile; on desktop, visible when a non-kanban group is active -->
+      <div :class="(groupBy === 'none' || groupBy === 'status' || groupBy === 'priority') ? 'md:hidden' : ''">
         <template v-if="sortedTasks.length">
           <!-- Grouped by workspace (draggable between groups) -->
           <template v-if="groupBy === 'workspace'">
@@ -115,6 +145,19 @@
             <div v-for="group in statusGroups" :key="group.status" class="px-4 mt-4">
               <p class="text-xs font-semibold uppercase tracking-wider mb-2"
                 :class="group.status === 'now' ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'">
+                {{ group.label }}
+              </p>
+              <div class="space-y-2.5">
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+              </div>
+            </div>
+            <div class="pb-6" />
+          </template>
+          <!-- Grouped by priority -->
+          <template v-else-if="groupBy === 'priority'">
+            <div v-for="group in priorityGroups" :key="group.key" class="px-4 mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider mb-2" :class="group.labelClass || 'text-(--ui-text-dimmed)'">
+                <UIcon v-if="group.icon" :name="group.icon" class="size-3.5 mr-1 align-[-2px]" />
                 {{ group.label }}
               </p>
               <div class="space-y-2.5">
@@ -167,6 +210,7 @@
 import draggable from 'vuedraggable';
 import type { Task } from '~/composables/useNotes';
 import { parseUTC } from '~/composables/useDate';
+import { PRIORITY_OPTIONS } from '~/composables/usePriority';
 
 const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask } = useTasks();
 const { activeId, workspaces } = useWorkspace();
@@ -174,7 +218,7 @@ const { prefs } = usePreferences();
 
 const showDone = ref(prefs.value.taskShowDone);
 const orderBy = ref<'created' | 'due'>(prefs.value.taskOrderBy);
-const groupBy = ref<'none' | 'workspace' | 'tag' | 'status'>(prefs.value.taskGroupBy);
+const groupBy = ref<'none' | 'workspace' | 'tag' | 'status' | 'priority'>(prefs.value.taskGroupBy);
 const showArchived = ref(false);
 
 async function load() { await fetchTasks({ workspace_id: activeId.value, archived: showArchived.value }); }
@@ -240,6 +284,34 @@ async function handleKanbanDrop(e: any, targetStatus: string) {
   }
 }
 
+// Priority kanban (mirrors status kanban)
+const priorityKanbanColumns = ref<{ key: string; value: number; label: string; icon: string; textClass: string; tasks: Task[] }[]>([]);
+
+function buildPriorityKanbanColumns() {
+  const cols = [
+    ...PRIORITY_OPTIONS.map(p => ({ key: `p${p.value}`, value: p.value, label: p.label, icon: p.icon, textClass: p.textClass, tasks: [] as Task[] })),
+    { key: 'p0', value: 0, label: 'None', icon: 'i-lucide-minus', textClass: 'text-(--ui-text-dimmed)', tasks: [] as Task[] },
+  ];
+  for (const task of sortedTasks.value) {
+    const p = task.priority ?? 0;
+    const col = cols.find(c => c.value === p);
+    if (col) col.tasks.push({ ...task });
+  }
+  priorityKanbanColumns.value = cols;
+}
+
+watch(sortedTasks, buildPriorityKanbanColumns, { immediate: true });
+
+async function handlePriorityDrop(e: any, targetPriority: number) {
+  if (!e.added) return;
+  const task = e.added.element;
+  await updateTask(task.id, { priority: targetPriority } as any);
+  const idx = tasks.value.findIndex(t => t.id === task.id);
+  if (idx >= 0) {
+    tasks.value[idx] = { ...tasks.value[idx], priority: targetPriority };
+  }
+}
+
 const statusGroups = computed(() => {
   const order = ['now', 'next', 'done'];
   const labels: Record<string, string> = { now: 'Now', next: 'Next', done: 'Done' };
@@ -251,6 +323,23 @@ const statusGroups = computed(() => {
     groups.get(s)!.push(task);
   }
   return order.filter(s => groups.get(s)!.length).map(s => ({ label: labels[s] || s, status: s, tasks: groups.get(s)! }));
+});
+
+const priorityGroups = computed(() => {
+  const map = new Map<number, Task[]>();
+  for (const task of sortedTasks.value) {
+    const p = task.priority ?? 0;
+    if (!map.has(p)) map.set(p, []);
+    map.get(p)!.push(task);
+  }
+  const out: { key: string; label: string; tasks: Task[]; icon?: string; labelClass?: string }[] = [];
+  for (const opt of PRIORITY_OPTIONS) {
+    const list = map.get(opt.value);
+    if (list?.length) out.push({ key: `p${opt.value}`, label: opt.label, tasks: list, icon: opt.icon, labelClass: opt.textClass });
+  }
+  const none = map.get(0);
+  if (none?.length) out.push({ key: 'p0', label: 'No priority', tasks: none, icon: 'i-lucide-minus' });
+  return out;
 });
 
 const tagGroups = computed(() => {
@@ -313,7 +402,7 @@ async function handleReorder() {
   }
 }
 
-async function handleAdd(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[] }) {
+async function handleAdd(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }) {
   const task = await createTask({ ...data, workspace_id: activeId.value });
   if (data.subtasks?.length) {
     for (const sub of data.subtasks) await createTask({ title: sub, parent_id: task.id, workspace_id: activeId.value });
