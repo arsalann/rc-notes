@@ -52,14 +52,19 @@ export function hasChecklist(content: string): boolean {
 
 /**
  * Replace checklist items in content with @-mention references.
- * Root tasks become @[Title], subtask lines are removed
- * (they show as subtasks inside the InlineTask embed).
+ * Root tasks become @[cleanTitle], subtask lines are removed.
+ * Accepts either a string[] of titles (original == clean) or
+ * a list of {original, clean} pairs so the mention can use a
+ * hashtag-stripped title even when the source line still holds
+ * the raw hashtags.
  */
 export function replaceChecklistWithMentions(
   content: string,
-  rootTitles: string[]
+  rootTitles: Array<string | { original: string; clean: string }>
 ): string {
-  const titleSet = new Set(rootTitles);
+  const pairs = rootTitles.map(t => typeof t === 'string' ? { original: t, clean: t } : t);
+  const map = new Map(pairs.map(p => [p.original, p.clean]));
+  const remaining = new Set(pairs.map(p => p.original));
   const lines = content.split('\n');
   const result: string[] = [];
 
@@ -67,10 +72,9 @@ export function replaceChecklistWithMentions(
     const match = line.match(CHECKLIST_RE);
     if (match) {
       const title = match[3].trim();
-      if (titleSet.has(title)) {
-        // Root item — replace with @-mention
-        result.push(`@[${title}]`);
-        titleSet.delete(title);
+      if (remaining.has(title)) {
+        result.push(`@[${map.get(title)}]`);
+        remaining.delete(title);
       }
       // Subtask lines are dropped (visible inside InlineTask)
     } else {

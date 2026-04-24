@@ -1,7 +1,9 @@
 <template>
-  <div v-if="task" class="my-3 rounded-xl ring-2 ring-teal-600/60 bg-teal-900/80 overflow-hidden">
+  <div v-if="task" class="my-3 rounded-xl ring-2 bg-teal-900/80 overflow-hidden"
+    :class="priority ? priority.ringClass : 'ring-teal-600/60'">
     <div class="flex items-center gap-2.5 px-3 py-2.5">
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
+      <UIcon v-if="priority" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
       <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
         <span class="text-sm font-medium" :class="task.completed && 'line-through text-(--ui-text-muted)'">{{ task.title }}</span>
       </NuxtLink>
@@ -22,6 +24,7 @@
 
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
+import { getPriorityOption } from '~/composables/usePriority';
 
 const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] } }>();
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
@@ -30,6 +33,8 @@ const { toggleComplete } = useTasks();
 const task = ref<Task | null>(props.initialData || null);
 const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
 const loading = ref(!props.initialData);
+
+const priority = computed(() => getPriorityOption(task.value?.priority));
 
 onMounted(async () => {
   if (props.initialData) {

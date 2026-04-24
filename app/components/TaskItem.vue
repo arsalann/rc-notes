@@ -16,6 +16,10 @@
           </div>
           <p v-if="task.description" class="text-xs text-(--ui-text-muted) mt-1 line-clamp-1">{{ task.description }}</p>
           <div v-if="hasMeta" class="flex items-center gap-1.5 mt-2 flex-wrap">
+            <UBadge v-if="priority" :color="priority.color" variant="subtle" size="xs">
+              <UIcon :name="priority.icon" class="size-3 mr-1" />
+              {{ priority.label }}
+            </UBadge>
             <UBadge v-if="statusLabel" :color="statusColor" variant="subtle" size="xs">{{ statusLabel }}</UBadge>
             <UBadge v-if="task.due_at" :color="isOverdue ? 'error' : 'neutral'" variant="subtle" size="xs">
               <UIcon :name="isOverdue ? 'i-lucide-alert-triangle' : 'i-lucide-clock'" class="size-3 mr-1" />
@@ -65,11 +69,13 @@ const loadingSubs = ref(false);
 const { toggleComplete } = useTasks();
 
 import { formatDue, isOverdue as checkOverdue } from '~/composables/useDate';
+import { getPriorityOption } from '~/composables/usePriority';
 
 const isOverdue = computed(() => { if (!props.task.due_at || props.task.completed) return false; return checkOverdue(props.task.due_at); });
 const statusLabel = computed(() => { const s = props.task.status; if (s === 'now') return 'Now'; if (s === 'next') return 'Next'; return ''; });
 const statusColor = computed(() => props.task.status === 'now' ? 'primary' as const : 'neutral' as const);
-const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.tags?.length || statusLabel.value);
+const priority = computed(() => getPriorityOption(props.task.priority));
+const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.tags?.length || statusLabel.value || priority.value);
 
 async function toggleExpand() {
   expanded.value = !expanded.value;

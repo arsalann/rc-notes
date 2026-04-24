@@ -177,7 +177,8 @@ export function useDB() {
       await migrate("ALTER TABLE workspaces ADD COLUMN archived BOOLEAN NOT NULL DEFAULT false");
       await migrate("ALTER TABLE workspaces ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp");
       await migrate("ALTER TABLE tasks ADD COLUMN status VARCHAR DEFAULT 'next'");
-      await migrate("ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0");
+      await migrate("ALTER TABLE tasks ADD COLUMN priority INTEGER DEFAULT 0");
+      await migrate("UPDATE tasks SET priority = 0 WHERE priority IS NULL");
       await migrate("ALTER TABLE tasks ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");
       await migrate("ALTER TABLE tasks ADD COLUMN reminder_at TIMESTAMP DEFAULT NULL");
       await migrate("ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL");

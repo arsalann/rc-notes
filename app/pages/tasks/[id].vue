@@ -34,6 +34,17 @@
             {{ s.label }}
           </UButton>
         </div>
+        <!-- Priority pills -->
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
+          <UButton v-for="p in priorityOptions" :key="p.value" size="sm"
+            :color="task.priority === p.value ? p.color : 'neutral'"
+            :variant="task.priority === p.value ? 'solid' : 'outline'"
+            :icon="p.icon"
+            @click="setPriority(p.value)">
+            {{ p.label }}
+          </UButton>
+          <UButton v-if="task.priority" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" @click="setPriority(0)" />
+        </div>
         <div class="flex items-start gap-3">
         <UCheckbox :model-value="task.completed" @update:model-value="handleToggleComplete" size="lg" class="mt-1" />
         <input v-model="editTitle" @blur="saveTitle" @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -151,6 +162,8 @@
 import { marked } from 'marked';
 import type { Task } from '~/composables/useNotes';
 import { parseUTC, todayLocal, localDateOffset } from '~/composables/useDate';
+import { PRIORITY_OPTIONS, type PriorityValue } from '~/composables/usePriority';
+import { parseHashtags } from '~/composables/useHashtagParse';
 
 const route = useRoute(); const router = useRouter(); const id = route.params.id as string;
 
@@ -177,6 +190,8 @@ const statusOptions = [
   { value: 'now', label: 'Now', color: 'primary' as const },
   { value: 'done', label: 'Done', color: 'success' as const },
 ];
+
+const priorityOptions = PRIORITY_OPTIONS;
 
 const currentWorkspaceName = computed(() => {
   if (!task.value?.workspace_id) return 'No workspace';
@@ -258,19 +273,21 @@ async function fetchLinks() {
   } catch {}
 }
 
-function extractTags(text: string): { title: string; tags: string[] } {
-  const tags: string[] = [];
-  const cleaned = text.replace(/#(\w[\w-]*)/g, (_, tag) => { tags.push(tag.toLowerCase()); return ''; }).replace(/\s{2,}/g, ' ').trim();
-  return { title: cleaned, tags: [...new Set(tags)] };
-}
-
 async function saveTitle() {
   if (!task.value || editTitle.value.trim() === task.value.title) return;
-  const { title: cleanTitle, tags: newTags } = extractTags(editTitle.value.trim());
-  const mergedTags = [...new Set([...editTags.value, ...newTags])];
-  editTitle.value = cleanTitle;
+  const p = parseHashtags(editTitle.value.trim());
+  const mergedTags = [...new Set([...editTags.value, ...p.tags])];
+  editTitle.value = p.title;
   editTags.value = mergedTags;
-  task.value = await updateTask(id, { title: cleanTitle, tags: mergedTags } as any);
+  const patch: Record<string, any> = { title: p.title, tags: mergedTags };
+  if (p.priority !== undefined) patch.priority = p.priority;
+  if (p.status) patch.status = p.status;
+  if (p.due_at) {
+    const iso = new Date(p.due_at).toISOString();
+    patch.due_at = iso;
+    editDue.value = p.due_at;
+  }
+  task.value = await updateTask(id, patch as any);
 }
 async function saveDescription() { if (!task.value || editDescription.value === task.value.description) return; task.value = await updateTask(id, { description: editDescription.value }); }
 async function saveDue(v: string) { task.value = await updateTask(id, { due_at: v ? new Date(v).toISOString() : null } as any); editDue.value = v; }
@@ -279,6 +296,10 @@ function removeTag(i: number) { editTags.value.splice(i, 1); updateTask(id, { ta
 async function setStatus(status: string) {
   if (!task.value) return;
   task.value = await updateTask(id, { status } as any);
+}
+async function setPriority(priority: PriorityValue) {
+  if (!task.value) return;
+  task.value = await updateTask(id, { priority } as any);
 }
 async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) { task.value.completed = u.completed; task.value.status = u.status; } }
 async function handlePin() { const u = await togglePin(id); if (task.value) task.value.pinned = u.pinned; }
@@ -311,7 +332,19 @@ async function attachAsSubtask(item: { id: string; title: string }) {
   subtasks.value = full.subtasks || [];
 }
 
-async function addSubtask() { const t = newSubtask.value.trim(); if (!t) return; const s = await createTask({ title: t, parent_id: id }); subtasks.value.push(s); newSubtask.value = ''; }
+async function addSubtask() {
+  const t = newSubtask.value.trim(); if (!t) return;
+  const p = parseHashtags(t);
+  const s = await createTask({
+    title: p.title,
+    parent_id: id,
+    tags: p.tags.length ? p.tags : undefined,
+    priority: p.priority,
+    status: p.status,
+    due_at: p.due_at ? new Date(p.due_at).toISOString() : undefined,
+  });
+  subtasks.value.push(s); newSubtask.value = '';
+}
 async function toggleSubtask(sid: string) { const u = await toggleComplete(sid); const i = subtasks.value.findIndex(s => s.id === sid); if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u }; }
 async function archiveSubtask(sid: string) { await deleteTask(sid); subtasks.value = subtasks.value.filter(s => s.id !== sid); }
 

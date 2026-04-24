@@ -59,7 +59,7 @@ export function useTasks() {
     }
   }
 
-  async function createTask(data: { title: string; description?: string; parent_id?: string; workspace_id?: string | null; tags?: string[]; due_at?: string }) {
+  async function createTask(data: { title: string; description?: string; parent_id?: string; workspace_id?: string | null; tags?: string[]; due_at?: string; priority?: number; status?: string }) {
     const task = await $fetch<Task>('/api/tasks', { method: 'POST', body: data });
     if (!data.parent_id) tasks.value = [task, ...tasks.value];
     return task;
