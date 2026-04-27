@@ -1,13 +1,25 @@
 <template>
   <div>
-    <UCard class="transition-all duration-200 active:scale-[0.98]" :class="task.completed && 'opacity-50'" :ui="{ body: 'p-3.5' }">
+    <UCard
+      class="transition-all duration-200"
+      :class="[
+        task.completed && 'opacity-50',
+        !selectMode && 'active:scale-[0.98]',
+        selectMode && selected && 'ring-2 ring-(--ui-primary)',
+      ]"
+      :ui="{ body: 'p-3.5' }">
       <div class="flex items-start gap-3">
-        <UCheckbox
+        <UCheckbox v-if="!selectMode"
           :model-value="task.completed"
           @update:model-value="$emit('toggle', task.id)"
           class="mt-0.5"
         />
-        <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
+        <button v-else type="button" @click="$emit('select')"
+          class="mt-0.5 size-5 rounded-md flex items-center justify-center transition-colors shrink-0"
+          :class="selected ? 'bg-(--ui-primary)' : 'border-2 border-(--ui-text-dimmed)'">
+          <UIcon v-if="selected" name="i-lucide-check" class="size-3.5 text-white" />
+        </button>
+        <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0" @click="onLinkClick">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium leading-snug" :class="task.completed && 'line-through text-(--ui-text-muted)'">
               {{ task.title }}
@@ -59,8 +71,15 @@
 
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
-const props = defineProps<{ task: Task }>();
-const emit = defineEmits<{ toggle: [id: string] }>();
+const props = defineProps<{ task: Task; selectMode?: boolean; selected?: boolean }>();
+const emit = defineEmits<{ toggle: [id: string]; select: [] }>();
+
+function onLinkClick(e: MouseEvent) {
+  if (props.selectMode) {
+    e.preventDefault();
+    emit('select');
+  }
+}
 
 const expanded = ref(false);
 const subtasks = ref<Task[]>([]);

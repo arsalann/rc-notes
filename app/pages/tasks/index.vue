@@ -9,6 +9,8 @@
         <div class="flex items-center gap-1">
           <UButton :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'" color="neutral"
             :variant="showArchived ? 'soft' : 'ghost'" size="sm" @click="toggleArchived" />
+          <UButton icon="i-lucide-list-checks" color="neutral"
+            :variant="selectMode ? 'soft' : 'ghost'" size="sm" @click="toggleSelectMode" />
           <UButton icon="i-lucide-calendar" color="neutral" variant="ghost" size="sm" to="/calendar" />
         </div>
       </div>
@@ -72,12 +74,13 @@
               :group="{ name: 'kanban', pull: true, put: true }"
               item-key="id"
               :animation="200"
-              ghost-class="opacity-30"
-              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              :disabled="selectMode"
+              ghost-class="sortable-ghost"
+              drag-class="sortable-drag-ring"
               class="space-y-2 min-h-12"
               @change="(e: any) => handleKanbanDrop(e, col.status)">
               <template #item="{ element }">
-                <TaskItem :task="element" @toggle="handleToggle" />
+                <TaskItem :task="element" :select-mode="selectMode" :selected="selectedIds.has(element.id)" @toggle="handleToggle" @select="toggleSelect(element.id)" />
               </template>
             </draggable>
           </div>
@@ -98,12 +101,13 @@
               :group="{ name: 'priority-kanban', pull: true, put: true }"
               item-key="id"
               :animation="200"
-              ghost-class="opacity-30"
-              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              :disabled="selectMode"
+              ghost-class="sortable-ghost"
+              drag-class="sortable-drag-ring"
               class="space-y-2 min-h-12"
               @change="(e: any) => handlePriorityDrop(e, col.value)">
               <template #item="{ element }">
-                <TaskItem :task="element" @toggle="handleToggle" />
+                <TaskItem :task="element" :select-mode="selectMode" :selected="selectedIds.has(element.id)" @toggle="handleToggle" @select="toggleSelect(element.id)" />
               </template>
             </draggable>
           </div>
@@ -121,8 +125,9 @@
                 :group="{ name: 'workspace-tasks', pull: true, put: true }"
                 item-key="id"
                 :animation="200"
-                ghost-class="opacity-30"
-                drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+                :disabled="selectMode"
+                ghost-class="sortable-ghost"
+                drag-class="sortable-drag-ring"
                 handle=".drag-handle"
                 class="space-y-2.5 min-h-8"
                 @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
@@ -132,7 +137,7 @@
                       <UIcon name="i-lucide-grip-vertical" class="size-5" />
                     </div>
                     <div class="flex-1 min-w-0">
-                      <TaskItem :task="element" @toggle="handleToggle" />
+                      <TaskItem :task="element" :select-mode="selectMode" :selected="selectedIds.has(element.id)" @toggle="handleToggle" @select="toggleSelect(element.id)" />
                     </div>
                   </div>
                 </template>
@@ -148,7 +153,7 @@
                 {{ group.label }}
               </p>
               <div class="space-y-2.5">
-                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" :select-mode="selectMode" :selected="selectedIds.has(task.id)" @toggle="handleToggle" @select="toggleSelect(task.id)" />
               </div>
             </div>
             <div class="pb-6" />
@@ -161,7 +166,7 @@
                 {{ group.label }}
               </p>
               <div class="space-y-2.5">
-                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" :select-mode="selectMode" :selected="selectedIds.has(task.id)" @toggle="handleToggle" @select="toggleSelect(task.id)" />
               </div>
             </div>
             <div class="pb-6" />
@@ -171,7 +176,7 @@
             <div v-for="group in tagGroups" :key="group.label" class="px-4 mt-4">
               <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
               <div class="space-y-2.5">
-                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" @toggle="handleToggle" />
+                <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" :select-mode="selectMode" :selected="selectedIds.has(task.id)" @toggle="handleToggle" @select="toggleSelect(task.id)" />
               </div>
             </div>
             <div class="pb-6" />
@@ -182,8 +187,9 @@
               :list="draggableTasks"
               item-key="id"
               :animation="200"
-              ghost-class="opacity-30"
-              drag-class="ring-2 ring-(--ui-primary) rounded-2xl"
+              :disabled="selectMode"
+              ghost-class="sortable-ghost"
+              drag-class="sortable-drag-ring"
               handle=".drag-handle"
               class="space-y-2.5"
               @end="handleReorder">
@@ -193,7 +199,7 @@
                     <UIcon name="i-lucide-grip-vertical" class="size-5" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <TaskItem :task="element" @toggle="handleToggle" />
+                    <TaskItem :task="element" :select-mode="selectMode" :selected="selectedIds.has(element.id)" @toggle="handleToggle" @select="toggleSelect(element.id)" />
                   </div>
                 </div>
               </template>
@@ -203,6 +209,46 @@
         <EmptyState v-else :message="showArchived ? 'No archived tasks.' : showDone ? 'No tasks yet — add one above.' : 'No open tasks. Toggle &quot;Done&quot; to see completed.'" :icon="showArchived ? 'i-lucide-archive' : 'i-lucide-circle-check'" />
       </div>
     </template>
+
+    <!-- Bulk action bar -->
+    <Transition
+      enter-active-class="transition ease-out duration-150"
+      enter-from-class="opacity-0 translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition ease-in duration-100"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0 translate-y-2">
+      <div v-if="selectMode" class="fixed left-0 right-0 z-40 px-4"
+        style="bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem)">
+        <div class="max-w-lg md:max-w-2xl mx-auto bg-teal-900/95 backdrop-blur-xl rounded-2xl border border-teal-700/60 shadow-2xl px-3 py-2.5">
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span class="text-sm font-semibold text-(--ui-text) whitespace-nowrap pl-1.5 pr-1">
+              {{ selectedIds.size }} selected
+            </span>
+            <UButton size="xs" color="neutral" variant="ghost" @click="selectAll" class="shrink-0">
+              All
+            </UButton>
+            <USeparator orientation="vertical" class="h-4 shrink-0" />
+            <UDropdownMenu :items="bulkStatusItems" :ui="{ content: 'min-w-32' }">
+              <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-circle-dot" trailing-icon="i-lucide-chevron-up" :disabled="!selectedIds.size" class="shrink-0">
+                Status
+              </UButton>
+            </UDropdownMenu>
+            <UDropdownMenu :items="bulkPriorityItems" :ui="{ content: 'min-w-36' }">
+              <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-flame" trailing-icon="i-lucide-chevron-up" :disabled="!selectedIds.size" class="shrink-0">
+                Priority
+              </UButton>
+            </UDropdownMenu>
+            <UButton size="xs" color="neutral" variant="soft"
+              :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+              :disabled="!selectedIds.size" @click="bulkArchive" class="shrink-0" />
+            <div class="flex-1" />
+            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="exitSelectMode" class="shrink-0" />
+          </div>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 </template>
 
@@ -212,9 +258,10 @@ import type { Task } from '~/composables/useNotes';
 import { parseUTC } from '~/composables/useDate';
 import { PRIORITY_OPTIONS } from '~/composables/usePriority';
 
-const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask } = useTasks();
+const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask, toggleArchive } = useTasks();
 const { activeId, workspaces } = useWorkspace();
 const { prefs } = usePreferences();
+const toast = useToast();
 
 const showDone = ref(prefs.value.taskShowDone);
 const orderBy = ref<'created' | 'due'>(prefs.value.taskOrderBy);
@@ -251,9 +298,14 @@ const sortedTasks = computed(() => {
   });
 });
 
+// Only rebuild draggable mirrors when the set of task IDs changes (add/remove/filter).
+// Field changes (status/priority/workspace) are already reflected by vuedraggable's
+// in-place DOM move; rebuilding on those would duplicate or desync cards.
+const taskSetKey = computed(() => sortedTasks.value.map(t => t.id).join('|'));
+
 // Mutable copy for flat-list drag reorder
 const draggableTasks = ref<Task[]>([]);
-watch(sortedTasks, (val) => { draggableTasks.value = [...val]; }, { immediate: true });
+watch(taskSetKey, () => { draggableTasks.value = [...sortedTasks.value]; }, { immediate: true });
 
 // Desktop kanban columns (mutable for drag-drop)
 const kanbanColumns = ref<{ status: string; label: string; tasks: Task[] }[]>([]);
@@ -267,12 +319,12 @@ function buildKanbanColumns() {
   for (const task of sortedTasks.value) {
     const s = task.status || 'next';
     const col = cols.find(c => c.status === s);
-    if (col) col.tasks.push({ ...task });
+    if (col) col.tasks.push(task);
   }
   kanbanColumns.value = cols;
 }
 
-watch(sortedTasks, buildKanbanColumns, { immediate: true });
+watch(taskSetKey, buildKanbanColumns, { immediate: true });
 
 async function handleKanbanDrop(e: any, targetStatus: string) {
   if (!e.added) return;
@@ -295,12 +347,12 @@ function buildPriorityKanbanColumns() {
   for (const task of sortedTasks.value) {
     const p = task.priority ?? 0;
     const col = cols.find(c => c.value === p);
-    if (col) col.tasks.push({ ...task });
+    if (col) col.tasks.push(task);
   }
   priorityKanbanColumns.value = cols;
 }
 
-watch(sortedTasks, buildPriorityKanbanColumns, { immediate: true });
+watch(taskSetKey, buildPriorityKanbanColumns, { immediate: true });
 
 async function handlePriorityDrop(e: any, targetPriority: number) {
   if (!e.added) return;
@@ -371,12 +423,12 @@ function buildWorkspaceGroups() {
     if (!groups.has(key)) {
       groups.set(key, { label: 'No workspace', wsId: null, tasks: [] });
     }
-    groups.get(key)!.tasks.push({ ...task });
+    groups.get(key)!.tasks.push(task);
   }
   workspaceGroupsLive.value = [...groups.values()];
 }
 
-watch([sortedTasks, groupBy], () => {
+watch([taskSetKey, groupBy], () => {
   if (groupBy.value === 'workspace') buildWorkspaceGroups();
 }, { immediate: true });
 
@@ -415,4 +467,67 @@ async function handleToggle(id: string) {
   const idx = tasks.value.findIndex(t => t.id === id);
   if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...updated };
 }
+
+// --- Multi-select / bulk actions ---
+const selectMode = ref(false);
+const selectedIds = ref(new Set<string>());
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value;
+  if (!selectMode.value) selectedIds.value = new Set();
+}
+function exitSelectMode() {
+  selectMode.value = false;
+  selectedIds.value = new Set();
+}
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  selectedIds.value = next;
+}
+function selectAll() {
+  selectedIds.value = new Set(sortedTasks.value.map(t => t.id));
+}
+
+async function bulkApply(patch: Partial<Task>) {
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  await Promise.all(ids.map(id => updateTask(id, patch)));
+  for (const id of ids) {
+    const idx = tasks.value.findIndex(t => t.id === id);
+    if (idx >= 0) {
+      const merged: any = { ...tasks.value[idx], ...patch };
+      if ('status' in patch) merged.completed = patch.status === 'done';
+      tasks.value[idx] = merged;
+    }
+  }
+  toast.add({ title: `Updated ${ids.length} task${ids.length === 1 ? '' : 's'}`, color: 'success' });
+}
+
+async function bulkArchive() {
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  await Promise.all(ids.map(id => toggleArchive(id)));
+  toast.add({ title: `${showArchived.value ? 'Restored' : 'Archived'} ${ids.length} task${ids.length === 1 ? '' : 's'}`, color: 'success' });
+  exitSelectMode();
+}
+
+const bulkStatusItems = computed(() => [
+  [
+    { label: 'Next', icon: 'i-lucide-circle', onSelect: () => bulkApply({ status: 'next', completed: false } as any) },
+    { label: 'Now', icon: 'i-lucide-circle-dot', onSelect: () => bulkApply({ status: 'now', completed: false } as any) },
+    { label: 'Done', icon: 'i-lucide-circle-check', onSelect: () => bulkApply({ status: 'done', completed: true } as any) },
+  ],
+]);
+
+const bulkPriorityItems = computed(() => [
+  [
+    ...PRIORITY_OPTIONS.map(p => ({
+      label: p.label,
+      icon: p.icon,
+      onSelect: () => bulkApply({ priority: p.value } as any),
+    })),
+    { label: 'None', icon: 'i-lucide-minus', onSelect: () => bulkApply({ priority: 0 } as any) },
+  ],
+]);
 </script>

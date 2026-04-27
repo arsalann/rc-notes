@@ -5,6 +5,12 @@
         <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/notes" />
         <h1 class="text-2xl font-bold tracking-tight">Diary</h1>
         <WorkspaceSwitcher />
+        <div class="ml-auto flex items-center gap-1">
+          <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="ghost" size="sm"
+            aria-label="Jump to today" @click="goToToday" />
+          <UButton icon="i-lucide-calendar-range" color="neutral" variant="ghost" size="sm"
+            aria-label="Week summary" @click="openWeekSummary" />
+        </div>
       </div>
     </div>
 
@@ -152,6 +158,87 @@
         </div>
       </div>
     </div>
+
+    <!-- Week summary modal -->
+    <UModal v-model:open="weekSummaryOpen" :ui="{ content: 'max-w-lg' }">
+      <template #content>
+        <div class="surface-card rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-(--ui-border)">
+            <div>
+              <p class="text-[11px] uppercase font-semibold tracking-wider text-(--ui-text-dimmed)">Week summary</p>
+              <p class="text-sm font-semibold mt-0.5">{{ weekRangeLabel }}</p>
+            </div>
+            <div class="flex items-center gap-1">
+              <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" size="sm" aria-label="Previous week" @click="shiftWeek(-1)" />
+              <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" size="sm" aria-label="Next week"
+                :disabled="weekStart >= currentWeekStart" @click="shiftWeek(1)" />
+              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Close" @click="weekSummaryOpen = false" />
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto px-4 py-3">
+            <div v-if="weekLoading" class="space-y-3">
+              <USkeleton v-for="i in 4" :key="i" class="h-16 w-full" />
+            </div>
+            <div v-else-if="!weekTotal" class="text-sm text-(--ui-text-dimmed) italic py-8 text-center">
+              No tasks completed this week.
+            </div>
+            <div v-else class="space-y-4">
+              <p class="text-xs text-(--ui-text-dimmed)">{{ weekTotal }} task{{ weekTotal === 1 ? '' : 's' }} completed</p>
+              <div v-for="day in weekDays" :key="day.date" class="space-y-1.5">
+                <div class="flex items-baseline justify-between">
+                  <p class="text-xs font-semibold uppercase tracking-wider"
+                    :class="day.isToday ? 'accent-text' : 'text-(--ui-text-dimmed)'">
+                    {{ day.label }}
+                    <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ day.tasks.length }})</span>
+                  </p>
+                </div>
+                <p v-if="!day.tasks.length" class="text-xs text-(--ui-text-dimmed) italic pl-1">—</p>
+                <div v-else class="space-y-1">
+                  <NuxtLink v-for="t in day.tasks" :key="t.id" :to="`/tasks/${t.id}`"
+                    class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-(--ui-bg-elevated) ring-1 ring-(--ui-border) active:scale-[0.99] transition-transform"
+                    @click="weekSummaryOpen = false">
+                    <UIcon name="i-lucide-check-circle-2" class="size-4 shrink-0 accent-text" />
+                    <span class="text-sm flex-1 truncate">{{ t.title }}</span>
+                    <UBadge color="neutral" variant="subtle" size="xs" class="font-mono shrink-0">{{ t.display_id }}</UBadge>
+                  </NuxtLink>
+                </div>
+              </div>
+            </div>
+
+            <!-- Outstanding: now + overdue -->
+            <div class="mt-6 pt-4 border-t border-(--ui-border)">
+              <div class="flex items-baseline justify-between mb-2">
+                <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">
+                  Outstanding
+                  <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ outstandingTasks.length }})</span>
+                </p>
+                <p class="text-[10px] text-(--ui-text-dimmed)">Now &amp; overdue</p>
+              </div>
+              <div v-if="outstandingLoading" class="space-y-2">
+                <USkeleton v-for="i in 3" :key="i" class="h-12 w-full" />
+              </div>
+              <p v-else-if="!outstandingTasks.length" class="text-xs text-(--ui-text-dimmed) italic">Nothing outstanding. Nice.</p>
+              <div v-else class="space-y-1">
+                <NuxtLink v-for="t in outstandingTasks" :key="t.id" :to="`/tasks/${t.id}`"
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-(--ui-bg-elevated) ring-1 ring-(--ui-border) active:scale-[0.99] transition-transform"
+                  @click="weekSummaryOpen = false">
+                  <UIcon
+                    :name="t.is_overdue ? 'i-lucide-alert-triangle' : 'i-lucide-flame'"
+                    class="size-4 shrink-0"
+                    :class="t.is_overdue ? 'text-red-400' : 'accent-text'" />
+                  <span class="text-sm flex-1 truncate">{{ t.title }}</span>
+                  <span v-if="t.due_at" class="text-[11px] shrink-0"
+                    :class="t.is_overdue ? 'text-red-400' : 'text-(--ui-text-dimmed)'">
+                    {{ formatDueLabel(t.due_at, t.is_overdue) }}
+                  </span>
+                  <UBadge color="neutral" variant="subtle" size="xs" class="font-mono shrink-0">{{ t.display_id }}</UBadge>
+                </NuxtLink>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
 
@@ -193,6 +280,52 @@ const taskCompleted = ref<Record<string, boolean>>({});
 const taskCache = ref<Record<string, Task & { subtasks?: Task[] }>>({});
 const taskSort = ref<'created' | 'priority'>('created');
 const taskGroup = ref<'none' | 'created' | 'priority'>('none');
+
+const todayDate = ref(todayLocal());
+
+// Week summary state
+interface CompletedTask {
+  id: string;
+  display_id: string;
+  title: string;
+  workspace_id: string | null;
+  completed_at: string;
+}
+interface OutstandingTask {
+  id: string;
+  display_id: string;
+  title: string;
+  status: string;
+  priority: number;
+  due_at: string | null;
+  is_overdue: boolean;
+}
+const weekSummaryOpen = ref(false);
+const weekStart = ref(''); // YYYY-MM-DD, Sunday start of viewed week
+const weekLoading = ref(false);
+const weekTasks = ref<CompletedTask[]>([]);
+const outstandingTasks = ref<OutstandingTask[]>([]);
+const outstandingLoading = ref(false);
+
+function startOfWeekSunday(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() - d.getDay()); // back to Sunday
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const currentWeekStart = computed(() => startOfWeekSunday(todayDate.value));
+const weekEnd = computed(() => addDays(weekStart.value || currentWeekStart.value, 6));
+
+const weekRangeLabel = computed(() => {
+  if (!weekStart.value) return '';
+  const fmt = (s: string) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(weekStart.value)} – ${fmt(weekEnd.value)}`;
+});
 
 function onTaskStatus(payload: { id: string; completed: boolean }) {
   taskCompleted.value = { ...taskCompleted.value, [payload.id]: payload.completed };
@@ -340,6 +473,97 @@ async function selectDay(date: string) {
   selectedDate.value = date;
   await fetchEntry();
 }
+
+function goToToday() {
+  todayDate.value = todayLocal();
+  selectDay(todayDate.value);
+}
+
+function localDateOfTimestamp(ts: string): string {
+  const d = parseUTC(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const weekDays = computed(() => {
+  if (!weekStart.value) return [] as { date: string; label: string; isToday: boolean; tasks: CompletedTask[] }[];
+  const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const out: { date: string; label: string; isToday: boolean; tasks: CompletedTask[] }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(weekStart.value, i);
+    const d = new Date(date + 'T12:00:00');
+    const tasks = weekTasks.value.filter(t => localDateOfTimestamp(t.completed_at) === date);
+    out.push({
+      date,
+      label: `${dn[d.getDay()]} ${d.getDate()}`,
+      isToday: date === todayDate.value,
+      tasks,
+    });
+  }
+  return out;
+});
+
+const weekTotal = computed(() => weekDays.value.reduce((n, d) => n + d.tasks.length, 0));
+
+async function loadWeek() {
+  if (!weekStart.value) return;
+  weekLoading.value = true;
+  try {
+    const q: Record<string, string> = { from: weekStart.value, to: weekEnd.value };
+    if (activeId.value) q.workspace_id = activeId.value;
+    weekTasks.value = await $fetch<CompletedTask[]>('/api/tasks/completed', { query: q });
+  } catch {
+    weekTasks.value = [];
+  } finally {
+    weekLoading.value = false;
+  }
+}
+
+async function loadOutstanding() {
+  outstandingLoading.value = true;
+  try {
+    const q: Record<string, string> = {};
+    if (activeId.value) q.workspace_id = activeId.value;
+    outstandingTasks.value = await $fetch<OutstandingTask[]>('/api/tasks/outstanding', { query: q });
+  } catch {
+    outstandingTasks.value = [];
+  } finally {
+    outstandingLoading.value = false;
+  }
+}
+
+function formatDueLabel(due: string | null, isOverdue: boolean): string {
+  if (!due) return '';
+  const d = parseUTC(due);
+  const now = new Date();
+  const dLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const nowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((dLocal.getTime() - nowLocal.getTime()) / 86400000);
+  if (isOverdue) {
+    if (diffDays === 0) return 'Overdue today';
+    return `${Math.abs(diffDays)}d overdue`;
+  }
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function openWeekSummary() {
+  todayDate.value = todayLocal();
+  // Default view: previous full Sun-Sat week.
+  weekStart.value = addDays(currentWeekStart.value, -7);
+  weekSummaryOpen.value = true;
+  loadWeek();
+  loadOutstanding();
+}
+
+function shiftWeek(delta: number) {
+  const next = addDays(weekStart.value, delta * 7);
+  if (next > currentWeekStart.value) return;
+  weekStart.value = next;
+  loadWeek();
+}
+
+watch(activeId, () => { if (weekSummaryOpen.value) { loadWeek(); loadOutstanding(); } });
 
 async function fetchEntry() {
   loading.value = true;

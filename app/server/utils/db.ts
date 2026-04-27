@@ -289,6 +289,20 @@ export function useDB() {
         console.warn('v7 diary link backfill warning:', e);
       }
 
+      // v11: provenance + richer event_log metadata
+      await migrate("ALTER TABLE tasks ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE notes ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE diary_entries ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE workspaces ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE links ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE users ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN updated_by VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN request_body VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN response_status INTEGER DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN client_kind VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN request_ip VARCHAR DEFAULT NULL");
+      await migrate("ALTER TABLE event_log ADD COLUMN duration_ms INTEGER DEFAULT NULL");
+
       // --- Indexes for query performance ---
       await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks (workspace_id)");
       await migrate("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks (parent_id)");

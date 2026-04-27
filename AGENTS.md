@@ -103,3 +103,39 @@ The app uses a **single dim theme** with NO light/dark mode toggle. All colors a
 - Optimize for phone browser usage
 - Color-blind friendly, high contrast
 - Subtask + due date creation must be frictionless
+
+## Safety Rules — READ BEFORE TOUCHING DATA
+
+### Tests must use `master_tester` only
+- The dev server hits **MotherDuck cloud**, which holds the user's real data.
+- `/api/tasks` and other endpoints **do not filter by `user_id`** (known cross-user leak). A test that signs up a fresh user and then runs `selectAll()` will grab the user's real tasks too.
+- **Going forward, tests run as user `master_tester` (password `password123`).** Never sign up new test users; never operate against other users' data.
+- Never run "select all" + bulk-modify in browser tests. Select tasks individually by id/title prefix that you created in the same test.
+- Tag every test task title with a unique prefix (e.g. `MasterTester_<feature>_<n>`) so it can be filtered out of any cleanup query.
+- If a test would touch the user's data on failure, do not run it.
+
+### Always back up before risky operations
+- **Before any agent/script writes that could affect existing rows** (UPDATE, DELETE, ALTER on populated tables, mass re-keying, etc.), snapshot the affected tables to the `rc_notes.backup` schema.
+- **Backup naming:** `rc_notes.backup.<table_name>_<YYYYMMDD>_<N>` where `N` is a 1-based suffix that increments per backup taken on the same day. Check existing backups for that date before picking N.
+- Use `CREATE OR REPLACE TABLE rc_notes.backup.<name>_<date>_<n> AS SELECT * FROM rc_notes.main.<name>` (fully qualified — DuckDB has a built-in "backup" catalog that conflicts with bare `backup.foo`).
+- Backups are cheap (MotherDuck dedupes storage) and have already saved a 43-task corruption incident — take them aggressively.
+
+### Provenance: every write should set `updated_by`
+All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values:
+- `user_in_app` — real user via the Nuxt UI in a browser
+- `user_in_test` — real user behavior simulated via Playwright (rare; prefer `test_playwright`)
+- `test_playwright` — automated browser test
+- `agent_query` — agent or operator running raw SQL via MotherDuck
+- `agent_query_<purpose>_<date>` — agent running a one-off purposeful job (e.g. `agent_query_recovery_2026-04-27`)
+- `recovery_script` — generic recovery SQL
+- `unknown` — fallback (only used by middleware when classification fails)
+
+The middleware (`app/server/middleware/event-logger.ts`) sets these automatically on `event_log` rows based on `User-Agent`. **For raw-SQL agent operations, set `updated_by` explicitly** in the UPDATE/INSERT, e.g. `SET ..., updated_by = 'agent_query_<task>_<YYYY-MM-DD>'`.
+
+### Event log captures request body
+`event_log` records `request_body` (truncated to 4KB), `response_status`, `client_kind`, `request_ip`, and `duration_ms`. Use these for any future damage-recovery analysis instead of guessing from current state.
+
+### When in doubt, ask before destructive ops
+- DELETE / UPDATE on existing user data: present scope + counts to the user, wait for explicit go-ahead.
+- A user approving one destructive action does NOT extend approval to others — re-confirm each time.
+- "Cleanup" requests are not blanket destructive permission; surface the exact rows you plan to touch first.
