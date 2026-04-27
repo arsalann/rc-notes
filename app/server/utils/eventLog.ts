@@ -1,5 +1,5 @@
 import { queryAll } from './db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR, INTEGER } from '@duckdb/node-api';
 
 /**
  * Maps HTTP method + path pattern to a human-readable event type.
@@ -73,22 +73,66 @@ function resolveEntity(path: string): { entity_type: string | null; entity_id: s
   return { entity_type: null, entity_id: null };
 }
 
+/**
+ * Classify the client based on user-agent. Used for `client_kind` and `updated_by` defaults.
+ * - 'playwright' : Playwright-driven browser tests
+ * - 'curl'       : curl/wget command-line
+ * - 'node_fetch' : node-fetch / undici / fetch from Node scripts
+ * - 'browser'    : ordinary browser (Mozilla UA)
+ * - 'unknown'    : everything else (or empty UA)
+ */
+export function classifyClient(userAgent: string | null | undefined): string {
+  const ua = (userAgent || '').toLowerCase();
+  if (!ua) return 'unknown';
+  if (ua.includes('playwright')) return 'playwright';
+  if (ua.includes('headlesschrome')) return 'playwright';  // playwright headless
+  if (ua.includes('curl/')) return 'curl';
+  if (ua.includes('node-fetch') || ua.includes('undici') || ua.startsWith('node')) return 'node_fetch';
+  if (ua.includes('mozilla')) return 'browser';
+  return 'unknown';
+}
+
+/**
+ * Map client_kind + auth context to an `updated_by` category.
+ * Used to tag rows so we can tell apart real-user actions from tests/agents.
+ */
+export function deriveUpdatedBy(clientKind: string, isAuthed: boolean): string {
+  if (clientKind === 'playwright') return 'test_playwright';
+  if (clientKind === 'curl' || clientKind === 'node_fetch') return 'agent_query';
+  if (clientKind === 'browser') return isAuthed ? 'user_in_app' : 'anonymous_browser';
+  return 'unknown';
+}
+
 export async function logEvent(opts: {
   method: string;
   path: string;
   workspace_id?: string | null;
   metadata?: Record<string, any>;
   user_agent?: string;
+  user_id?: string | null;
+  user_name?: string | null;
+  request_body?: string | null;
+  response_status?: number | null;
+  request_ip?: string | null;
+  duration_ms?: number | null;
 }) {
   try {
     const eventType = resolveEventType(opts.method, opts.path);
     const { entity_type, entity_id } = resolveEntity(opts.path);
     const metadata = opts.metadata ? JSON.stringify(opts.metadata) : '{}';
+    const clientKind = classifyClient(opts.user_agent);
+    const updatedBy = deriveUpdatedBy(clientKind, !!opts.user_id);
 
     await queryAll(
-      `INSERT INTO event_log (id, event_type, method, path, entity_type, entity_id, workspace_id, metadata, user_agent)
-       VALUES (uuid()::VARCHAR, $event_type, $method, $path, $entity_type, $entity_id, $workspace_id, $metadata, $user_agent)
-       RETURNING id`,
+      `INSERT INTO event_log (
+         id, event_type, method, path, entity_type, entity_id,
+         workspace_id, metadata, user_agent, user_id, user_name,
+         updated_by, request_body, response_status, client_kind, request_ip, duration_ms
+       ) VALUES (
+         uuid()::VARCHAR, $event_type, $method, $path, $entity_type, $entity_id,
+         $workspace_id, $metadata, $user_agent, $user_id, $user_name,
+         $updated_by, $request_body, $response_status, $client_kind, $request_ip, $duration_ms
+       ) RETURNING id`,
       {
         event_type: eventType,
         method: opts.method.toUpperCase(),
@@ -98,11 +142,21 @@ export async function logEvent(opts: {
         workspace_id: opts.workspace_id || '',
         metadata,
         user_agent: opts.user_agent || '',
+        user_id: opts.user_id || '',
+        user_name: opts.user_name || '',
+        updated_by: updatedBy,
+        request_body: opts.request_body || '',
+        response_status: opts.response_status ?? null,
+        client_kind: clientKind,
+        request_ip: opts.request_ip || '',
+        duration_ms: opts.duration_ms ?? null,
       },
       {
         event_type: VARCHAR, method: VARCHAR, path: VARCHAR,
         entity_type: VARCHAR, entity_id: VARCHAR, workspace_id: VARCHAR,
-        metadata: VARCHAR, user_agent: VARCHAR,
+        metadata: VARCHAR, user_agent: VARCHAR, user_id: VARCHAR, user_name: VARCHAR,
+        updated_by: VARCHAR, request_body: VARCHAR, response_status: INTEGER,
+        client_kind: VARCHAR, request_ip: VARCHAR, duration_ms: INTEGER,
       }
     );
   } catch {
