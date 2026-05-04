@@ -38,6 +38,9 @@
         <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
           Task
         </UButton>
+        <UButton :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
+          :icon="hideDone ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="hideDone ? 'Show done' : 'Hide done'"
+          @click="toggleHideDone" />
         <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
           :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode">
           {{ editMode ? 'Preview' : 'Edit' }}
@@ -126,15 +129,19 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Tasks</p>
         <template v-if="pendingGroups.length">
           <div v-for="group in pendingGroups" :key="group.key" class="mb-4 last:mb-0">
-            <p v-if="taskGroup !== 'none'" class="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
-              :class="group.labelClass || 'text-(--ui-text-dimmed)'">
+            <button v-if="taskGroup !== 'none'" type="button"
+              class="w-full flex items-center text-[11px] font-semibold uppercase tracking-wider mb-1.5 py-1"
+              :class="group.labelClass || 'text-(--ui-text-dimmed)'"
+              @click="toggleGroupCollapsed(group.key)">
+              <UIcon :name="isGroupCollapsed(group.key) ? 'i-lucide-chevron-right' : 'i-lucide-chevron-down'" class="size-3.5 mr-1" />
               <UIcon v-if="group.icon" :name="group.icon" class="size-3.5 mr-1 align-[-2px]" />
               {{ group.label }}
               <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ group.ids.length }})</span>
-            </p>
-            <div class="space-y-1.5">
+            </button>
+            <div v-if="!isGroupCollapsed(group.key)" class="space-y-1.5">
               <InlineTask v-for="id in group.ids" :key="id" :task-id="id"
                 :initial-data="taskCache[id]"
+                :hide-done-subtasks="hideDone"
                 @update:completed="onTaskStatus" />
             </div>
           </div>
@@ -144,7 +151,7 @@
       </div>
 
       <!-- Done section (collapsed by default) -->
-      <div v-if="doneTaskIds.length">
+      <div v-if="doneTaskIds.length && !hideDone">
         <button @click="doneOpen = !doneOpen"
           class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
           <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -193,14 +200,29 @@
                   </p>
                 </div>
                 <p v-if="!day.tasks.length" class="text-xs text-(--ui-text-dimmed) italic pl-1">—</p>
-                <div v-else class="space-y-1">
-                  <NuxtLink v-for="t in day.tasks" :key="t.id" :to="`/tasks/${t.id}`"
-                    class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-(--ui-bg-elevated) ring-1 ring-(--ui-border) active:scale-[0.99] transition-transform"
-                    @click="weekSummaryOpen = false">
-                    <UIcon name="i-lucide-check-circle-2" class="size-4 shrink-0 accent-text" />
-                    <span class="text-sm flex-1 truncate">{{ t.title }}</span>
-                    <UBadge color="neutral" variant="subtle" size="xs" class="font-mono shrink-0">{{ t.display_id }}</UBadge>
-                  </NuxtLink>
+                <div v-else class="space-y-1.5">
+                  <div v-for="g in day.groups" :key="g.parent?.id || g.rootTask?.id" class="rounded-lg bg-(--ui-bg-elevated) ring-1 ring-(--ui-border) overflow-hidden">
+                    <NuxtLink v-if="g.parent" :to="`/tasks/${g.parent.id}`"
+                      class="flex items-center gap-2 px-2.5 py-2 active:scale-[0.99] transition-transform"
+                      @click="weekSummaryOpen = false">
+                      <UIcon
+                        :name="g.parent.completedThisDay ? 'i-lucide-check-circle-2' : 'i-lucide-folder'"
+                        class="size-4 shrink-0"
+                        :class="g.parent.completedThisDay ? 'accent-text' : 'text-(--ui-text-dimmed)'" />
+                      <span class="text-sm flex-1 truncate"
+                        :class="!g.parent.completedThisDay && 'text-(--ui-text-muted)'">{{ g.parent.title }}</span>
+                      <UBadge color="neutral" variant="subtle" size="xs" class="font-mono shrink-0">{{ g.parent.display_id }}</UBadge>
+                    </NuxtLink>
+                    <div v-if="g.subtasks.length" class="border-t border-(--ui-border) px-2.5 py-1.5 space-y-1">
+                      <NuxtLink v-for="s in g.subtasks" :key="s.id" :to="`/tasks/${s.id}`"
+                        class="flex items-center gap-2 pl-4 py-1 active:scale-[0.99] transition-transform"
+                        @click="weekSummaryOpen = false">
+                        <UIcon name="i-lucide-check" class="size-3.5 shrink-0 accent-text" />
+                        <span class="text-xs flex-1 truncate">{{ s.title }}</span>
+                        <UBadge color="neutral" variant="subtle" size="xs" class="font-mono shrink-0">{{ s.display_id }}</UBadge>
+                      </NuxtLink>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -260,6 +282,7 @@ interface DiaryEntry {
 
 const { activeId } = useWorkspace();
 const { createTask } = useTasks();
+const { prefs, set: setPref } = usePreferences();
 
 const selectedDate = ref(todayLocal());
 const showAddTask = ref(false);
@@ -276,10 +299,25 @@ const mentionResults = ref<any[]>([]);
 const contentRef = ref<HTMLTextAreaElement>();
 const creatingTasks = ref(false);
 const doneOpen = ref(false);
+const hideDone = ref(prefs.value.diaryHideDone);
+function toggleHideDone() {
+  hideDone.value = !hideDone.value;
+  setPref('diaryHideDone', hideDone.value);
+}
+watch(() => prefs.value.diaryHideDone, v => { hideDone.value = v; });
 const taskCompleted = ref<Record<string, boolean>>({});
 const taskCache = ref<Record<string, Task & { subtasks?: Task[] }>>({});
-const taskSort = ref<'created' | 'priority'>('created');
-const taskGroup = ref<'none' | 'created' | 'priority'>('none');
+const taskSort = ref<'created' | 'priority'>('priority');
+const taskGroup = ref<'none' | 'created' | 'priority'>('priority');
+const collapsedGroups = ref<Set<string>>(new Set());
+function isGroupCollapsed(key: string) {
+  return collapsedGroups.value.has(key);
+}
+function toggleGroupCollapsed(key: string) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  collapsedGroups.value = next;
+}
 
 const todayDate = ref(todayLocal());
 
@@ -290,6 +328,17 @@ interface CompletedTask {
   title: string;
   workspace_id: string | null;
   completed_at: string;
+  parent_id: string | null;
+  parent_task_id: string | null;
+  parent_display_id: string | null;
+  parent_title: string | null;
+  parent_completed: boolean | null;
+}
+interface CompletedTaskGroup {
+  parentId: string | null;
+  parent: { id: string; display_id: string; title: string; completedThisDay: boolean } | null;
+  rootTask: CompletedTask | null;
+  subtasks: CompletedTask[];
 }
 interface OutstandingTask {
   id: string;
@@ -484,19 +533,53 @@ function localDateOfTimestamp(ts: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function groupCompletedTasks(tasksForDay: CompletedTask[]): CompletedTaskGroup[] {
+  const map = new Map<string, CompletedTaskGroup>();
+  const order: string[] = [];
+  // Group key is the parent task's id when a subtask exists; otherwise the task's own id.
+  // Parent completed on same day gets the same key as its subtasks so they merge.
+  for (const t of tasksForDay) {
+    const isSubtask = !!t.parent_id;
+    const groupKey = isSubtask ? t.parent_id! : t.id;
+    let g = map.get(groupKey);
+    if (!g) {
+      g = { parentId: isSubtask ? t.parent_id : null, parent: null, rootTask: null, subtasks: [] };
+      map.set(groupKey, g);
+      order.push(groupKey);
+    }
+    if (isSubtask) {
+      g.subtasks.push(t);
+      if (!g.parent && t.parent_task_id && t.parent_title && t.parent_display_id) {
+        g.parent = {
+          id: t.parent_task_id,
+          display_id: t.parent_display_id,
+          title: t.parent_title,
+          completedThisDay: false,
+        };
+      }
+    } else {
+      g.rootTask = t;
+      g.parent = { id: t.id, display_id: t.display_id, title: t.title, completedThisDay: true };
+    }
+  }
+  return order.map(k => map.get(k)!);
+}
+
 const weekDays = computed(() => {
-  if (!weekStart.value) return [] as { date: string; label: string; isToday: boolean; tasks: CompletedTask[] }[];
+  if (!weekStart.value) return [] as { date: string; label: string; isToday: boolean; tasks: CompletedTask[]; groups: CompletedTaskGroup[] }[];
   const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const out: { date: string; label: string; isToday: boolean; tasks: CompletedTask[] }[] = [];
+  const out: { date: string; label: string; isToday: boolean; tasks: CompletedTask[]; groups: CompletedTaskGroup[] }[] = [];
   for (let i = 0; i < 7; i++) {
     const date = addDays(weekStart.value, i);
     const d = new Date(date + 'T12:00:00');
     const tasks = weekTasks.value.filter(t => localDateOfTimestamp(t.completed_at) === date);
+    const groups = groupCompletedTasks(tasks);
     out.push({
       date,
       label: `${dn[d.getDay()]} ${d.getDate()}`,
       isToday: date === todayDate.value,
       tasks,
+      groups,
     });
   }
   return out;

@@ -9,10 +9,12 @@
       </NuxtLink>
       <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ task.display_id }}</UBadge>
     </div>
-    <div v-if="subtasks.length" class="border-t border-(--ui-border) px-3 py-1.5">
-      <div v-for="sub in subtasks" :key="sub.id" class="flex items-center gap-2 py-1.5 pl-4">
+    <div v-if="visibleSubtasks.length" class="border-t border-(--ui-border) px-3 py-1.5">
+      <div v-for="sub in visibleSubtasks" :key="sub.id" class="flex items-center gap-2 py-1.5 pl-4">
         <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub.id)" />
-        <span class="text-sm" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
+        <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0">
+          <span class="text-sm" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
+        </NuxtLink>
       </div>
     </div>
   </div>
@@ -26,7 +28,7 @@
 import type { Task } from '~/composables/useNotes';
 import { getPriorityOption } from '~/composables/usePriority';
 
-const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] } }>();
+const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] }; hideDoneSubtasks?: boolean }>();
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete } = useTasks();
 
@@ -35,6 +37,9 @@ const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
 const loading = ref(!props.initialData);
 
 const priority = computed(() => getPriorityOption(task.value?.priority));
+const visibleSubtasks = computed(() =>
+  props.hideDoneSubtasks ? subtasks.value.filter(s => !s.completed) : subtasks.value
+);
 
 onMounted(async () => {
   if (props.initialData) {

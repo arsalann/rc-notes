@@ -19,10 +19,13 @@ export default defineEventHandler(async (event) => {
 
   return await queryAll(`
     SELECT t.id, t.display_id, t.workspace_id, t.title, t.status, t.priority,
-      t.completed, t.completed_at, t.due_at, t.tags, t.created_at, t.updated_at
+      t.completed, t.completed_at, t.due_at, t.tags, t.created_at, t.updated_at,
+      t.parent_id,
+      p.id AS parent_task_id, p.display_id AS parent_display_id, p.title AS parent_title,
+      p.completed AS parent_completed
     FROM tasks t
-    WHERE t.parent_id IS NULL
-      AND t.completed = true
+    LEFT JOIN tasks p ON p.id = t.parent_id
+    WHERE t.completed = true
       AND t.completed_at IS NOT NULL
       AND t.completed_at >= ($from::DATE - INTERVAL 1 DAY)
       AND t.completed_at < ($to::DATE + INTERVAL 2 DAY)
