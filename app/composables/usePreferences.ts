@@ -3,6 +3,7 @@ export interface Preferences {
   taskGroupBy: 'none' | 'workspace' | 'tag' | 'status' | 'priority';
   taskOrderBy: 'created' | 'due';
   taskShowDone: boolean;
+  diaryHideDone: boolean;
 }
 
 const STORAGE_KEY = 'preferences';
@@ -12,6 +13,7 @@ const defaults: Preferences = {
   taskGroupBy: 'status',
   taskOrderBy: 'created',
   taskShowDone: true,
+  diaryHideDone: false,
 };
 
 function load(): Preferences {
