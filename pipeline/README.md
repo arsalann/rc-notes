@@ -1,109 +1,71 @@
-# Bruin - DuckDB Template
+# rc-notes Bruin pipeline
 
-This pipeline is a simple example of a Bruin pipeline for DuckDB,
-featuring `example.sql`—a SQL asset that creates a table with sample data and enforces schema constraints
-like `not_null`, `unique`, and `primary_key`.
+This pipeline mirrors the rc-notes app database (MotherDuck, `rc_notes.main`
+schema). It is **not** a generated dataset — the live database is owned by
+the Nuxt app (`app/server/utils/db.ts` runs the CREATE TABLE / ALTER
+migrations on boot). The role of this pipeline is purely to keep a versioned
+schema description of those tables on disk so the catalog stays accurate as
+the schema evolves.
 
-It also includes a `macros/` folder with reusable Jinja macros for common SQL patterns:
-- **aggregations.sql**: Common aggregation patterns (count_by, sum_by, top_n)
-- **filters.sql**: Common filtering patterns (date_range, recent_records, filter_null, in_list)
-- **transformations.sql**: Data transformation helpers (pivot_sum, deduplicate, generate_surrogate_key, safe_divide)
+## Layout
 
-The `macro_example.sql` asset demonstrates how to use these macros in your queries.
+```
+pipeline.yml                       # pipeline-level config (MotherDuck default)
+assets/
+  main/                            # one .asset.yml per live rc_notes.main table
+    workspaces.asset.yml
+    tasks.asset.yml
+    notes.asset.yml
+    diary_entries.asset.yml
+    links.asset.yml
+    event_log.asset.yml
+    users.asset.yml
+```
 
-## Setup
-The pipeline already includes an empty `.bruin.yml` file, fill it with your connections and environments. You can read more about connections [here](https://getbruin.com/docs/bruin/commands/connections.html).
+Each `main/*.asset.yml` is `type: empty` — the table is created and owned by
+the app, the asset only records the column list + descriptions.
 
-Here's a sample `.bruin.yml` file:
+## Connection
 
+`.bruin.yml` (gitignored, project root) holds a single MotherDuck connection
+named `motherduck-default`, pointing at the `rc_notes` database. `pipeline.yml`
+sets that as the default connection for the `motherduck` type.
 
 ```yaml
 environments:
   default:
     connections:
-      duckdb:
-        - name: "duckdb_default"
-          path: "/path/to/your/database.db"
-      
+      motherduck:
+        - name: motherduck-default
+          token: <MOTHERDUCK_PAT>
+          database: rc_notes
 ```
 
-## Running the pipeline
+The app reads the same token from `app/.env` (`MOTHERDUCK_NOTEBOOK_RC`).
 
-bruin CLI can run the whole pipeline or any task with the downstreams:
+## Common commands
+
+Run from the project root, not from `pipeline/`:
 
 ```shell
-
-bruin run ./duckdb/pipeline.yml
+bruin validate pipeline/                                       # type-check assets
+bruin import database --connection motherduck-default pipeline # refresh main/*.asset.yml
 ```
 
-You can also run a single task:
+## Keeping assets in sync with the database
 
-```shell
-bruin run assets/hello.py                            
-```
+Whenever `app/server/utils/db.ts` adds/drops a column or table:
 
-```shell
-Starting the pipeline execution...
+1. Re-run `bruin import database --connection motherduck-default pipeline`.
+2. Delete any junk the importer pulls in from MotherDuck's shared catalogs —
+   keep only `assets/main/*.asset.yml` for the seven real rc_notes tables.
+   Remove anything under `backup/`, `hn/`, `kaggle/`, `nyc/`,
+   `stackoverflow_survey/`, `who/`, and any `main/*.sql` files for MotherDuck
+   system views (`database_snapshots`, `databases`, `owned_shares`,
+   `query_history`, `recent_queries`, `shared_with_me`, `storage_info*`).
+3. Re-add per-column `description:` text on the affected columns (the importer
+   strips it).
+4. `bruin validate pipeline/` must report "No issues found" before committing.
 
-[2023-03-16T18:25:59Z] [worker-0] Running: hello
-[2023-03-16T18:26:00Z] [worker-0] [hello] >> Hello, world!
-[2023-03-16T18:26:00Z] [worker-0] Completed: hello (103ms)
-
-
-Executed 1 tasks in 103ms
-```
-
-You can optionally pass a `--downstream` flag to run the task with all of its downstreams.
-
-## Using Macros
-
-The `macros/` folder contains reusable Jinja macros that are automatically available in all your SQL assets. Here are some examples:
-
-### Aggregation Macros
-```sql
--- Count records by a column
-{{ count_by('example', 'country') }}
-
--- Sum a column grouped by another
-{{ sum_by('sales', 'country', 'revenue') }}
-
--- Get top N records
-{{ top_n('example', 'id', 5) }}
-```
-
-### Filter Macros
-```sql
--- Filter by date range
-{{ date_range('orders', 'created_at', '2024-01-01', '2024-12-31') }}
-
--- Get recent records
-{{ recent_records('events', 'timestamp', 30) }}
-
--- Filter out nulls
-{{ filter_null('users', ['email', 'name']) }}
-
--- Filter by list of values
-{{ in_list('example', 'country', ['spain', 'germany']) }}
-```
-
-### Transformation Macros
-```sql
--- Generate a surrogate key from multiple columns
-SELECT {{ generate_surrogate_key(['id', 'country']) }}, *
-FROM example
-
--- Safe division (avoids divide by zero)
-SELECT
-    country,
-    COUNT(*) as count,
-    {{ safe_divide('revenue', 'count') }} as avg_revenue
-FROM sales
-GROUP BY country
-
--- Deduplicate records
-{{ deduplicate('events', 'user_id', 'timestamp') }}
-```
-
-Check out `assets/macro_example.sql` for more examples!
-
-That's it, good luck!
+See the project root [`AGENTS.md`](../AGENTS.md) "Keep pipeline assets in sync
+with the database" section for the canonical workflow.

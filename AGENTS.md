@@ -1,5 +1,16 @@
 # AGENTS.md — Agent Instructions & Context
 
+## Which doc to follow
+- **App editing mode** (changing code, fixing bugs, adding features, schema/db
+  changes, UI work): follow THIS file (`AGENTS.md`).
+- **Assistant mode** (managing Arsalan's tasks/notes/diary, answering questions
+  about his data, daily briefings, triaging Slack/Gmail/GitHub/Calendar — i.e.
+  operating ON the data rather than editing the app): follow
+  [`ASSISTANT.md`](./ASSISTANT.md) instead. That doc defines the
+  `assistant_agent` provenance, safety rules, and command vocabulary.
+- If a request mixes both (e.g. "add a feature AND backfill my tasks"), apply
+  `AGENTS.md` to the code changes and `ASSISTANT.md` to the data writes.
+
 ## Project Context
 - This is a mobile-first **todo/reminder + notes app** called **rc-notes**
 - Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar
@@ -88,6 +99,17 @@ The app uses a **single dim theme** with NO light/dark mode toggle. All colors a
 - Run from project root, not from `app/`
 - `.bruin.yml` at project root references `md:rc_notes` (MotherDuck) via `MOTHERDUCK_NOTEBOOK_RC` env var
 - `bruin validate pipeline/` then `bruin run pipeline/`
+
+### Keep pipeline assets in sync with the database — REQUIRED
+Whenever a change is made to the database schema (new table, dropped table, added/removed/renamed column, type change, new backup snapshot), you MUST refresh the Bruin asset definitions so `pipeline/` stays an accurate mirror of MotherDuck:
+
+1. Run `bruin import database --connection motherduck-default pipeline` from the project root.
+2. Delete any junk the importer pulls in from MotherDuck's shared catalogs — keep ONLY `pipeline/assets/main/*.asset.yml` (the seven real `rc_notes.main` tables: tasks, notes, workspaces, diary_entries, links, event_log, users). Remove anything under `backup/` (snapshot tables are operational, not pipeline assets), `hn/`, `kaggle/`, `nyc/`, `stackoverflow_survey/`, `who/`, and any `main/*.sql` files for MotherDuck system views (`database_snapshots`, `databases`, `owned_shares`, `query_history`, `recent_queries`, `shared_with_me`, `storage_info*`).
+3. Re-add per-column `description:` text on any columns the importer touched — `bruin import` strips descriptions, and the asset YAMLs are the canonical column dictionary.
+4. Run `bruin validate pipeline/` and confirm "No issues found" before committing.
+5. Commit the asset changes alongside the schema/migration change in `app/server/utils/db.ts` so the two never drift.
+
+Also use the Bruin MCP tools when available for richer schema inspection — the CLI import is the source of truth for the on-disk asset files.
 
 ## Home Page (Tasks) UI
 - Two independent toolbar controls: **order-by** (newest / due date) and **group-by** (none / workspace / tag)

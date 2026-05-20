@@ -1,0 +1,41 @@
+name: main.workspaces
+type: empty
+description: |-
+  Workspaces are filter-based labels (not folders) used to scope tasks, notes,
+  and diary entries. Seeded with "Personal" and "Work" on first boot; "Work"
+  acts as the fallback workspace for content created without an explicit one.
+  Workspaces are referenced by `workspace_id` on tasks, notes, and
+  diary_entries. Soft-archival is supported via `archived = true`; rows are
+  never hard-deleted from the UI. All writes carry `updated_by` provenance.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key (generated via uuid()::VARCHAR).
+  - name: name
+    type: VARCHAR
+    description: Display name (e.g. "Personal", "Work"). Not constrained unique at the DB level.
+  - name: emoji
+    type: VARCHAR
+    description: Single-emoji icon shown in the workspace switcher and chips. Defaults to ''.
+  - name: position
+    type: INTEGER
+    description: Manual sort order in the workspace list (lower first). 0 by default.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp (server clock).
+  - name: user_id
+    type: VARCHAR
+    description: Owner user id. Multi-user is not wired up yet — currently NULL or the single seeded user.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized owner username for cheap display without joining users.
+  - name: color
+    type: VARCHAR
+    description: Optional hex/Tailwind colour token used to tint the workspace chip. NULL = default theme accent.
+  - name: updated_by
+    type: VARCHAR
+    description: |-
+      Provenance for the last write. Standard values: `user_in_app`,
+      `user_in_test`, `test_playwright`, `agent_query`,
+      `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.

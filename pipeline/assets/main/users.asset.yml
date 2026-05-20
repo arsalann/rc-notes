@@ -1,0 +1,37 @@
+name: main.users
+type: empty
+description: |-
+  Minimal user table backing the optional auth flow added in migration v8.
+  `username` is unique (enforced by `idx_users_username`). `password_hash`
+  is a bcrypt hash via the `bcryptjs` dependency. `is_admin` gates the
+  admin-only routes in `app/server/api/`.
+
+  In current single-user usage, the app has one seeded admin user
+  (`master_tester` for test runs — see AGENTS.md Safety Rules). Content
+  tables (`tasks`, `notes`, etc.) carry `user_id`/`user_name` columns but
+  the API endpoints do NOT yet filter by user_id — a known cross-user leak
+  documented in AGENTS.md, hence the rule that tests must always
+  authenticate as `master_tester` and never create new test users.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: username
+    type: VARCHAR
+    description: Login handle. Unique (enforced by `idx_users_username`).
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: password_hash
+    type: VARCHAR
+    description: bcryptjs hash of the user's password. NULL for legacy rows pre-auth (v8).
+  - name: is_admin
+    type: BOOLEAN
+    description: Admin flag. Required for the admin-only routes (e.g. user management, raw query endpoints if any).
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last-write timestamp.
+  - name: updated_by
+    type: VARCHAR
+    description: Provenance for the last write (see standard vocabulary on `tasks.updated_by`).
