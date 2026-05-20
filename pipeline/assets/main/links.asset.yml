@@ -1,0 +1,42 @@
+name: main.links
+type: empty
+description: |-
+  Generic bidirectional link table connecting any two pieces of content.
+  Each row models one directed edge — the UI reads links in both directions
+  to render backlinks. Currently used for:
+
+    - `note` ↔ `note` — `@mention` linking between notes
+    - `note` ↔ `task` — task references in note bodies and vice versa
+    - `diary` → `task` — auto-created when a task gets a `due_at`, so the
+      task appears under that day's diary entry (see `linkTaskToDiary()` in
+      `app/server/utils/db.ts`).
+
+  Stale `diary → task` rows are cleaned up when a task's due_at changes day
+  or is cleared. There is no FK enforcement — `source_id`/`target_id` are
+  free-form VARCHARs and orphaned links are tolerated.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: source_type
+    type: VARCHAR
+    description: Type of the source entity — one of `task`, `note`, `diary`.
+  - name: source_id
+    type: VARCHAR
+    description: UUID of the source entity (id from the corresponding table). Not FK-enforced.
+  - name: target_type
+    type: VARCHAR
+    description: Type of the target entity — one of `task`, `note`, `diary`.
+  - name: target_id
+    type: VARCHAR
+    description: UUID of the target entity. Not FK-enforced.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: user_id
+    type: VARCHAR
+    description: Creator user id. Multi-user not wired up yet.
+  - name: updated_by
+    type: VARCHAR
+    description: Provenance for the last write (see `tasks.updated_by` for the standard vocabulary).

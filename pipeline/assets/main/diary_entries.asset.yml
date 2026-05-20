@@ -1,0 +1,47 @@
+name: main.diary_entries
+type: empty
+description: |-
+  Diary entries are one-per-day free-form notes (markdown body) that also
+  act as the day's "agenda": tasks with a `due_at` on that date are
+  auto-linked to the corresponding diary entry via the `links` table
+  (`source_type='diary'` → `target_type='task'`). The 5-day calendar view
+  reads diary entries plus their linked tasks.
+
+  Entries are created lazily — `linkTaskToDiary()` in `db.ts` upserts an
+  entry for a date the first time a task is due that day. Soft-delete via
+  `deleted_at` preserves history.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: workspace_id
+    type: VARCHAR
+    description: FK → workspaces.id. NULL is treated as "Work" by migration v5.
+  - name: entry_date
+    type: DATE
+    description: Calendar date this entry represents (one entry per workspace per date by convention; not enforced as a uniqueness constraint).
+  - name: content
+    type: VARCHAR
+    description: Markdown body. Empty string when the row is auto-created by `linkTaskToDiary` and the user hasn't written anything yet.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last-write timestamp.
+  - name: user_id
+    type: VARCHAR
+    description: Owner user id. Multi-user not wired up yet.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized owner username.
+  - name: deleted_at
+    type: TIMESTAMP
+    description: Soft-delete timestamp.
+  - name: updated_by
+    type: VARCHAR
+    description: |-
+      Provenance for the last write. Standard values: `user_in_app`,
+      `user_in_test`, `test_playwright`, `agent_query`,
+      `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.

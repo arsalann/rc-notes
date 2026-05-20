@@ -1,0 +1,73 @@
+name: main.event_log
+type: empty
+description: |-
+  Append-only audit log of every API write. Populated by the
+  `app/server/middleware/event-logger.ts` Nitro middleware which captures
+  method, path, request body (truncated to 4KB), response status, latency,
+  and client provenance for each request.
+
+  Use this table as the source of truth when investigating data-loss or
+  damage-recovery incidents — current row state can be wrong but the event
+  log records what was actually requested. Filter by `entity_type`/
+  `entity_id` to reconstruct the history of a single row, or by `updated_by`
+  to find writes from a specific actor (real user vs. test vs. agent).
+
+  `metadata` is a JSON string holding any extra context the API layer
+  attached. The table is never deleted from in normal operation; growth is
+  acceptable for the app's small dataset.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: event_type
+    type: VARCHAR
+    description: High-level event name (e.g. `task.create`, `note.update`, `task.complete`). Set by the API endpoint.
+  - name: method
+    type: VARCHAR
+    description: HTTP method of the originating request (`POST`, `PUT`, `PATCH`, `DELETE`, `GET`).
+  - name: path
+    type: VARCHAR
+    description: Request path (e.g. `/api/tasks/abc-123/complete`).
+  - name: entity_type
+    type: VARCHAR
+    description: Type of the affected entity — `task`, `note`, `workspace`, `diary`, `link`, `user`. NULL for non-entity events.
+  - name: entity_id
+    type: VARCHAR
+    description: ID of the affected entity. NULL when the event is not entity-scoped or the ID isn't known yet (e.g. failed creates).
+  - name: workspace_id
+    type: VARCHAR
+    description: Workspace context, copied from the entity when known. Lets you slice events by workspace without joining.
+  - name: metadata
+    type: VARCHAR
+    description: 'JSON string with extra event context (e.g. `{ "old_status": "next", "new_status": "now" }`).'
+  - name: user_agent
+    type: VARCHAR
+    description: Raw `User-Agent` header from the request. Used to classify `client_kind` and infer `updated_by`.
+  - name: created_at
+    type: TIMESTAMP
+    description: Server timestamp when the event was logged.
+  - name: user_id
+    type: VARCHAR
+    description: Acting user id, if known.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized acting username.
+  - name: updated_by
+    type: VARCHAR
+    description: Provenance auto-classified from User-Agent — `user_in_app`, `user_in_test`, `test_playwright`, `agent_query`, `agent_query_<purpose>_<date>`, `recovery_script`, or `unknown` when classification fails.
+  - name: request_body
+    type: VARCHAR
+    description: Request body captured by the middleware, truncated to 4KB. NULL for GETs and empty bodies.
+  - name: response_status
+    type: INTEGER
+    description: HTTP status code returned to the client.
+  - name: client_kind
+    type: VARCHAR
+    description: Coarse client classification derived from User-Agent — e.g. `browser`, `playwright`, `agent`.
+  - name: request_ip
+    type: VARCHAR
+    description: Client IP captured by the middleware.
+  - name: duration_ms
+    type: INTEGER
+    description: Request handling latency in milliseconds (middleware-measured).

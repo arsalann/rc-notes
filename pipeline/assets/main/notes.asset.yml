@@ -1,0 +1,59 @@
+name: main.notes
+type: empty
+description: |-
+  Notes are long-form markdown documents scoped to a workspace. They can be
+  bidirectionally linked to tasks via the `links` table (typed `note` ↔
+  `task`), which powers the `@mention` autocomplete in both task titles and
+  note bodies.
+
+  Soft-delete via `deleted_at`; archive via `archived = true`. Notes share
+  the same display-id scheme as tasks (`<3 title chars><2 tag chars><4 id
+  chars>`). Tags are a DuckDB `VARCHAR[]` array, joined with task tags in
+  `analytics.tag_counts`.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: workspace_id
+    type: VARCHAR
+    description: FK → workspaces.id. NULL is treated as "Work" by migration v5.
+  - name: title
+    type: VARCHAR
+    description: Note title. Required; defaults to '' if user leaves it blank.
+  - name: content
+    type: VARCHAR
+    description: Markdown body rendered with the `marked` library. Stored as TEXT.
+  - name: pinned
+    type: BOOLEAN
+    description: User pin flag — pinned notes float to the top of lists.
+  - name: archived
+    type: BOOLEAN
+    description: Soft-archive flag — excluded from active lists. Distinct from `deleted_at`.
+  - name: tags
+    type: LIST
+    description: VARCHAR[] of free-form tags. Feeds `analytics.tag_counts`.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last-write timestamp.
+  - name: display_id
+    type: VARCHAR
+    description: Short human-readable id used for `@mention` links and URL slugs.
+  - name: user_id
+    type: VARCHAR
+    description: Owner user id. Multi-user not wired up yet — APIs do not filter on this.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized owner username for cheap display.
+  - name: deleted_at
+    type: TIMESTAMP
+    description: Soft-delete timestamp. Non-null rows are excluded from active queries.
+  - name: updated_by
+    type: VARCHAR
+    description: |-
+      Provenance for the last write. Standard values: `user_in_app`,
+      `user_in_test`, `test_playwright`, `agent_query`,
+      `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.

@@ -1,0 +1,95 @@
+name: main.tasks
+type: empty
+description: |-
+  Tasks are the primary content type — todos with optional subtasks, due
+  dates, reminders, tags, status, and priority. Subtasks are tasks with a
+  `parent_id` pointing at the parent task; only top-level tasks (parent_id IS
+  NULL) appear in workspace groupings and analytics.
+
+  Lifecycle:
+    - `status` is one of `next` (default), `now` (active / has due date), or
+      `done` (also flips `completed` true and stamps `completed_at`). Legacy
+      rows may carry the deprecated value `open` which migrations rewrite to
+      `next` / `done`.
+    - `priority` is 0..3 — 0 = none, 1 = snack, 2 = focus, 3 = critical
+      (see `app/composables/useHashtagParse.ts`).
+    - Soft-delete via `deleted_at`; archive via `archived = true`. Neither
+      removes the row.
+    - Setting `due_at` auto-creates a `links` row of (`diary`, diary_id) →
+      (`task`, task_id) so the task surfaces on that day's diary entry; the
+      link is rewritten if the due date changes and cleared if it is removed.
+
+  Display IDs are short human-friendly slugs derived from title + first tag +
+  id prefix (see `db.ts` backfill block). Tags are a DuckDB `VARCHAR[]` array
+  and are pulled out via UNNEST() for tag-count analytics.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: workspace_id
+    type: VARCHAR
+    description: FK → workspaces.id. NULL is treated as "Work" by migration v5.
+  - name: parent_id
+    type: VARCHAR
+    description: FK → tasks.id for subtasks. NULL for top-level tasks.
+  - name: title
+    type: VARCHAR
+    description: Required task title. The hashtag/quick-syntax parser strips `#tag`, `!priority`, `@status`, `^due` tokens out of the raw input before this is stored.
+  - name: description
+    type: VARCHAR
+    description: Optional long-form description / notes for the task.
+  - name: completed
+    type: BOOLEAN
+    description: True when status reaches `done`. Kept in sync with status by the API layer.
+  - name: completed_at
+    type: TIMESTAMP
+    description: Server timestamp when `completed` flipped to true; cleared on un-complete.
+  - name: pinned
+    type: BOOLEAN
+    description: User pin flag (currently unused in primary task UI but supported by API/schema).
+  - name: archived
+    type: BOOLEAN
+    description: Soft-archive flag — excluded from active lists but preserved for history. Distinct from `deleted_at`.
+  - name: due_at
+    type: TIMESTAMP
+    description: Optional due date/time. Setting this auto-promotes status to `now` and creates a diary→task link for the day.
+  - name: tags
+    type: LIST
+    description: VARCHAR[] of free-form tags. Feeds `analytics.tag_counts`.
+  - name: position
+    type: INTEGER
+    description: Manual sort order within the current grouping (workspace, parent, or flat list).
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last-write timestamp; bumped by every API write path.
+  - name: display_id
+    type: VARCHAR
+    description: Short human-readable id `<3 title chars><2 tag chars><4 id chars>` — used for `@mention` links and URL slugs.
+  - name: user_id
+    type: VARCHAR
+    description: Owner user id. Multi-user not wired up yet — APIs do NOT filter by user_id (known cross-user leak documented in AGENTS.md).
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized owner username for cheap display.
+  - name: deleted_at
+    type: TIMESTAMP
+    description: Soft-delete timestamp. Non-null rows are excluded from active queries but kept for recovery.
+  - name: reminder_at
+    type: TIMESTAMP
+    description: Optional reminder time (independent of due_at). UI surfaces upcoming reminders.
+  - name: status
+    type: VARCHAR
+    description: Workflow state — `next` (default), `now` (has due date or user-activated), `done` (completed). Legacy `open` value is migrated away.
+  - name: priority
+    type: INTEGER
+    description: 0 = none, 1 = snack, 2 = focus, 3 = critical. Drives the priority kanban view.
+  - name: updated_by
+    type: VARCHAR
+    description: |-
+      Provenance for the last write. Standard values: `user_in_app`,
+      `user_in_test`, `test_playwright`, `agent_query`,
+      `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.
