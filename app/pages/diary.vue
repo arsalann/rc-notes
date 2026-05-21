@@ -1,23 +1,61 @@
 <template>
   <div class="max-w-lg mx-auto min-h-screen">
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
-      <div class="flex items-center gap-3">
-        <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" to="/notes" />
+      <div class="flex items-center gap-2">
         <h1 class="text-2xl font-bold tracking-tight">Diary</h1>
-        <WorkspaceSwitcher />
-        <div class="ml-auto flex items-center gap-1">
-          <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="ghost" size="sm"
-            aria-label="Jump to today" @click="goToToday" />
-          <UButton icon="i-lucide-calendar-range" color="neutral" variant="ghost" size="sm"
-            aria-label="Week summary" @click="openWeekSummary" />
+        <div class="ml-auto flex items-center gap-1.5">
+          <UButton icon="i-lucide-search" color="neutral" variant="soft" size="md"
+            aria-label="Search" :square="true" @click="toggleSearch" />
+          <UButton icon="i-lucide-circle-check" color="neutral" variant="soft" size="md"
+            aria-label="Tasks" to="/tasks" :square="true" />
+          <UButton icon="i-lucide-book-open" color="neutral" variant="soft" size="md"
+            aria-label="Notebook" to="/notes" :square="true" />
+          <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
+            aria-label="Jump to today" :square="true" @click="goToToday" />
+          <UButton icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
+            aria-label="Week summary" :square="true" @click="openWeekSummary" />
+        </div>
+      </div>
+
+      <!-- Search row -->
+      <div v-if="searchOpen" class="relative mt-3">
+        <input ref="searchInput" :value="searchQuery"
+          @input="runSearch(($event.target as HTMLInputElement).value)"
+          @keydown.escape="closeSearch"
+          placeholder="Search tasks and notes..."
+          class="w-full pl-10 pr-10 py-2.5 bg-(--ui-bg-elevated) rounded-xl border border-(--ui-border) outline-none placeholder:text-(--ui-text-dimmed) text-(--ui-text) text-sm transition-all focus:border-(--ui-primary)/50 focus:ring-1 focus:ring-(--ui-primary)/20" />
+        <UIcon name="i-lucide-search" class="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-(--ui-text-dimmed)" />
+        <button @click="closeSearch" class="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted)">
+          <UIcon name="i-lucide-x" class="size-4" />
+        </button>
+
+        <div v-if="searchQuery || searching" class="absolute top-full left-0 right-0 mt-1.5 max-h-72 overflow-y-auto overscroll-contain rounded-xl bg-(--ui-bg-elevated) border border-(--ui-border) shadow-2xl z-40">
+          <div v-if="searching" class="p-3 space-y-2">
+            <div v-for="i in 3" :key="i" class="h-10 rounded-lg bg-(--ui-bg)/50 animate-pulse" />
+          </div>
+          <div v-else-if="searchResults.length" class="py-1">
+            <template v-for="item in searchResults" :key="item.id">
+              <NuxtLink v-if="item.type === 'task'" :to="`/tasks/${item.id}`" @click="closeSearch"
+                class="flex items-center gap-2.5 px-4 py-3 transition-colors active:bg-(--ui-bg)">
+                <UBadge color="primary" variant="subtle" size="xs">Task</UBadge>
+                <span class="text-sm truncate" :class="item.completed && 'line-through text-(--ui-text-dimmed)'">{{ item.title }}</span>
+              </NuxtLink>
+              <NuxtLink v-else :to="`/notes/${item.id}`" @click="closeSearch"
+                class="flex items-center gap-2.5 px-4 py-3 transition-colors active:bg-(--ui-bg)">
+                <UBadge color="neutral" variant="subtle" size="xs">Note</UBadge>
+                <span class="text-sm truncate">{{ item.title }}</span>
+              </NuxtLink>
+            </template>
+          </div>
+          <div v-else-if="searchQuery" class="p-4 text-center text-sm text-(--ui-text-dimmed)">No results found</div>
         </div>
       </div>
     </div>
 
     <!-- Day selector -->
-    <div class="flex gap-1.5 px-3 mt-3 no-scrollbar overflow-x-auto scroll-hint">
+    <div class="flex gap-1.5 px-3 mt-2 py-2 no-scrollbar overflow-x-auto scroll-hint">
       <button v-for="day in days" :key="day.date" @click="selectDay(day.date)"
-        class="flex flex-col items-center flex-1 min-w-[3.25rem] px-1.5 py-3 rounded-2xl transition-all duration-200 active:scale-95"
+        class="flex flex-col items-center flex-1 min-w-[2.75rem] px-1.5 py-2 rounded-xl transition-all duration-200 active:scale-95"
         :class="selectedDate === day.date
           ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
           : day.isToday
@@ -25,8 +63,8 @@
             : 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)'">
         <span class="text-[10px] uppercase font-semibold tracking-wide"
           :class="selectedDate === day.date ? 'text-white/70' : 'text-(--ui-text-dimmed)'">{{ day.dayName }}</span>
-        <span class="text-lg font-bold mt-0.5">{{ day.dayNum }}</span>
-        <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-1"
+        <span class="text-base font-bold mt-0.5 leading-tight">{{ day.dayNum }}</span>
+        <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-0.5"
           :class="selectedDate === day.date ? 'bg-white/60' : 'bg-(--ui-primary)'" />
       </button>
     </div>
@@ -282,6 +320,39 @@ interface DiaryEntry {
 
 const { activeId } = useWorkspace();
 const { createTask } = useTasks();
+
+const searchOpen = ref(false);
+const searchQuery = ref('');
+const searchResults = ref<any[]>([]);
+const searching = ref(false);
+const searchInput = ref<HTMLInputElement>();
+let searchDebounce: ReturnType<typeof setTimeout>;
+
+async function toggleSearch() {
+  searchOpen.value = !searchOpen.value;
+  if (searchOpen.value) {
+    await nextTick();
+    searchInput.value?.focus();
+  }
+}
+function closeSearch() {
+  searchOpen.value = false;
+  searchQuery.value = '';
+  searchResults.value = [];
+}
+function runSearch(q: string) {
+  searchQuery.value = q;
+  clearTimeout(searchDebounce);
+  if (!q.trim()) { searchResults.value = []; return; }
+  searchDebounce = setTimeout(async () => {
+    searching.value = true;
+    try {
+      const p: Record<string, string> = { q };
+      if (activeId.value) p.workspace_id = activeId.value;
+      searchResults.value = await $fetch<any[]>('/api/search', { query: p });
+    } finally { searching.value = false; }
+  }, 300);
+}
 const { prefs, set: setPref } = usePreferences();
 
 const selectedDate = ref(todayLocal());

@@ -350,10 +350,20 @@ export async function linkTaskToDiary(taskId: string, dueAt: string, workspaceId
   // Extract YYYY-MM-DD from the due_at timestamp
   const dateStr = dueAt.slice(0, 10);
 
-  // Find existing diary entry for this date
+  // Find existing diary entry for this date in the task's workspace
+  const findParams: Record<string, any> = { date: dateStr };
+  const findTypes: Record<string, any> = { date: VARCHAR };
+  let wsFilter = '';
+  if (workspaceId) {
+    wsFilter = ' AND workspace_id = $ws';
+    findParams.ws = workspaceId;
+    findTypes.ws = VARCHAR;
+  } else {
+    wsFilter = ' AND workspace_id IS NULL';
+  }
   let diaryRows = await queryAll(
-    'SELECT id FROM diary_entries WHERE entry_date = $date::DATE LIMIT 1',
-    { date: dateStr }, { date: VARCHAR }
+    `SELECT id FROM diary_entries WHERE entry_date = $date::DATE${wsFilter} LIMIT 1`,
+    findParams, findTypes
   );
 
   // Create diary entry if it doesn't exist

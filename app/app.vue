@@ -13,7 +13,7 @@
 
     <!-- App -->
     <template v-else>
-      <div class="min-h-screen pb-40">
+      <div class="min-h-screen pb-28">
         <NuxtPage />
         <BottomNav />
       </div>

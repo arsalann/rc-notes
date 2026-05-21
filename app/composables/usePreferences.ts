@@ -4,6 +4,7 @@ export interface Preferences {
   taskOrderBy: 'created' | 'due';
   taskShowDone: boolean;
   diaryHideDone: boolean;
+  navWorkspaceIds: string[];
 }
 
 const STORAGE_KEY = 'preferences';
@@ -14,6 +15,7 @@ const defaults: Preferences = {
   taskOrderBy: 'created',
   taskShowDone: true,
   diaryHideDone: false,
+  navWorkspaceIds: [],
 };
 
 function load(): Preferences {

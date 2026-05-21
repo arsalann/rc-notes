@@ -141,6 +141,49 @@
         </div>
       </UCard>
 
+      <!-- Workspaces -->
+      <UCard>
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-folder" class="size-5" />
+            <span class="font-semibold">Workspaces</span>
+          </div>
+        </template>
+        <div class="space-y-5">
+          <!-- Bottom-nav picker -->
+          <div>
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-1">Bottom Nav</p>
+            <p class="text-xs text-(--ui-text-muted) mb-3">Pick up to 2 workspaces to show in the bottom navigation.</p>
+            <div class="space-y-2">
+              <button v-for="ws in workspaces" :key="ws.id" type="button"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-lg ring-1 transition-colors"
+                :class="isInNav(ws.id) ? 'bg-(--ui-primary)/10 ring-(--ui-primary)/40' : 'bg-(--ui-bg-elevated) ring-(--ui-border)'"
+                @click="toggleNavWorkspace(ws.id)">
+                <span class="flex items-center gap-2">
+                  <span class="text-lg leading-none">{{ ws.emoji }}</span>
+                  <span class="text-sm font-medium">{{ ws.name }}</span>
+                </span>
+                <UIcon :name="isInNav(ws.id) ? 'i-lucide-check-circle-2' : 'i-lucide-circle'"
+                  class="size-5" :class="isInNav(ws.id) ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'" />
+              </button>
+              <p v-if="!workspaces.length" class="text-xs text-(--ui-text-dimmed) italic">No workspaces yet.</p>
+            </div>
+          </div>
+
+          <!-- Create new -->
+          <div class="border-t border-(--ui-border) pt-4">
+            <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider mb-3">New Workspace</p>
+            <form @submit.prevent="handleCreateWorkspace" class="flex gap-2">
+              <UInput v-model="newWs.emoji" placeholder="📁" class="w-14" size="md" />
+              <UInput v-model="newWs.name" placeholder="Workspace name" class="flex-1" size="md" />
+              <UButton type="submit" :loading="creatingWs" :disabled="!newWs.name.trim()" icon="i-lucide-plus" size="md">
+                Add
+              </UButton>
+            </form>
+          </div>
+        </div>
+      </UCard>
+
       <!-- Default Views -->
       <UCard>
         <template #header>
@@ -220,7 +263,7 @@
 
 <script setup lang="ts">
 const { user, logout } = useAuth();
-const { workspaces, fetchWorkspaces, setActive } = useWorkspace();
+const { workspaces, fetchWorkspaces, setActive, createWorkspace } = useWorkspace();
 const { prefs, set } = usePreferences();
 const toast = useToast();
 
@@ -301,7 +344,6 @@ async function deleteUser(id: string) {
 // --- Preferences ---
 const groupOptions = [
   { value: 'status' as const, label: 'Status', icon: 'i-lucide-circle-dot' },
-  { value: 'workspace' as const, label: 'Space', icon: 'i-lucide-folder' },
   { value: 'tag' as const, label: 'Tag', icon: 'i-lucide-tags' },
   { value: 'none' as const, label: 'None', icon: 'i-lucide-list' },
 ];
@@ -314,5 +356,44 @@ const orderOptions = [
 function setDefaultWorkspace(id: string | null) {
   set('defaultWorkspace', id);
   setActive(id);
+}
+
+// --- Workspace management ---
+const newWs = reactive({ name: '', emoji: '' });
+const creatingWs = ref(false);
+
+function isInNav(id: string) {
+  return (prefs.value.navWorkspaceIds || []).includes(id);
+}
+
+function toggleNavWorkspace(id: string) {
+  const current = [...(prefs.value.navWorkspaceIds || [])];
+  const idx = current.indexOf(id);
+  if (idx >= 0) {
+    current.splice(idx, 1);
+  } else {
+    if (current.length >= 2) current.shift();
+    current.push(id);
+  }
+  set('navWorkspaceIds', current);
+}
+
+async function handleCreateWorkspace() {
+  if (!newWs.name.trim()) return;
+  creatingWs.value = true;
+  try {
+    const ws = await createWorkspace({ name: newWs.name.trim(), emoji: newWs.emoji.trim() || '📁' });
+    const current = [...(prefs.value.navWorkspaceIds || [])];
+    if (current.length < 2) {
+      current.push(ws.id);
+      set('navWorkspaceIds', current);
+    }
+    toast.add({ title: `Workspace "${ws.name}" created`, color: 'success' });
+    newWs.name = '';
+    newWs.emoji = '';
+  } catch (err: any) {
+    toast.add({ title: 'Failed', description: err?.data?.statusMessage || 'Could not create workspace', color: 'error' });
+  }
+  creatingWs.value = false;
 }
 </script>

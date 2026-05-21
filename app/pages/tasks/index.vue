@@ -34,10 +34,6 @@
           icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0">
           Tag
         </UButton>
-        <UButton :color="groupBy === 'workspace' ? 'primary' : 'neutral'" :variant="groupBy === 'workspace' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-folder" @click="groupBy = groupBy === 'workspace' ? 'none' : 'workspace'" class="shrink-0">
-          Space
-        </UButton>
         <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
           icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0">
           Status
@@ -116,37 +112,8 @@
       <!-- List Views — always visible on mobile; on desktop, visible when a non-kanban group is active -->
       <div :class="(groupBy === 'none' || groupBy === 'status' || groupBy === 'priority') ? 'md:hidden' : ''">
         <template v-if="sortedTasks.length">
-          <!-- Grouped by workspace (draggable between groups) -->
-          <template v-if="groupBy === 'workspace'">
-            <div v-for="group in workspaceGroupsLive.filter(g => g.tasks.length)" :key="group.wsId ?? '__none__'" class="px-4 mt-4">
-              <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
-              <draggable
-                :list="group.tasks"
-                :group="{ name: 'workspace-tasks', pull: true, put: true }"
-                item-key="id"
-                :animation="200"
-                :disabled="selectMode"
-                ghost-class="sortable-ghost"
-                drag-class="sortable-drag-ring"
-                handle=".drag-handle"
-                class="space-y-2.5 min-h-8"
-                @change="(e: any) => handleWorkspaceDrop(e, group.wsId)">
-                <template #item="{ element }">
-                  <div class="flex items-start gap-0">
-                    <div class="drag-handle cursor-grab active:cursor-grabbing py-3 px-2 text-(--ui-text-dimmed) active:text-(--ui-text-muted) transition-colors touch-none">
-                      <UIcon name="i-lucide-grip-vertical" class="size-5" />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <TaskItem :task="element" :select-mode="selectMode" :selected="selectedIds.has(element.id)" @toggle="handleToggle" @select="toggleSelect(element.id)" />
-                    </div>
-                  </div>
-                </template>
-              </draggable>
-            </div>
-            <div class="pb-6" />
-          </template>
           <!-- Grouped by status -->
-          <template v-else-if="groupBy === 'status'">
+          <template v-if="groupBy === 'status'">
             <div v-for="group in statusGroups" :key="group.status" class="px-4 mt-4">
               <p class="text-xs font-semibold uppercase tracking-wider mb-2"
                 :class="group.status === 'now' ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'">
@@ -259,13 +226,15 @@ import { parseUTC } from '~/composables/useDate';
 import { PRIORITY_OPTIONS } from '~/composables/usePriority';
 
 const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask, toggleArchive } = useTasks();
-const { activeId, workspaces } = useWorkspace();
+const { activeId } = useWorkspace();
 const { prefs } = usePreferences();
 const toast = useToast();
 
 const showDone = ref(prefs.value.taskShowDone);
 const orderBy = ref<'created' | 'due'>(prefs.value.taskOrderBy);
-const groupBy = ref<'none' | 'workspace' | 'tag' | 'status' | 'priority'>(prefs.value.taskGroupBy);
+const groupBy = ref<'none' | 'tag' | 'status' | 'priority'>(
+  prefs.value.taskGroupBy === 'workspace' ? 'none' : prefs.value.taskGroupBy as any
+);
 const showArchived = ref(false);
 
 async function load() { await fetchTasks({ workspace_id: activeId.value, archived: showArchived.value }); }
@@ -407,39 +376,6 @@ const tagGroups = computed(() => {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([label, tasks]) => ({ label, tasks }));
 });
-
-// Mutable workspace groups for drag between groups
-const workspaceGroupsLive = ref<{ label: string; wsId: string | null; tasks: Task[] }[]>([]);
-
-function buildWorkspaceGroups() {
-  const groups = new Map<string | null, { label: string; wsId: string | null; tasks: Task[] }>();
-  // Pre-create groups for all workspaces so empty ones are drop targets
-  groups.set(null, { label: 'No workspace', wsId: null, tasks: [] });
-  for (const ws of workspaces.value) {
-    groups.set(ws.id, { label: `${ws.emoji} ${ws.name}`, wsId: ws.id, tasks: [] });
-  }
-  for (const task of sortedTasks.value) {
-    const key = task.workspace_id || null;
-    if (!groups.has(key)) {
-      groups.set(key, { label: 'No workspace', wsId: null, tasks: [] });
-    }
-    groups.get(key)!.tasks.push(task);
-  }
-  workspaceGroupsLive.value = [...groups.values()];
-}
-
-watch([taskSetKey, groupBy], () => {
-  if (groupBy.value === 'workspace') buildWorkspaceGroups();
-}, { immediate: true });
-
-async function handleWorkspaceDrop(e: any, targetWsId: string | null) {
-  // Only act when an item is added to this group (not removed from it)
-  if (!e.added) return;
-  const task = e.added.element;
-  await updateTask(task.id, { workspace_id: targetWsId } as any);
-  const idx = tasks.value.findIndex(t => t.id === task.id);
-  if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], workspace_id: targetWsId };
-}
 
 async function handleReorder() {
   // Save new positions

@@ -68,12 +68,22 @@ export default defineEventHandler(async (event) => {
   const carriedTasks: any[] = [];
   if (prevEntries.length) {
     const prevId = prevEntries[0].id;
+    const undoneParams: Record<string, any> = { pid: prevId };
+    const undoneTypes: Record<string, any> = { pid: VARCHAR };
+    let undoneWs = '';
+    if (wsId) {
+      undoneWs = ' AND t.workspace_id = $ws';
+      undoneParams.ws = wsId;
+      undoneTypes.ws = VARCHAR;
+    } else {
+      undoneWs = ' AND t.workspace_id IS NULL';
+    }
     const undone = await queryAll(`
       SELECT l.target_id, t.title, t.id
       FROM links l
       JOIN tasks t ON t.id = l.target_id
-      WHERE l.source_type = 'diary' AND l.source_id = $pid AND l.target_type = 'task' AND t.completed = false
-    `, { pid: prevId }, { pid: VARCHAR });
+      WHERE l.source_type = 'diary' AND l.source_id = $pid AND l.target_type = 'task' AND t.completed = false${undoneWs}
+    `, undoneParams, undoneTypes);
 
     if (undone.length) {
       // Batch insert all carry-forward links in one query
@@ -90,15 +100,31 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Fetch links so the client doesn't need a follow-up GET
+  // Fetch links — workspace-scoped to match the new entry
+  const linksReadParams: Record<string, any> = { id: newEntry.id };
+  const linksReadTypes: Record<string, any> = { id: VARCHAR };
+  let wsMatch = '';
+  if (wsId) {
+    wsMatch = `AND (
+      (l.target_type = 'task' AND t.workspace_id = $ws)
+      OR (l.target_type = 'note' AND n.workspace_id = $ws)
+    )`;
+    linksReadParams.ws = wsId;
+    linksReadTypes.ws = VARCHAR;
+  } else {
+    wsMatch = `AND (
+      (l.target_type = 'task' AND t.workspace_id IS NULL)
+      OR (l.target_type = 'note' AND n.workspace_id IS NULL)
+    )`;
+  }
   const links = await queryAll(`
     SELECT l.id as link_id, l.target_type, l.target_id,
       COALESCE(t.title, n.title) as target_title
     FROM links l
     LEFT JOIN tasks t ON l.target_type = 'task' AND t.id = l.target_id
     LEFT JOIN notes n ON l.target_type = 'note' AND n.id = l.target_id
-    WHERE l.source_type = 'diary' AND l.source_id = $id
-  `, { id: newEntry.id }, { id: VARCHAR });
+    WHERE l.source_type = 'diary' AND l.source_id = $id ${wsMatch}
+  `, linksReadParams, linksReadTypes);
 
   setResponseStatus(event, 201);
   return { ...newEntry, links, carried_tasks: carriedTasks };
