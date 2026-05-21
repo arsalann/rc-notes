@@ -37,8 +37,8 @@
         <!-- Priority pills -->
         <div class="flex items-center gap-2 mb-2 flex-wrap">
           <UButton v-for="p in priorityOptions" :key="p.value" size="sm"
-            :color="task.priority === p.value ? p.color : 'neutral'"
-            :variant="task.priority === p.value ? 'solid' : 'outline'"
+            :color="p.color"
+            :variant="task.priority === p.value ? 'solid' : 'soft'"
             :icon="p.icon"
             @click="setPriority(p.value)">
             {{ p.label }}

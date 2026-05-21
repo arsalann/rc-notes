@@ -8,7 +8,19 @@ export default defineEventHandler(async (event) => {
   const title = body.title?.trim() || '';
   const description = body.description?.trim() || '';
   const parentId = body.parent_id || null;
-  const workspaceId = body.workspace_id || await getDefaultWorkspaceId();
+  // For subtasks, inherit workspace from the parent task unless explicitly provided.
+  let workspaceId: string | null;
+  if (body.workspace_id !== undefined && body.workspace_id !== null) {
+    workspaceId = body.workspace_id;
+  } else if (parentId) {
+    const parentWs = await queryAll(
+      'SELECT workspace_id FROM tasks WHERE id = $pid',
+      { pid: parentId }, { pid: VARCHAR }
+    );
+    workspaceId = (parentWs[0]?.workspace_id as string | null) ?? null;
+  } else {
+    workspaceId = await getDefaultWorkspaceId();
+  }
   const tags = Array.isArray(body.tags) ? body.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
   const dueAt = body.due_at || null;
   const priority = body.priority !== undefined && [0, 1, 2, 3].includes(Number(body.priority))
