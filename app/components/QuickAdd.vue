@@ -71,11 +71,14 @@
 import { PRIORITY_OPTIONS, getPriorityOption, type PriorityValue } from '~/composables/usePriority';
 import { parseHashtags } from '~/composables/useHashtagParse';
 
-const props = defineProps<{ placeholder?: string; parentId?: string }>();
+const props = withDefaults(
+  defineProps<{ placeholder?: string; parentId?: string; defaultStatus?: 'next' | 'now' | 'done' }>(),
+  { defaultStatus: 'next' },
+);
 const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }] }>();
 const title = ref(''); const dueAt = ref(''); const subtasks = ref<string[]>([]); const newSubtask = ref('');
 const priority = ref<PriorityValue>(2);
-const status = ref<'next' | 'now' | 'done'>('next');
+const status = ref<'next' | 'now' | 'done'>(props.defaultStatus);
 const expanded = ref(false); const showDatePicker = ref(false); const showSubtaskInput = ref(false);
 const titleRef = ref<HTMLInputElement>(); const subtaskRef = ref<HTMLInputElement>();
 import { todayLocal, localDateOffset } from '~/composables/useDate';
@@ -124,6 +127,6 @@ function submit() { const t=title.value.trim(); if(!t)return;
   const finalPriority = p.priority !== undefined ? p.priority : priority.value;
   const finalStatus = p.status || status.value;
   emit('add',{title:p.title,parent_id:props.parentId,due_at:finalDue,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:p.tags.length?p.tags:undefined,priority:finalPriority,status:finalStatus});
-  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;priority.value=2;status.value='next';collapse(); }
+  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;priority.value=2;status.value=props.defaultStatus;collapse(); }
 function formatDate(s:string){return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 </script>

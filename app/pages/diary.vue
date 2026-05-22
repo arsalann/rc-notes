@@ -111,7 +111,7 @@
 
     <!-- Quick add task -->
     <div v-if="showAddTask" class="mt-3 -mx-0">
-      <QuickAdd placeholder="Add a task for this day..." @add="handleAddTask" />
+      <QuickAdd placeholder="Add a task for this day..." default-status="now" @add="handleAddTask" />
     </div>
 
     <!-- Loading -->
