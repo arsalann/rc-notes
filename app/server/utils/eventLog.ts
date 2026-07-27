@@ -27,6 +27,7 @@ function resolveEventType(method: string, path: string): string {
   if (p.match(/^notes\/[^/]+\/pin$/)) return 'note.toggle_pin';
 
   // Diary
+  if (p.match(/^diary$/) && m === 'GET') return 'diary.list';
   if (p.match(/^diary$/) && m === 'POST') return 'diary.create';
   if (p.match(/^diary\/[^/]+$/) && m === 'GET') return 'diary.view';
   if (p.match(/^diary\/[^/]+$/) && m === 'PUT') return 'diary.update';
