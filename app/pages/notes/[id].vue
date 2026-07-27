@@ -14,7 +14,8 @@
           :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode" />
         <UButton color="neutral" variant="ghost" :icon="note?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="note?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
-        <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="confirmDelete = true" />
+        <UButton color="neutral" variant="ghost" :icon="note?.archived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
+          @click="confirmArchive = true" />
       </div>
     </div>
 
@@ -72,11 +73,14 @@
       </div>
     </div>
 
-    <UModal v-model:open="confirmDelete" title="Archive note?" description="You can find archived notes later.">
+    <UModal v-model:open="confirmArchive" :title="note?.archived ? 'Restore note?' : 'Archive note?'"
+      :description="note?.archived ? 'This note will return to your notebook.' : 'You can find archived notes later.'">
       <template #footer>
         <div class="flex gap-3 w-full">
-          <UButton color="neutral" variant="soft" class="flex-1" @click="confirmDelete = false">Cancel</UButton>
-          <UButton color="error" class="flex-1" @click="handleDelete">Archive</UButton>
+          <UButton color="neutral" variant="soft" class="flex-1" @click="confirmArchive = false">Cancel</UButton>
+          <UButton :color="note?.archived ? 'primary' : 'warning'" class="flex-1" @click="handleArchive">
+            {{ note?.archived ? 'Restore' : 'Archive' }}
+          </UButton>
         </div>
       </template>
     </UModal>
@@ -89,8 +93,8 @@ import type { Note } from '~/composables/useNotes';
 import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
 
 const route = useRoute(); const id = route.params.id as string;
-const { updateNote, deleteNote, togglePin } = useNotesCrud();
-const note = ref<Note | null>(null); const loadingNote = ref(true); const saving = ref(false); const confirmDelete = ref(false);
+const { updateNote, togglePin } = useNotesCrud();
+const note = ref<Note | null>(null); const loadingNote = ref(true); const saving = ref(false); const confirmArchive = ref(false);
 const editTitle = ref(''); const editContent = ref(''); const contentRef = ref<HTMLTextAreaElement>();
 const mentionOpen = ref(false); const mentionResults = ref<any[]>([]);
 const editMode = ref(true);
@@ -217,5 +221,9 @@ async function toggleEditMode() {
 }
 
 async function handlePin() { if (!note.value) return; const u = await togglePin(id); note.value.pinned = u.pinned; }
-async function handleDelete() { await deleteNote(id); navigateTo('/notes'); }
+async function handleArchive() {
+  if (!note.value) return;
+  await updateNote(id, { archived: !note.value.archived });
+  navigateTo('/notes');
+}
 </script>

@@ -85,7 +85,7 @@ All content tables include `user_id` and `user_name` columns for future multi-us
 | GET | /api/mention?q= | @-mention autocomplete |
 
 ## Known Issues / Next Steps
-- Archive page was removed — needs a way to access archived items (could be a filter toggle on Tasks/Notes pages)
+- Tasks and Notes each have an archive-view toggle; archived items stay hidden by default and can be restored from their detail view.
 - @-mention dropdown positioning could be improved (currently fixed at top of textarea)
 - No recurring tasks
 - No due date notifications / reminders (schema has `reminder_at` column ready)

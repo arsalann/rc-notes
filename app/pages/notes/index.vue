@@ -3,10 +3,14 @@
     <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <h1 class="text-2xl font-bold tracking-tight">Notebook</h1>
+          <h1 class="text-2xl font-bold tracking-tight">{{ showArchived ? 'Archived notes' : 'Notebook' }}</h1>
           <WorkspaceSwitcher />
         </div>
-        <UButton color="secondary" icon="i-lucide-plus" size="sm" @click="handleNew" />
+        <div class="flex items-center gap-1">
+          <UButton :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'" color="neutral"
+            :variant="showArchived ? 'soft' : 'ghost'" size="sm" @click="toggleArchived" />
+          <UButton v-if="!showArchived" color="secondary" icon="i-lucide-plus" size="sm" @click="handleNew" />
+        </div>
       </div>
     </div>
 
@@ -73,8 +77,8 @@
       </div>
 
       <div v-if="!notes.length" class="text-center py-8">
-        <UIcon name="i-lucide-file-text" class="size-8 text-(--ui-text-dimmed) mx-auto mb-2" />
-        <p class="text-sm text-(--ui-text-dimmed)">No notes yet. Tap + to create one.</p>
+        <UIcon :name="showArchived ? 'i-lucide-archive' : 'i-lucide-file-text'" class="size-8 text-(--ui-text-dimmed) mx-auto mb-2" />
+        <p class="text-sm text-(--ui-text-dimmed)">{{ showArchived ? 'No archived notes.' : 'No notes yet. Tap + to create one.' }}</p>
       </div>
     </div>
   </div>
@@ -83,16 +87,18 @@
 <script setup lang="ts">
 const { notes, loading, fetchNotes, createNote } = useNotesCrud();
 const { activeId } = useWorkspace();
+const showArchived = ref(false);
 
 const pinnedNotes = computed(() => notes.value.filter((n: any) => n.pinned));
 const unpinnedNotes = computed(() => notes.value.filter((n: any) => !n.pinned));
 
 async function load() {
-  await fetchNotes({ workspace_id: activeId.value });
+  await fetchNotes({ workspace_id: activeId.value, archived: showArchived.value });
 }
 
 onMounted(load);
 watch(activeId, load);
+function toggleArchived() { showArchived.value = !showArchived.value; load(); }
 
 async function handleNew() {
   const n = await createNote({ title: 'Untitled', workspace_id: activeId.value });
