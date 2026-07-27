@@ -7,6 +7,8 @@ A personal productivity app with tasks (+ subtasks), notes, diary, and a 5-day c
 - Mobile-first: primarily used in phone browser
 - **Dark theme** — purple accent, color-blind friendly, no light/dark toggle
 - **Four main sections**: Tasks, Notes, Diary, Calendar — linked via @-mentions
+- **Notebook groups**: diary entries with written content appear as date-titled diary notes, separately from ordinary notes; both groups are collapsible
+- **Diary navigation**: previous/next day buttons shift the seven-day selector and selected diary date, with exact dates deep-linkable through `?date=YYYY-MM-DD`
 - **Workspaces**: filter-based labels (Personal, Work, etc.), easily switchable
 - **Calendar**: 5-day view (2 days before + today + 2 days after) as its own tab
 - **Task creation must be frictionless**: expandable quick-add with inline subtasks, due date shortcuts (Today/Tomorrow/Next week)
@@ -83,6 +85,7 @@ All content tables include `user_id` and `user_name` columns for future multi-us
 | GET | /api/calendar?workspace_id= | 5-day calendar data |
 | GET | /api/search?q=&workspace_id= | Search tasks + notes |
 | GET | /api/mention?q= | @-mention autocomplete |
+| GET | /api/diary?workspace_id= | List diary entries with written content for the Notebook |
 
 ## Known Issues / Next Steps
 - Tasks and Notes each have an archive-view toggle; archived items stay hidden by default and can be restored from their detail view.

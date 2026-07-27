@@ -53,20 +53,26 @@
     </div>
 
     <!-- Day selector -->
-    <div class="flex gap-1.5 px-3 mt-2 py-2 no-scrollbar overflow-x-auto scroll-hint">
-      <button v-for="day in days" :key="day.date" @click="selectDay(day.date)"
-        class="flex flex-col items-center flex-1 min-w-[2.75rem] px-1.5 py-2 rounded-xl transition-all duration-200 active:scale-95"
-        :class="selectedDate === day.date
-          ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-          : day.isToday
-            ? 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-primary)/40'
-            : 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)'">
-        <span class="text-[10px] uppercase font-semibold tracking-wide"
-          :class="selectedDate === day.date ? 'text-white/70' : 'text-(--ui-text-dimmed)'">{{ day.dayName }}</span>
-        <span class="text-base font-bold mt-0.5 leading-tight">{{ day.dayNum }}</span>
-        <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-0.5"
-          :class="selectedDate === day.date ? 'bg-white/60' : 'bg-(--ui-primary)'" />
-      </button>
+    <div class="flex items-center gap-1.5 px-2 mt-2 py-2">
+      <UButton icon="i-lucide-chevron-left" color="neutral" variant="soft" size="sm"
+        aria-label="Previous day" :square="true" class="touch-target shrink-0" @click="shiftDay(-1)" />
+      <div class="flex-1 min-w-0 flex gap-1.5 no-scrollbar overflow-x-auto scroll-hint">
+        <button v-for="day in days" :key="day.date" @click="selectDay(day.date)"
+          class="flex flex-col items-center flex-1 min-w-[2.75rem] px-1.5 py-2 rounded-xl transition-all duration-200 active:scale-95"
+          :class="selectedDate === day.date
+            ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+            : day.isToday
+              ? 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-primary)/40'
+              : 'bg-(--ui-bg-elevated) ring-1 ring-(--ui-border)'">
+          <span class="text-[10px] uppercase font-semibold tracking-wide"
+            :class="selectedDate === day.date ? 'text-white/70' : 'text-(--ui-text-dimmed)'">{{ day.dayName }}</span>
+          <span class="text-base font-bold mt-0.5 leading-tight">{{ day.dayNum }}</span>
+          <div v-if="day.hasContent" class="w-1.5 h-1.5 rounded-full mt-0.5"
+            :class="selectedDate === day.date ? 'bg-purple-200/80' : 'bg-(--ui-primary)'" />
+        </button>
+      </div>
+      <UButton icon="i-lucide-chevron-right" color="neutral" variant="soft" size="sm"
+        aria-label="Next day" :square="true" class="touch-target shrink-0" @click="shiftDay(1)" />
     </div>
 
     <!-- Day label + edit toggle -->
@@ -320,6 +326,8 @@ interface DiaryEntry {
 
 const { activeId } = useWorkspace();
 const { createTask } = useTasks();
+const route = useRoute();
+const router = useRouter();
 
 const searchOpen = ref(false);
 const searchQuery = ref('');
@@ -355,7 +363,18 @@ function runSearch(q: string) {
 }
 const { prefs, set: setPref } = usePreferences();
 
-const selectedDate = ref(todayLocal());
+function routeDiaryDate(value: unknown): string | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (typeof candidate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return null;
+  const parsed = new Date(`${candidate}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const roundTrip = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  return roundTrip === candidate ? candidate : null;
+}
+
+const initialDate = routeDiaryDate(route.query.date) || todayLocal();
+const selectedDate = ref(initialDate);
+const dateWindowCenter = ref(initialDate);
 const showAddTask = ref(false);
 const entry = ref<DiaryEntry | null>(null);
 const editContent = ref('');
@@ -457,7 +476,7 @@ const days = computed(() => {
   const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const td = todayLocal();
   for (let i = -3; i <= 3; i++) {
-    const ds = localDateOffset(i);
+    const ds = addDays(dateWindowCenter.value, i);
     const d = new Date(ds + 'T12:00:00');
     r.push({ date: ds, dayName: dn[d.getDay()], dayNum: d.getDate(), isToday: ds === td, hasContent: entryDates.value.has(ds) });
   }
@@ -467,8 +486,8 @@ const days = computed(() => {
 const selectedDayLabel = computed(() => {
   const td = todayLocal();
   if (selectedDate.value === td) return 'Today';
-  if (selectedDate.value === localDateOffset(-1)) return 'Yesterday';
-  if (selectedDate.value === localDateOffset(1)) return 'Tomorrow';
+  if (selectedDate.value === addDays(td, -1)) return 'Yesterday';
+  if (selectedDate.value === addDays(td, 1)) return 'Tomorrow';
   return new Date(selectedDate.value + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 });
 
@@ -591,12 +610,23 @@ const notesHtml = computed(() => {
 
 async function selectDay(date: string) {
   selectedDate.value = date;
+  if (routeDiaryDate(route.query.date) !== date) {
+    void router.replace({ query: { ...route.query, date } });
+  }
   await fetchEntry();
 }
 
-function goToToday() {
+async function goToToday() {
   todayDate.value = todayLocal();
-  selectDay(todayDate.value);
+  dateWindowCenter.value = todayDate.value;
+  await selectDay(todayDate.value);
+  await fetchDateIndicators();
+}
+
+async function shiftDay(delta: number) {
+  dateWindowCenter.value = addDays(dateWindowCenter.value, delta);
+  await selectDay(addDays(selectedDate.value, delta));
+  await fetchDateIndicators();
 }
 
 function localDateOfTimestamp(ts: string): string {
@@ -719,16 +749,21 @@ function shiftWeek(delta: number) {
 
 watch(activeId, () => { if (weekSummaryOpen.value) { loadWeek(); loadOutstanding(); } });
 
+let entryRequestId = 0;
 async function fetchEntry() {
+  const requestId = ++entryRequestId;
+  const requestedDate = selectedDate.value;
+  const requestedWorkspaceId = activeId.value;
   loading.value = true;
   carriedTasks.value = [];
   try {
     const q: Record<string, string> = {};
-    if (activeId.value) q.workspace_id = activeId.value;
+    if (requestedWorkspaceId) q.workspace_id = requestedWorkspaceId;
 
     // Try to get existing entry
-    const data = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
+    const data = await $fetch<DiaryEntry>(`/api/diary/${requestedDate}`, { query: q }).catch(() => null);
     if (data) {
+      if (requestId !== entryRequestId) return;
       entry.value = data;
       editContent.value = data.content;
       editMode.value = false;
@@ -738,26 +773,29 @@ async function fetchEntry() {
     // Create new entry (triggers carry-forward) — POST now returns links
     const created = await $fetch<DiaryEntry & { carried_tasks?: { id: string; title: string }[] }>('/api/diary', {
       method: 'POST',
-      body: { entry_date: selectedDate.value, workspace_id: activeId.value },
+      body: { entry_date: requestedDate, workspace_id: requestedWorkspaceId },
     });
+    if (requestId !== entryRequestId) return;
     entry.value = created;
     editContent.value = created.content;
     carriedTasks.value = created.carried_tasks || [];
     editMode.value = false;
   } finally {
-    loading.value = false;
+    if (requestId === entryRequestId) loading.value = false;
   }
 }
 
 // Track which dates have content (batch endpoint)
+let indicatorRequestId = 0;
 async function fetchDateIndicators() {
+  const requestId = ++indicatorRequestId;
   try {
-    const fromDate = localDateOffset(-3);
-    const toDate = localDateOffset(3);
+    const fromDate = days.value[0]?.date || addDays(dateWindowCenter.value, -3);
+    const toDate = days.value.at(-1)?.date || addDays(dateWindowCenter.value, 3);
     const q: Record<string, string> = { from: fromDate, to: toDate };
     if (activeId.value) q.workspace_id = activeId.value;
     const dates = await $fetch<string[]>('/api/diary/dates', { query: q });
-    entryDates.value = new Set(dates);
+    if (requestId === indicatorRequestId) entryDates.value = new Set(dates);
   } catch {}
 }
 
@@ -765,7 +803,18 @@ onMounted(async () => {
   await fetchEntry();
   fetchDateIndicators();
 });
-watch(activeId, () => fetchEntry());
+watch(activeId, async () => {
+  await fetchEntry();
+  fetchDateIndicators();
+});
+watch(() => route.query.date, async (value) => {
+  const date = routeDiaryDate(value);
+  if (!date || date === selectedDate.value) return;
+  selectedDate.value = date;
+  dateWindowCenter.value = date;
+  await fetchEntry();
+  fetchDateIndicators();
+});
 
 // Autosave
 let saveTimer: ReturnType<typeof setTimeout>;
@@ -773,14 +822,15 @@ function saveContent() {
   if (!entry.value) return;
   clearTimeout(saveTimer);
   saving.value = true;
+  const dateToSave = selectedDate.value;
+  const contentToSave = editContent.value;
+  const workspaceId = activeId.value;
   saveTimer = setTimeout(async () => {
-    const q: Record<string, string> = {};
-    if (activeId.value) q.workspace_id = activeId.value;
-    await $fetch(`/api/diary/${selectedDate.value}`, {
+    await $fetch(`/api/diary/${dateToSave}`, {
       method: 'PUT',
-      body: { content: editContent.value, workspace_id: activeId.value },
+      body: { content: contentToSave, workspace_id: workspaceId },
     });
-    if (editContent.value.trim()) entryDates.value.add(selectedDate.value);
+    if (contentToSave.trim()) entryDates.value.add(dateToSave);
     saving.value = false;
   }, 300);
 }
