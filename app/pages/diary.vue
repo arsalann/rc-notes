@@ -733,8 +733,8 @@ function formatDueLabel(due: string | null, isOverdue: boolean): string {
 
 function openWeekSummary() {
   todayDate.value = todayLocal();
-  // Default view: previous full Sun-Sat week.
-  weekStart.value = addDays(currentWeekStart.value, -7);
+  // Default view: the current Sunday–Saturday week, including progress so far.
+  weekStart.value = currentWeekStart.value;
   weekSummaryOpen.value = true;
   loadWeek();
   loadOutstanding();
