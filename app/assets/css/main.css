@@ -224,6 +224,29 @@
 }
 .calm-quick-add-card [data-slot="body"] { padding: 0 !important; }
 .calm-quick-add-card:focus-within { border-color: var(--daybook-line-strong) !important; }
+.daybook-capture-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  color: var(--daybook-ink-faint);
+  font-size: 0.7rem;
+}
+.daybook-capture-summary-label {
+  margin-right: 0.15rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.daybook-capture-title {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--daybook-ink-muted);
+  font-family: var(--daybook-serif);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Notes index */
 .calm-note-card {
@@ -376,6 +399,48 @@
   padding: 1.15rem 0 1.35rem;
   border-bottom: 1px solid var(--daybook-line);
 }
+.daybook-journal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+.daybook-journal-heading button { min-height: 2rem; color: var(--daybook-ink-faint); }
+.daybook-journal-heading button:hover { color: var(--daybook-accent-strong); }
+.daybook-journal-preview {
+  min-height: 4rem;
+  cursor: text;
+  border-radius: 0.55rem;
+  transition: background-color 160ms ease;
+}
+.daybook-journal-preview:hover,
+.daybook-journal-preview:focus-visible {
+  background: color-mix(in srgb, var(--daybook-surface) 45%, transparent);
+  outline: none;
+}
+.daybook-journal-hint {
+  margin-top: 0.9rem;
+  color: var(--daybook-ink-faint);
+  font-size: 0.68rem;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.daybook-journal-preview:hover .daybook-journal-hint,
+.daybook-journal-preview:focus-visible .daybook-journal-hint { opacity: 1; }
+.daybook-copy-preview {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: 0.85rem;
+  color: var(--daybook-ink-muted);
+  background: var(--daybook-surface);
+  border: 1px solid var(--daybook-line);
+  border-radius: 0.75rem;
+  font-family: var(--daybook-serif);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
 .calm-diary-tasks { padding-top: 1.35rem; }
 .calm-diary-note textarea {
   min-height: 11rem;
@@ -400,6 +465,116 @@
   padding-top: 1.1rem;
   border-top: 1px solid var(--daybook-line);
 }
+
+/* Focus mode and daily orientation */
+.daybook-focus-context {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.6rem;
+  padding: 0.45rem 1rem 0.1rem;
+  color: var(--daybook-ink-faint);
+  font-size: 0.72rem;
+}
+.daybook-focus-context-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--daybook-accent);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--daybook-accent) 12%, transparent);
+}
+.daybook-focus-context strong {
+  overflow: hidden;
+  color: var(--daybook-ink-muted);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daybook-focus-context-divider { color: var(--daybook-line-strong); }
+.daybook-focus-context button {
+  min-height: 2rem;
+  margin-left: auto;
+  padding-inline: 0.6rem;
+  color: var(--daybook-ink-faint);
+  font-size: 0.7rem;
+}
+.daybook-focus-context button:hover { color: var(--daybook-accent-strong); }
+.is-focus-mode .calm-diary-header { border-bottom-color: color-mix(in srgb, var(--daybook-accent) 22%, var(--daybook-line)); }
+.is-focus-mode .calm-diary-content { padding-top: 0.4rem; }
+.is-focus-mode .calm-diary-note { padding-top: 0.65rem; }
+
+.daybook-carry-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3.4rem;
+  padding: 0.6rem 0.7rem;
+  background: color-mix(in srgb, var(--daybook-warm) 8%, var(--daybook-surface));
+  border: 1px solid color-mix(in srgb, var(--daybook-warm) 26%, var(--daybook-line));
+  border-radius: 0.9rem;
+}
+.daybook-carry-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--daybook-warm);
+  background: color-mix(in srgb, var(--daybook-warm) 12%, transparent);
+  border-radius: 0.65rem;
+}
+.daybook-carry-title { color: var(--daybook-ink); font-size: 0.78rem; font-weight: 650; }
+.daybook-carry-copy { margin-top: 0.1rem; color: var(--daybook-ink-muted); font-size: 0.72rem; }
+
+.daybook-task-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+}
+.daybook-task-count {
+  margin-top: 0.28rem;
+  color: var(--daybook-ink-faint);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+.daybook-task-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: min(7.5rem, 30%);
+  color: var(--daybook-accent-strong);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+.daybook-task-progress-track {
+  height: 0.22rem;
+  flex: 1;
+  overflow: hidden;
+  background: var(--daybook-line);
+  border-radius: 999px;
+}
+.daybook-task-progress-track i {
+  display: block;
+  height: 100%;
+  background: var(--daybook-accent);
+  border-radius: inherit;
+  transition: width 220ms ease;
+}
+.daybook-reorder-status {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.15rem 0 0.65rem;
+  color: var(--daybook-ink-faint);
+  font-size: 0.68rem;
+}
+.daybook-reorder-status.is-saving { color: var(--daybook-ink-muted); }
+.daybook-reorder-status.is-saved { color: var(--daybook-accent-strong); }
+.daybook-reorder-status.is-error { color: var(--daybook-danger); }
 
 /* Sortable drag states */
 .sortable-drag-ring { box-shadow: 0 0 0 2px var(--daybook-accent) !important; border-radius: 0.8rem; }

@@ -7,8 +7,10 @@
           class="flex-1 bg-transparent outline-none placeholder:text-(--ui-text-dimmed)"
           @focus="expanded = true" @keydown.enter.prevent="submit" @keydown.escape="collapse" />
       </div>
-      <div v-if="parsedTags.length" class="flex items-center gap-1.5 px-4 pb-2 -mt-1 flex-wrap">
-        <UBadge v-for="tag in parsedTags" :key="tag" color="primary" variant="subtle" size="xs">{{ tag }}</UBadge>
+      <div v-if="expanded && captureSummary.length" class="daybook-capture-summary px-4 pb-2 -mt-1">
+        <span class="daybook-capture-summary-label">Will capture</span>
+        <span v-if="parsed.title && parsed.title !== title.trim()" class="daybook-capture-title">{{ parsed.title }}</span>
+        <UBadge v-for="item in captureSummary" :key="item" color="neutral" variant="subtle" size="xs">{{ item }}</UBadge>
       </div>
       <template v-if="expanded">
         <USeparator />
@@ -112,7 +114,16 @@ const dateShortcuts = computed(() => [
 
 // Reactive parse — drives preview and auto-applies recognized hashtags to the buttons.
 const parsed = computed(() => parseHashtags(title.value));
-const parsedTags = computed(() => parsed.value.tags);
+const captureSummary = computed(() => {
+  const summary: string[] = [];
+  if (parsed.value.priority !== undefined) {
+    summary.push(getPriorityOption(parsed.value.priority)?.label || 'No priority');
+  }
+  if (parsed.value.status) summary.push(parsed.value.status === 'now' ? 'Now' : parsed.value.status === 'done' ? 'Done' : 'Next');
+  if (parsed.value.due_at) summary.push(formatDate(parsed.value.due_at));
+  summary.push(...parsed.value.tags.map(tag => `#${tag}`));
+  return summary;
+});
 
 // When the user types a recognized priority/status/date hashtag, update the corresponding button.
 watch(() => parsed.value.priority, v => { if (v !== undefined) priority.value = v as PriorityValue; });

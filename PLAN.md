@@ -44,6 +44,18 @@ Research principles applied:
 The redesign is visual and interaction-level only. MotherDuck, the database
 schema, API routes, and data model are unchanged.
 
+UX pass in progress (2026-08): the Daybook now has a persistent optional Focus
+mode that removes secondary controls while keeping the active workspace visible,
+a compact daily open/done progress cue, a carry-forward review banner when a
+new page inherits unfinished threads, and visible save feedback after drag
+reordering. Quick capture also previews the title and recognized hashtags,
+priority, status, and due date before submission. These changes use local
+preferences and existing task fields only; no database migration is required.
+Focus mode defaults on. Diary writing now enters edit mode by tapping the
+journal itself, saves after a short pause, and returns to preview automatically.
+The journal header also provides a safe previous-page copy action with append or
+replace confirmation when the current page already contains writing.
+
 Brand direction: the app shell now uses a system editorial serif stack so it
 feels closer to a personal journal while keeping monospace utility labels
 readable. The current Daybook favicon is the selected flat geometric
