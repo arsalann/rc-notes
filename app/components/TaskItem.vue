@@ -1,7 +1,7 @@
 <template>
   <div>
     <UCard
-      class="transition-all duration-200"
+      class="calm-task-card transition-all duration-200"
       :class="[
         task.completed && 'opacity-50',
         !selectMode && 'active:scale-[0.98]',

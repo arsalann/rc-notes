@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-lg mx-auto md:max-w-6xl">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
+  <div class="calm-page tasks-page max-w-lg mx-auto md:max-w-6xl">
+    <div class="calm-page-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <h1 class="text-2xl font-bold tracking-tight">{{ showArchived ? 'Archived' : 'Tasks' }}</h1>
@@ -15,33 +15,17 @@
         </div>
       </div>
       <!-- Toolbar -->
-      <div class="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
+      <div class="calm-control-toolbar flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
         <UButton :color="showDone ? 'primary' : 'neutral'" :variant="showDone ? 'soft' : 'outline'" size="xs"
           :icon="showDone ? 'i-lucide-eye' : 'i-lucide-eye-off'" @click="showDone = !showDone" class="shrink-0">
           Done
         </UButton>
-        <USeparator orientation="vertical" class="h-4 shrink-0" />
-        <UButton :color="orderBy === 'created' ? 'primary' : 'neutral'" :variant="orderBy === 'created' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-clock" @click="orderBy = 'created'" class="shrink-0">
-          Newest
-        </UButton>
-        <UButton :color="orderBy === 'due' ? 'primary' : 'neutral'" :variant="orderBy === 'due' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-calendar" @click="orderBy = 'due'" class="shrink-0">
-          Due
-        </UButton>
-        <USeparator orientation="vertical" class="h-4 shrink-0" />
-        <UButton :color="groupBy === 'tag' ? 'primary' : 'neutral'" :variant="groupBy === 'tag' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-tags" @click="groupBy = groupBy === 'tag' ? 'none' : 'tag'" class="shrink-0">
-          Tag
-        </UButton>
-        <UButton :color="groupBy === 'status' ? 'primary' : 'neutral'" :variant="groupBy === 'status' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-circle-dot" @click="groupBy = groupBy === 'status' ? 'none' : 'status'" class="shrink-0">
-          Status
-        </UButton>
-        <UButton :color="groupBy === 'priority' ? 'primary' : 'neutral'" :variant="groupBy === 'priority' ? 'soft' : 'outline'" size="xs"
-          icon="i-lucide-flame" @click="groupBy = groupBy === 'priority' ? 'none' : 'priority'" class="shrink-0">
-          Priority
-        </UButton>
+        <UDropdownMenu :items="viewMenuItems" :ui="{ content: 'min-w-52' }">
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-sliders-horizontal"
+            trailing-icon="i-lucide-chevron-down" class="shrink-0">
+            View
+          </UButton>
+        </UDropdownMenu>
       </div>
     </div>
     <div v-if="!showArchived" class="mt-2">
@@ -187,7 +171,7 @@
       leave-to-class="opacity-0 translate-y-2">
       <div v-if="selectMode" class="fixed left-0 right-0 z-40 px-4"
         style="bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem)">
-        <div class="max-w-lg md:max-w-2xl mx-auto bg-teal-900/95 backdrop-blur-xl rounded-2xl border border-teal-700/60 shadow-2xl px-3 py-2.5">
+        <div class="calm-bulk-bar max-w-lg md:max-w-2xl mx-auto rounded-2xl px-3 py-2.5">
           <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <span class="text-sm font-semibold text-(--ui-text) whitespace-nowrap pl-1.5 pr-1">
               {{ selectedIds.size }} selected
@@ -236,6 +220,19 @@ const groupBy = ref<'none' | 'tag' | 'status' | 'priority'>(
   prefs.value.taskGroupBy === 'workspace' ? 'none' : prefs.value.taskGroupBy as any
 );
 const showArchived = ref(false);
+
+const viewMenuItems = computed(() => [
+  [
+    { label: 'Newest first', icon: orderBy.value === 'created' ? 'i-lucide-check' : 'i-lucide-clock', onSelect: () => { orderBy.value = 'created'; } },
+    { label: 'Due date', icon: orderBy.value === 'due' ? 'i-lucide-check' : 'i-lucide-calendar', onSelect: () => { orderBy.value = 'due'; } },
+  ],
+  [
+    { label: 'No grouping', icon: groupBy.value === 'none' ? 'i-lucide-check' : 'i-lucide-list', onSelect: () => { groupBy.value = 'none'; } },
+    { label: 'By status', icon: groupBy.value === 'status' ? 'i-lucide-check' : 'i-lucide-circle-dot', onSelect: () => { groupBy.value = 'status'; } },
+    { label: 'By priority', icon: groupBy.value === 'priority' ? 'i-lucide-check' : 'i-lucide-flag', onSelect: () => { groupBy.value = 'priority'; } },
+    { label: 'By tag', icon: groupBy.value === 'tag' ? 'i-lucide-check' : 'i-lucide-hash', onSelect: () => { groupBy.value = 'tag'; } },
+  ],
+]);
 
 async function load() { await fetchTasks({ workspace_id: activeId.value, archived: showArchived.value }); }
 onMounted(load); watch(activeId, load);

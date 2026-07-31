@@ -4,8 +4,8 @@
       <!-- Welcome screen -->
       <template v-if="mode === 'choose'">
         <div class="text-center space-y-2">
-          <h1 class="text-3xl font-bold tracking-tight">rc-notes</h1>
-          <p class="text-sm text-(--ui-text-dimmed)">Your personal notes and tasks</p>
+          <h1 class="text-3xl font-bold tracking-tight">daybook</h1>
+          <p class="text-sm text-(--ui-text-dimmed)">A quiet place for your day</p>
         </div>
 
         <div class="space-y-3">
@@ -21,7 +21,7 @@
       <!-- Sign In form -->
       <template v-else-if="mode === 'login'">
         <div class="text-center">
-          <h1 class="text-3xl font-bold tracking-tight">rc-notes</h1>
+          <h1 class="text-3xl font-bold tracking-tight">daybook</h1>
           <p class="mt-2 text-sm text-(--ui-text-dimmed)">Sign in to continue</p>
         </div>
 
@@ -81,7 +81,7 @@
       <!-- Create Account form -->
       <template v-else>
         <div class="text-center">
-          <h1 class="text-3xl font-bold tracking-tight">rc-notes</h1>
+          <h1 class="text-3xl font-bold tracking-tight">daybook</h1>
           <p class="mt-2 text-sm text-(--ui-text-dimmed)">Create your account</p>
         </div>
 

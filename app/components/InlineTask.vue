@@ -1,6 +1,8 @@
 <template>
-  <div v-if="task" class="my-3 rounded-xl ring-2 bg-teal-900/80 overflow-hidden"
-    :class="priority ? priority.ringClass : 'ring-teal-600/60'">
+  <div v-if="task"
+    :class="variant === 'after-hours'
+      ? 'after-hours-inline-task'
+      : ['my-3 rounded-xl ring-2 bg-teal-900/80 overflow-hidden', priority ? priority.ringClass : 'ring-teal-600/60']">
     <div class="flex items-center gap-2.5 px-3 py-2.5">
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
       <UIcon v-if="priority" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
@@ -37,7 +39,12 @@
 import type { Task } from '~/composables/useNotes';
 import { getPriorityOption } from '~/composables/usePriority';
 
-const props = defineProps<{ taskId: string; initialData?: Task & { subtasks?: Task[] }; hideDoneSubtasks?: boolean }>();
+const props = withDefaults(defineProps<{
+  taskId: string;
+  initialData?: Task & { subtasks?: Task[] };
+  hideDoneSubtasks?: boolean;
+  variant?: 'default' | 'after-hours';
+}>(), { variant: 'default' });
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete, createTask } = useTasks();
 const { activeId } = useWorkspace();

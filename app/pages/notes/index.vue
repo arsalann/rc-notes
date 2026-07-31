@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-lg mx-auto">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
+  <div class="calm-page notes-page max-w-lg mx-auto">
+    <div class="calm-page-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <h1 class="text-2xl font-bold tracking-tight">{{ showArchived ? 'Archived notes' : 'Notebook' }}</h1>
@@ -39,7 +39,7 @@
           <NuxtLink v-for="diaryNote in diaryNotes" :key="diaryNote.id"
             :to="{ path: '/diary', query: { date: diaryNote.entry_date } }"
             class="block">
-            <UCard class="transition-all duration-200 active:scale-[0.98] ring-1 ring-purple-500/15"
+            <UCard class="calm-note-card transition-all duration-200 active:scale-[0.98] ring-1 ring-purple-500/15"
               :ui="{ body: 'p-3.5' }">
               <div class="flex items-start gap-3">
                 <div class="mt-0.5 size-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
@@ -89,7 +89,7 @@
             </div>
             <div class="space-y-2.5">
               <NuxtLink v-for="note in pinnedNotes" :key="note.id" :to="`/notes/${note.id}`" class="block">
-                <UCard class="transition-all duration-200 active:scale-[0.98] ring-1 ring-purple-500/20" :ui="{ body: 'p-3.5' }">
+                <UCard class="calm-note-card transition-all duration-200 active:scale-[0.98] ring-1 ring-purple-500/20" :ui="{ body: 'p-3.5' }">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
                       <h3 class="font-semibold text-sm truncate" :class="!note.title && 'text-(--ui-text-dimmed) italic'">
@@ -116,7 +116,7 @@
             </div>
             <div class="space-y-2.5">
               <NuxtLink v-for="note in unpinnedNotes" :key="note.id" :to="`/notes/${note.id}`" class="block">
-                <UCard class="transition-all duration-200 active:scale-[0.98]" :ui="{ body: 'p-3.5' }">
+                <UCard class="calm-note-card transition-all duration-200 active:scale-[0.98]" :ui="{ body: 'p-3.5' }">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
                       <h3 class="font-semibold text-sm truncate" :class="!note.title && 'text-(--ui-text-dimmed) italic'">

@@ -4,6 +4,7 @@ export interface Preferences {
   taskOrderBy: 'created' | 'due';
   taskShowDone: boolean;
   diaryHideDone: boolean;
+  diaryTaskSort: 'manual' | 'created' | 'priority';
   navWorkspaceIds: string[];
 }
 
@@ -15,6 +16,7 @@ const defaults: Preferences = {
   taskOrderBy: 'created',
   taskShowDone: true,
   diaryHideDone: false,
+  diaryTaskSort: 'manual',
   navWorkspaceIds: [],
 };
 

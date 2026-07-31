@@ -5,7 +5,7 @@ A personal productivity app with tasks (+ subtasks), notes, diary, and a 5-day c
 
 ## User Requirements & Preferences
 - Mobile-first: primarily used in phone browser
-- **Dark theme** — purple accent, color-blind friendly, no light/dark toggle
+- **Single dim theme** — warm-neutral ink canvas with a muted sage accent, color-blind friendly, no light/dark toggle
 - **Four main sections**: Tasks, Notes, Diary, Calendar — linked via @-mentions
 - **Notebook groups**: diary entries with written content appear as date-titled diary notes, separately from ordinary notes; both groups are collapsible
 - **Diary navigation**: previous/next day buttons shift the seven-day selector and selected diary date, with exact dates deep-linkable through `?date=YYYY-MM-DD`
@@ -22,20 +22,59 @@ A personal productivity app with tasks (+ subtasks), notes, diary, and a 5-day c
 - **Database**: MotherDuck (cloud DuckDB) via `@duckdb/node-api`, local DuckDB fallback
 - **Pipelines**: Bruin CLI
 
+## Calm mobile redesign (2026-07)
+
+The UI is being refactored toward a quiet editorial utility: one clear primary
+action per screen, flatter list rows, a stable single-column hierarchy, and
+progressive disclosure for sort/group/bulk tools. The diary is the primary
+landing surface and keeps the date rail, journal editor, linked tasks, task
+conversion, workspace filtering, search, and week summary behavior intact.
+
+Research principles applied:
+
+- Apple HIG: purpose and simplicity first; use typography, spacing, and direct
+  language to establish hierarchy.
+- Nielsen Norman Group: remove irrelevant information, but do not hide core
+  affordances behind a “zen mode.”
+- Material 3: use a consistent responsive scaffold rather than bespoke card
+  compositions for each screen.
+- WCAG 2.2: keep text contrast legible and interactive targets comfortably
+  touchable on phone screens.
+
+The redesign is visual and interaction-level only. MotherDuck, the database
+schema, API routes, and data model are unchanged.
+
+Brand direction: the app shell now uses a system editorial serif stack so it
+feels closer to a personal journal while keeping monospace utility labels
+readable. The current Daybook favicon is the selected flat geometric
+pen/book/sun mark in `app/public/daybook-mark*.png`; the comparison set is
+collected in `/logo-options` and `app/public/logo-options-v4/`.
+
+Daybook task ordering uses the existing `tasks.position` field and update
+endpoint. The `Custom order` preference is stored in the existing browser
+preferences store; dragging writes the resulting positions without a migration.
+Because `position` belongs to the task rather than a diary/date relationship,
+the manual order is global wherever that task appears.
+
+On wide screens, Daybook keeps the journal/list presentation on phones and
+switches its open tasks to a priority kanban: Critical, Focus, Snack, and an
+Unsorted overflow column. Moving a card between columns updates the existing
+`tasks.priority` field and preserves the existing manual position ordering; no
+schema or backend endpoint changes are required.
+
 ## Color Palette (Single Dim Theme)
-| Element | Color | Zinc |
+| Element | Color | Role |
 |---------|-------|------|
-| Body | #18181b | zinc-900 |
-| Card | #27272a | zinc-800 |
-| Input/surface | #3f3f46 | zinc-700 |
-| Border (overlay) | #52525b | zinc-600 |
-| Checkbox border | #71717a | zinc-500 |
-| Text primary | #fafafa | zinc-50 |
-| Text muted | #a1a1aa | zinc-400 |
-| Text faint | #71717a | zinc-500 |
-| Tags | #3f3f46 bg + #d4d4d8 text | |
-| Accent | #2dd4bf / #0d9488 | teal-400/600 |
-| Danger | #b91c1c | red-700 |
+| Body | #171716 | warm graphite |
+| Surface | #20201e | warm graphite raised |
+| Raised surface | #282723 | warm stone |
+| Border | #38362f | warm stone line |
+| Text primary | #f1ede5 | warm ivory |
+| Text muted | #b9b4aa | warm gray |
+| Text faint | #989289 | accessible warm gray |
+| Accent | #9fb9aa / #c0d9c9 | muted sage |
+| Warm state | #d7b17a | muted amber |
+| Danger | #d48f82 | muted rose |
 
 ## Database Schema
 
@@ -49,8 +88,10 @@ All content tables include `user_id` and `user_name` columns for future multi-us
 - **event_log**: id, user_id, user_name, event_type, method, path, entity_type, entity_id, workspace_id, metadata, user_agent, created_at
 
 ## Navigation
-- **Bottom nav**: Tasks, Notes, Diary, Calendar (4 tabs) + global search
-- **Header**: Workspace switcher dropdown
+- **Bottom nav**: Today, Tasks, Notes, Settings (4 labeled tabs)
+- **Header**: Workspace switcher dropdown on list surfaces; Diary keeps a compact
+  workspace rail for one-thumb filtering
+- **Calendar**: reachable from the Tasks header and retains its 5-day view
 - Archive accessible from item detail views
 
 ## API Endpoints

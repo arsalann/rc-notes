@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-lg mx-auto">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
+  <div class="calm-page settings-page max-w-lg mx-auto">
+    <div class="calm-page-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
     </div>
 

@@ -1,6 +1,6 @@
 <template>
-  <div class="px-4">
-    <UCard :ui="{ body: 'p-0' }" :class="expanded && 'ring-(--ui-primary)'">
+  <div class="calm-quick-add">
+    <UCard class="calm-quick-add-card" :ui="{ body: 'p-0' }" :class="expanded && 'ring-(--ui-primary)'">
       <div class="flex items-center gap-2.5 px-4 py-3.5">
         <UIcon name="i-lucide-plus" class="size-5 text-(--ui-text-dimmed) shrink-0" />
         <input ref="titleRef" v-model="title" :placeholder="placeholder"
