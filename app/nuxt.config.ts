@@ -5,16 +5,17 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'rc-notes',
+      title: 'daybook',
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'theme-color', content: '#042f2e' },
+        { name: 'theme-color', content: '#171716' },
       ],
       link: [
         { rel: 'manifest', href: '/manifest.json' },
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/daybook-mark-32.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/daybook-mark-180.png' },
       ],
     },
     pageTransition: { name: 'page', mode: 'out-in' },

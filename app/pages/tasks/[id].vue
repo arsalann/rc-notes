@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-lg mx-auto min-h-screen">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg flex items-center justify-between px-4 py-3 safe-top">
+  <div class="calm-page task-detail-page max-w-lg mx-auto min-h-screen">
+    <div class="calm-page-header sticky top-0 z-30 flex items-center justify-between px-4 py-3 safe-top">
       <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" @click="goBack" />
       <div class="flex items-center gap-1">
         <UButton color="neutral" variant="ghost" :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'" @click="copyAsMarkdown" />
@@ -97,7 +97,7 @@
         class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[80px] placeholder:text-(--ui-text-dimmed)" />
 
       <!-- Due Date -->
-      <UCard>
+      <UCard class="calm-detail-surface">
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Due Date</p>
         <div class="flex items-center gap-2 flex-wrap">
           <UButton v-for="opt in dateShortcuts" :key="opt.label" :color="isDueMatch(opt.value) ? 'primary' : 'neutral'"
@@ -113,7 +113,7 @@
       </UCard>
 
       <!-- Tags -->
-      <UCard>
+      <UCard class="calm-detail-surface">
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Tags</p>
         <div class="flex items-center gap-2 flex-wrap">
           <UBadge v-for="(tag, i) in editTags" :key="i" color="neutral" variant="subtle" size="sm" class="gap-1.5 py-1">
@@ -133,7 +133,7 @@
             <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-external-link">Open</UButton>
           </NuxtLink>
         </div>
-        <UCard :ui="{ body: 'p-3' }">
+        <UCard class="calm-detail-surface" :ui="{ body: 'p-3' }">
           <p class="text-sm font-medium">{{ linkedNote.target_title }}</p>
           <div v-if="linkedNoteContent" class="mt-2 prose prose-invert prose-sm max-w-none text-(--ui-text-muted)
             prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted)

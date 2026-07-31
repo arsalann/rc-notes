@@ -1,17 +1,24 @@
 {
-  "name": "rc-notes",
-  "short_name": "Notes",
-  "description": "Personal notes app",
+  "name": "daybook",
+  "short_name": "daybook",
+  "description": "A quiet place for your day",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#042f2e",
-  "theme_color": "#042f2e",
+  "background_color": "#171716",
+  "theme_color": "#171716",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "/daybook-mark-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/daybook-mark-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

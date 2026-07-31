@@ -1,15 +1,12 @@
 <template>
-  <div class="max-w-lg mx-auto min-h-screen">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg px-4 pt-5 pb-3 safe-top">
+  <div class="calm-diary after-hours-diary max-w-lg lg:max-w-[90rem] mx-auto min-h-screen">
+    <div class="calm-diary-header after-hours-diary-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-2">
-        <h1 class="text-2xl font-bold tracking-tight">Diary</h1>
+        <span class="calm-brand-mark after-hours-diary-mark" aria-hidden="true">✦</span>
+        <h1 class="text-2xl font-bold tracking-tight">daybook</h1>
         <div class="ml-auto flex items-center gap-1.5">
           <UButton icon="i-lucide-search" color="neutral" variant="soft" size="md"
             aria-label="Search" :square="true" @click="toggleSearch" />
-          <UButton icon="i-lucide-circle-check" color="neutral" variant="soft" size="md"
-            aria-label="Tasks" to="/tasks" :square="true" />
-          <UButton icon="i-lucide-book-open" color="neutral" variant="soft" size="md"
-            aria-label="Notebook" to="/notes" :square="true" />
           <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
             aria-label="Jump to today" :square="true" @click="goToToday" />
           <UButton icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
@@ -18,7 +15,7 @@
       </div>
 
       <!-- Search row -->
-      <div v-if="searchOpen" class="relative mt-3">
+      <div v-if="searchOpen" class="after-hours-search-row relative mt-3">
         <input ref="searchInput" :value="searchQuery"
           @input="runSearch(($event.target as HTMLInputElement).value)"
           @keydown.escape="closeSearch"
@@ -52,12 +49,20 @@
       </div>
     </div>
 
+    <div class="calm-workspace-strip after-hours-workspace-strip no-scrollbar" aria-label="Workspace filter">
+      <button type="button" :class="{ active: activeId === null }" :aria-pressed="activeId === null" @click="selectWorkspace(null)">All</button>
+      <button v-for="workspace in workspaces" :key="workspace.id" type="button"
+        :class="{ active: activeId === workspace.id }" :aria-pressed="activeId === workspace.id" @click="selectWorkspace(workspace.id)">
+        <span>{{ workspace.emoji }}</span>{{ workspace.name }}
+      </button>
+    </div>
+
     <!-- Day selector -->
-    <div class="flex items-center gap-1.5 px-2 mt-2 py-2">
+    <div class="calm-day-rail after-hours-day-selector flex items-center gap-1.5 px-2 mt-2 py-2">
       <UButton icon="i-lucide-chevron-left" color="neutral" variant="soft" size="sm"
         aria-label="Previous day" :square="true" class="touch-target shrink-0" @click="shiftDay(-1)" />
       <div class="flex-1 min-w-0 flex gap-1.5 no-scrollbar overflow-x-auto scroll-hint">
-        <button v-for="day in days" :key="day.date" @click="selectDay(day.date)"
+        <button v-for="day in days" :key="day.date" :aria-current="selectedDate === day.date ? 'date' : undefined" @click="selectDay(day.date)"
           class="flex flex-col items-center flex-1 min-w-[2.75rem] px-1.5 py-2 rounded-xl transition-all duration-200 active:scale-95"
           :class="selectedDate === day.date
             ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
@@ -76,7 +81,7 @@
     </div>
 
     <!-- Day label + edit toggle -->
-    <div class="px-4 mt-5 flex items-center justify-between">
+    <div class="calm-diary-toolbar after-hours-day-toolbar px-4 mt-5 flex items-center justify-between">
       <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">{{ selectedDayLabel }}</p>
       <div class="flex items-center gap-1">
         <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
@@ -93,42 +98,29 @@
     </div>
 
     <!-- Task sort/group toolbar -->
-    <div class="flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
-      <span class="text-[10px] uppercase font-semibold tracking-wide text-(--ui-text-dimmed) shrink-0 mr-1">Sort</span>
-      <UButton :color="taskSort === 'created' ? 'primary' : 'neutral'" :variant="taskSort === 'created' ? 'soft' : 'outline'" size="xs"
-        icon="i-lucide-clock" @click="taskSort = 'created'" class="shrink-0">
-        Newest
-      </UButton>
-      <UButton :color="taskSort === 'priority' ? 'primary' : 'neutral'" :variant="taskSort === 'priority' ? 'soft' : 'outline'" size="xs"
-        icon="i-lucide-flame" @click="taskSort = 'priority'" class="shrink-0">
-        Priority
-      </UButton>
-      <USeparator orientation="vertical" class="h-4 shrink-0" />
-      <span class="text-[10px] uppercase font-semibold tracking-wide text-(--ui-text-dimmed) shrink-0 mr-1">Group</span>
-      <UButton :color="taskGroup === 'created' ? 'primary' : 'neutral'" :variant="taskGroup === 'created' ? 'soft' : 'outline'" size="xs"
-        icon="i-lucide-calendar-days" @click="taskGroup = taskGroup === 'created' ? 'none' : 'created'" class="shrink-0">
-        Created
-      </UButton>
-      <UButton :color="taskGroup === 'priority' ? 'primary' : 'neutral'" :variant="taskGroup === 'priority' ? 'soft' : 'outline'" size="xs"
-        icon="i-lucide-flame" @click="taskGroup = taskGroup === 'priority' ? 'none' : 'priority'" class="shrink-0">
-        Priority
-      </UButton>
+    <div class="calm-diary-sort after-hours-sort-toolbar flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
+      <UDropdownMenu :items="diaryViewMenuItems" :ui="{ content: 'min-w-48' }">
+        <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-sliders-horizontal"
+          trailing-icon="i-lucide-chevron-down" class="shrink-0">
+          View
+        </UButton>
+      </UDropdownMenu>
     </div>
 
     <!-- Quick add task -->
-    <div v-if="showAddTask" class="mt-3 -mx-0">
+    <div v-if="showAddTask" class="calm-diary-quick-add after-hours-quick-add mt-3 -mx-0">
       <QuickAdd placeholder="Add a task for this day..." default-status="now" @add="handleAddTask" />
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="px-4 mt-4">
+    <div v-if="loading" class="after-hours-loading px-4 mt-4">
       <USkeleton class="h-40 w-full" />
     </div>
 
-    <div v-else class="px-4 mt-3 pb-8 space-y-6">
+    <div v-else class="calm-diary-content after-hours-diary-content px-4 mt-3 pb-8 space-y-6">
       <!-- Notes section -->
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Notes</p>
+      <div class="calm-diary-note after-hours-note-card">
+        <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider mb-2">Journal</p>
 
         <!-- Edit mode -->
         <div v-if="editMode" class="relative">
@@ -139,7 +131,7 @@
             </div>
           </Transition>
           <textarea v-model="editContent" @input="handleContentInput" @blur="saveContent" @keydown.escape="mentionOpen = false" ref="contentRef"
-            class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[160px] placeholder:text-(--ui-text-dimmed) font-mono"
+            class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[160px] placeholder:text-(--ui-text-dimmed)"
             placeholder="Write about your day... Type @ to link a task or note" />
           <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
             leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
@@ -169,10 +161,68 @@
       </div>
 
       <!-- Tasks section -->
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Tasks</p>
+      <div class="calm-diary-tasks after-hours-tasks-card">
+        <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider mb-2">Tasks</p>
+
+        <!-- Desktop priority board -->
+        <div class="daybook-desktop-task-view">
+          <div class="daybook-kanban-grid">
+            <section v-for="column in desktopBoardColumns" v-show="column.value !== 0 || column.tasks.length" :key="column.key" class="daybook-kanban-column">
+              <header class="daybook-kanban-column-header">
+                <div class="flex items-center gap-2 min-w-0">
+                  <UIcon :name="column.icon" class="size-4 shrink-0" :class="column.textClass" />
+                  <h2 class="text-sm font-semibold truncate" :class="column.textClass">{{ column.label }}</h2>
+                </div>
+                <span class="daybook-kanban-count">{{ column.tasks.length }}</span>
+              </header>
+
+              <draggable
+                :list="column.tasks"
+                :group="{ name: 'daybook-priority', pull: true, put: true }"
+                item-key="id"
+                :animation="180"
+                :disabled="reorderSaving"
+                ghost-class="daybook-kanban-ghost"
+                drag-class="daybook-kanban-drag"
+                class="daybook-kanban-column-list"
+                @change="(event: any) => handleDesktopBoardChange(event, column.value)">
+                <template #item="{ element }">
+                  <div class="daybook-kanban-card">
+                    <InlineTask :task-id="element.id"
+                      :initial-data="element"
+                      :hide-done-subtasks="hideDone"
+                      variant="after-hours"
+                      @update:completed="onTaskStatus" />
+                  </div>
+                </template>
+              </draggable>
+              <p v-if="!column.tasks.length" class="daybook-kanban-empty">Drop tasks here</p>
+            </section>
+          </div>
+          <p v-if="!desktopBoardTaskCount" class="text-sm text-(--ui-text-dimmed) italic mt-4">
+            {{ allTaskIds.length ? 'All tasks done for this day.' : 'No tasks for this day. Tap + Task to add one.' }}
+          </p>
+
+          <div v-if="doneTaskIds.length && !hideDone" class="daybook-desktop-done calm-diary-done after-hours-done-card">
+            <button @click="doneOpen = !doneOpen"
+              class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
+              <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
+              <span>Done</span>
+              <span class="text-(--ui-text-dimmed) font-mono normal-case">({{ doneTaskIds.length }})</span>
+            </button>
+            <div v-if="doneOpen" class="space-y-1.5">
+              <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
+                :initial-data="taskCache[id]"
+                variant="after-hours"
+                @update:completed="onTaskStatus" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Daybook list -->
+        <div class="daybook-mobile-task-view">
         <template v-if="pendingGroups.length">
-          <div v-for="group in pendingGroups" :key="group.key" class="mb-4 last:mb-0">
+          <div v-for="group in pendingGroups" :key="group.key" class="after-hours-task-group mb-4 last:mb-0">
             <button v-if="taskGroup !== 'none'" type="button"
               class="w-full flex items-center text-[11px] font-semibold uppercase tracking-wider mb-1.5 py-1"
               :class="group.labelClass || 'text-(--ui-text-dimmed)'"
@@ -182,20 +232,48 @@
               {{ group.label }}
               <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ group.ids.length }})</span>
             </button>
-            <div v-if="!isGroupCollapsed(group.key)" class="space-y-1.5">
-              <InlineTask v-for="id in group.ids" :key="id" :task-id="id"
-                :initial-data="taskCache[id]"
-                :hide-done-subtasks="hideDone"
-                @update:completed="onTaskStatus" />
+            <div v-if="!isGroupCollapsed(group.key)" class="after-hours-task-group-list space-y-1.5">
+              <draggable
+                v-if="taskSort === 'manual' && taskGroup === 'none'"
+                :list="manualPendingTaskIds"
+                item-key="id"
+                handle=".daybook-drag-handle"
+                :animation="180"
+                :disabled="reorderSaving"
+                ghost-class="daybook-drag-ghost"
+                class="space-y-1.5"
+                @change="handleDiaryReorder">
+                <template #item="{ element }">
+                  <div class="daybook-drag-row">
+                    <button type="button" class="daybook-drag-handle" aria-label="Drag task to reorder">
+                      <UIcon name="i-lucide-grip-vertical" class="size-4" />
+                    </button>
+                    <div class="min-w-0 flex-1">
+                      <InlineTask :task-id="element"
+                        :initial-data="taskCache[element]"
+                        :hide-done-subtasks="hideDone"
+                        variant="after-hours"
+                        @update:completed="onTaskStatus" />
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+              <template v-else>
+                <InlineTask v-for="id in group.ids" :key="id" :task-id="id"
+                  :initial-data="taskCache[id]"
+                  :hide-done-subtasks="hideDone"
+                  variant="after-hours"
+                  @update:completed="onTaskStatus" />
+              </template>
             </div>
           </div>
         </template>
         <p v-else-if="!allTaskIds.length" class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
         <p v-else class="text-sm text-(--ui-text-dimmed) italic">All tasks done for this day.</p>
-      </div>
+        </div>
 
       <!-- Done section (collapsed by default) -->
-      <div v-if="doneTaskIds.length && !hideDone">
+      <div v-if="doneTaskIds.length && !hideDone" class="calm-diary-done after-hours-done-card">
         <button @click="doneOpen = !doneOpen"
           class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
           <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -203,17 +281,45 @@
           <span class="text-(--ui-text-dimmed) font-mono normal-case">({{ doneTaskIds.length }})</span>
         </button>
         <div v-if="doneOpen" class="space-y-1.5">
-          <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
-            :initial-data="taskCache[id]"
-            @update:completed="onTaskStatus" />
+          <draggable
+            v-if="taskSort === 'manual'"
+            :list="manualDoneTaskIds"
+            item-key="id"
+            handle=".daybook-drag-handle"
+            :animation="180"
+            :disabled="reorderSaving"
+            ghost-class="daybook-drag-ghost"
+            class="space-y-1.5"
+            @change="handleDiaryReorder">
+            <template #item="{ element }">
+              <div class="daybook-drag-row">
+                <button type="button" class="daybook-drag-handle" aria-label="Drag task to reorder">
+                  <UIcon name="i-lucide-grip-vertical" class="size-4" />
+                </button>
+                <div class="min-w-0 flex-1">
+                  <InlineTask :task-id="element"
+                    :initial-data="taskCache[element]"
+                    variant="after-hours"
+                    @update:completed="onTaskStatus" />
+                </div>
+              </div>
+            </template>
+          </draggable>
+          <template v-else>
+            <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
+              :initial-data="taskCache[id]"
+              variant="after-hours"
+              @update:completed="onTaskStatus" />
+          </template>
         </div>
       </div>
-    </div>
+        </div>
+      </div>
 
     <!-- Week summary modal -->
     <UModal v-model:open="weekSummaryOpen" :ui="{ content: 'max-w-lg' }">
       <template #content>
-        <div class="surface-card rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        <div class="after-hours-modal surface-card rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
           <div class="flex items-center justify-between px-4 py-3 border-b border-(--ui-border)">
             <div>
               <p class="text-[11px] uppercase font-semibold tracking-wider text-(--ui-text-dimmed)">Week summary</p>
@@ -310,6 +416,7 @@
 
 <script setup lang="ts">
 import { marked } from 'marked';
+import draggable from 'vuedraggable';
 import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/composables/useChecklist';
 import { parseHashtags } from '~/composables/useHashtagParse';
 import { todayLocal, localDateOffset, parseUTC } from '~/composables/useDate';
@@ -324,8 +431,8 @@ interface DiaryEntry {
   links?: any[];
 }
 
-const { activeId } = useWorkspace();
-const { createTask } = useTasks();
+const { activeId, workspaces, setActive } = useWorkspace();
+const { createTask, updateTask } = useTasks();
 const route = useRoute();
 const router = useRouter();
 
@@ -397,8 +504,36 @@ function toggleHideDone() {
 watch(() => prefs.value.diaryHideDone, v => { hideDone.value = v; });
 const taskCompleted = ref<Record<string, boolean>>({});
 const taskCache = ref<Record<string, Task & { subtasks?: Task[] }>>({});
-const taskSort = ref<'created' | 'priority'>('priority');
-const taskGroup = ref<'none' | 'created' | 'priority'>('priority');
+type DiaryTaskSort = 'manual' | 'created' | 'priority';
+const taskSort = ref<DiaryTaskSort>(prefs.value.diaryTaskSort);
+const taskGroup = ref<'none' | 'created' | 'priority'>('none');
+const manualPendingTaskIds = ref<string[]>([]);
+const manualDoneTaskIds = ref<string[]>([]);
+const manualListsReady = ref(false);
+const reorderSaving = ref(false);
+
+watch(() => prefs.value.diaryTaskSort, value => {
+  if (value) taskSort.value = value;
+});
+
+function setTaskSort(value: DiaryTaskSort) {
+  taskSort.value = value;
+  setPref('diaryTaskSort', value);
+  if (value === 'manual') taskGroup.value = 'none';
+}
+
+const diaryViewMenuItems = computed(() => [
+  [
+    { label: 'Custom order', icon: taskSort.value === 'manual' ? 'i-lucide-check' : 'i-lucide-grip-vertical', onSelect: () => setTaskSort('manual') },
+    { label: 'Newest first', icon: taskSort.value === 'created' ? 'i-lucide-check' : 'i-lucide-clock', onSelect: () => setTaskSort('created') },
+    { label: 'Priority first', icon: taskSort.value === 'priority' ? 'i-lucide-check' : 'i-lucide-flag', onSelect: () => setTaskSort('priority') },
+  ],
+  [
+    { label: 'No grouping', icon: taskGroup.value === 'none' ? 'i-lucide-check' : 'i-lucide-list', onSelect: () => { taskGroup.value = 'none'; } },
+    { label: 'By created date', icon: taskGroup.value === 'created' ? 'i-lucide-check' : 'i-lucide-calendar-days', onSelect: () => { taskGroup.value = 'created'; } },
+    { label: 'By priority', icon: taskGroup.value === 'priority' ? 'i-lucide-check' : 'i-lucide-flag', onSelect: () => { taskGroup.value = 'priority'; } },
+  ],
+]);
 const collapsedGroups = ref<Set<string>>(new Set());
 function isGroupCollapsed(key: string) {
   return collapsedGroups.value.has(key);
@@ -510,6 +645,8 @@ const allTaskIds = computed(() => {
 const pendingTaskIds = computed(() => allTaskIds.value.filter(id => !taskCompleted.value[id]));
 const doneTaskIds = computed(() => allTaskIds.value.filter(id => taskCompleted.value[id]));
 
+const allTaskMetadataLoaded = computed(() => allTaskIds.value.every(id => !!taskCache.value[id]));
+
 // Fetch task metadata for sorting/grouping (dedupes + parallelizes)
 watch(allTaskIds, async (ids) => {
   const missing = ids.filter(id => !taskCache.value[id]);
@@ -522,9 +659,50 @@ watch(allTaskIds, async (ids) => {
   taskCache.value = next;
 }, { immediate: true });
 
+function sortByPosition(ids: string[]): string[] {
+  const cache = taskCache.value;
+  return [...ids].sort((a, b) => {
+    const pa = cache[a]?.position ?? Number.MAX_SAFE_INTEGER;
+    const pb = cache[b]?.position ?? Number.MAX_SAFE_INTEGER;
+    if (pa !== pb) return pa - pb;
+    const ta = cache[a]?.created_at ? parseUTC(cache[a]!.created_at).getTime() : 0;
+    const tb = cache[b]?.created_at ? parseUTC(cache[b]!.created_at).getTime() : 0;
+    if (ta !== tb) return ta - tb;
+    return a.localeCompare(b);
+  });
+}
+
+function preserveExistingOrder(current: string[], next: string[]): string[] {
+  const allowed = new Set(next);
+  const retained = current.filter(id => allowed.has(id));
+  const appended = next.filter(id => !retained.includes(id));
+  return [...retained, ...appended];
+}
+
+function syncManualTaskLists() {
+  const nextPending = sortByPosition(pendingTaskIds.value);
+  const nextDone = sortByPosition(doneTaskIds.value);
+  if (!manualListsReady.value) {
+    if (!allTaskMetadataLoaded.value) {
+      manualPendingTaskIds.value = [...pendingTaskIds.value];
+      manualDoneTaskIds.value = [...doneTaskIds.value];
+      return;
+    }
+    manualPendingTaskIds.value = nextPending;
+    manualDoneTaskIds.value = nextDone;
+    manualListsReady.value = true;
+    return;
+  }
+  manualPendingTaskIds.value = preserveExistingOrder(manualPendingTaskIds.value, nextPending);
+  manualDoneTaskIds.value = preserveExistingOrder(manualDoneTaskIds.value, nextDone);
+}
+
+watch([pendingTaskIds, doneTaskIds, allTaskMetadataLoaded], syncManualTaskLists, { immediate: true });
+
 function sortIds(ids: string[]): string[] {
   const cache = taskCache.value;
   const arr = [...ids];
+  if (taskSort.value === 'manual') return sortByPosition(arr);
   if (taskSort.value === 'priority') {
     arr.sort((a, b) => {
       const pa = cache[a]?.priority ?? 0;
@@ -546,6 +724,117 @@ function sortIds(ids: string[]): string[] {
 
 const sortedPendingTaskIds = computed(() => sortIds(pendingTaskIds.value));
 const sortedDoneTaskIds = computed(() => sortIds(doneTaskIds.value));
+
+interface DesktopBoardColumn {
+  key: string;
+  value: number;
+  label: string;
+  icon: string;
+  textClass: string;
+  tasks: (Task & { subtasks?: Task[] })[];
+}
+
+const desktopBoardColumnMeta: Omit<DesktopBoardColumn, 'tasks'>[] = [
+  ...PRIORITY_OPTIONS.map(option => ({
+    key: `p${option.value}`,
+    value: option.value,
+    label: option.label,
+    icon: option.icon,
+    textClass: option.textClass,
+  })),
+  {
+    key: 'p0',
+    value: 0,
+    label: 'Unsorted',
+    icon: 'i-lucide-minus',
+    textClass: 'text-(--ui-text-dimmed)',
+  },
+];
+
+const desktopBoardColumns = ref<DesktopBoardColumn[]>([]);
+const desktopBoardTaskSetKey = computed(() =>
+  pendingTaskIds.value.filter(id => !!taskCache.value[id]).sort().join('|')
+);
+const desktopBoardTaskCount = computed(() =>
+  desktopBoardColumns.value.reduce((count, column) => count + column.tasks.length, 0)
+);
+
+function buildDesktopBoardColumns() {
+  const knownIds = pendingTaskIds.value.filter(id => !!taskCache.value[id]);
+  const known = new Set(knownIds);
+  const preferredOrder = manualPendingTaskIds.value.filter(id => known.has(id));
+  const fallbackOrder = desktopBoardColumns.value.flatMap(column => column.tasks.map(task => task.id));
+  const order = preserveExistingOrder(
+    preferredOrder.length ? preferredOrder : fallbackOrder,
+    sortByPosition(knownIds),
+  );
+  const columns = desktopBoardColumnMeta.map(column => ({ ...column, tasks: [] as (Task & { subtasks?: Task[] })[] }));
+
+  for (const id of order) {
+    const task = taskCache.value[id];
+    if (!task) continue;
+    const column = columns.find(item => item.value === (task.priority || 0)) || columns.at(-1)!;
+    column.tasks.push(task);
+  }
+
+  desktopBoardColumns.value = columns;
+}
+
+watch([desktopBoardTaskSetKey, allTaskMetadataLoaded, selectedDate], buildDesktopBoardColumns, { immediate: true });
+
+async function handleDiaryReorder() {
+  const order = [...manualPendingTaskIds.value, ...manualDoneTaskIds.value];
+  if (!order.length || reorderSaving.value) return;
+
+  const nextCache = { ...taskCache.value };
+  order.forEach((id, index) => {
+    if (nextCache[id]) nextCache[id] = { ...nextCache[id], position: index };
+  });
+  taskCache.value = nextCache;
+  manualListsReady.value = true;
+  reorderSaving.value = true;
+  try {
+    await Promise.all(order.map((id, position) => updateTask(id, { position } as any)));
+  } finally {
+    reorderSaving.value = false;
+  }
+  buildDesktopBoardColumns();
+}
+
+async function handleDesktopBoardChange(event: any, targetPriority: number) {
+  if (!event.added && !event.moved) return;
+
+  const patches = new Map<string, Partial<Task>>();
+  if (event.added) {
+    const task = event.added.element as Task & { subtasks?: Task[] };
+    if (task.priority !== targetPriority) {
+      task.priority = targetPriority;
+      patches.set(task.id, { priority: targetPriority });
+    }
+  }
+
+  const pendingOrder = desktopBoardColumns.value.flatMap(column => column.tasks.map(task => task.id));
+  const doneOrder = manualDoneTaskIds.value.filter(id => !!taskCache.value[id]);
+  const order = [...pendingOrder, ...doneOrder];
+  manualPendingTaskIds.value = pendingOrder;
+  manualDoneTaskIds.value = doneOrder;
+  manualListsReady.value = true;
+
+  const nextCache = { ...taskCache.value };
+  order.forEach((id, position) => {
+    if (!nextCache[id]) return;
+    nextCache[id] = { ...nextCache[id], position };
+    patches.set(id, { ...(patches.get(id) || {}), position });
+  });
+  taskCache.value = nextCache;
+
+  reorderSaving.value = true;
+  try {
+    await Promise.all([...patches.entries()].map(([id, patch]) => updateTask(id, patch as any)));
+  } finally {
+    reorderSaving.value = false;
+  }
+}
 
 interface TaskGroup { key: string; label: string; ids: string[]; icon?: string; labelClass?: string; }
 
@@ -755,7 +1044,17 @@ async function fetchEntry() {
   const requestedDate = selectedDate.value;
   const requestedWorkspaceId = activeId.value;
   loading.value = true;
+  entry.value = null;
+  editContent.value = '';
   carriedTasks.value = [];
+  taskCompleted.value = {};
+  taskCache.value = {};
+  manualPendingTaskIds.value = [];
+  manualDoneTaskIds.value = [];
+  manualListsReady.value = false;
+  desktopBoardColumns.value = [];
+  doneOpen.value = false;
+  collapsedGroups.value = new Set();
   try {
     const q: Record<string, string> = {};
     if (requestedWorkspaceId) q.workspace_id = requestedWorkspaceId;
@@ -783,6 +1082,11 @@ async function fetchEntry() {
   } finally {
     if (requestId === entryRequestId) loading.value = false;
   }
+}
+
+function selectWorkspace(workspaceId: string | null) {
+  if (activeId.value === workspaceId) return;
+  setActive(workspaceId);
 }
 
 // Track which dates have content (batch endpoint)

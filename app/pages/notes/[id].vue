@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-lg mx-auto min-h-screen">
-    <div class="sticky top-0 z-30 bg-(--ui-bg)/80 backdrop-blur-lg flex items-center justify-between px-4 py-3 safe-top">
+  <div class="calm-page note-detail-page max-w-lg mx-auto min-h-screen">
+    <div class="calm-page-header sticky top-0 z-30 flex items-center justify-between px-4 py-3 safe-top">
       <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" @click="navigateTo('/notes')" />
       <div class="flex items-center gap-1">
         <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-90" enter-to-class="opacity-100 scale-100"
@@ -30,7 +30,7 @@
       <!-- Edit mode: raw textarea -->
       <div v-if="editMode" class="relative mt-4">
         <textarea v-model="editContent" @input="handleContentInput" @blur="saveField('content', editContent)" @keydown.escape="mentionOpen = false" ref="contentRef"
-          class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[200px] placeholder:text-(--ui-text-dimmed) font-mono"
+          class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[200px] placeholder:text-(--ui-text-dimmed)"
           placeholder="Write in markdown... Type @ to link a task or note" />
         <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
           leave-active-class="transition ease-in duration-100" leave-from-class="opacity-100" leave-to-class="opacity-0 -translate-y-1">
