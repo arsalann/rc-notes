@@ -254,6 +254,15 @@
             </div>
             <USwitch :model-value="prefs.taskShowDone" @update:model-value="set('taskShowDone', $event)" />
           </div>
+
+          <!-- Focus mode -->
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Remember Focus Mode</p>
+              <p class="text-xs text-(--ui-text-muted) mt-0.5">Open the diary as a quieter single-page view</p>
+            </div>
+            <USwitch :model-value="prefs.diaryFocusMode" @update:model-value="set('diaryFocusMode', $event)" />
+          </div>
         </div>
       </UCard>
 

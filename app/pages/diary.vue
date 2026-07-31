@@ -1,16 +1,18 @@
 <template>
-  <div class="calm-diary after-hours-diary max-w-lg lg:max-w-[90rem] mx-auto min-h-screen">
+  <div class="calm-diary after-hours-diary max-w-lg lg:max-w-[90rem] mx-auto min-h-screen" :class="{ 'is-focus-mode': focusMode }">
     <div class="calm-diary-header after-hours-diary-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-2">
         <span class="calm-brand-mark after-hours-diary-mark" aria-hidden="true">✦</span>
         <h1 class="text-2xl font-bold tracking-tight">daybook</h1>
         <div class="ml-auto flex items-center gap-1.5">
-          <UButton icon="i-lucide-search" color="neutral" variant="soft" size="md"
+          <UButton v-if="!focusMode" icon="i-lucide-search" color="neutral" variant="soft" size="md"
             aria-label="Search" :square="true" @click="toggleSearch" />
-          <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
+          <UButton v-if="!focusMode && selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
             aria-label="Jump to today" :square="true" @click="goToToday" />
-          <UButton icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
+          <UButton v-if="!focusMode" icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
             aria-label="Week summary" :square="true" @click="openWeekSummary" />
+          <UButton :icon="focusMode ? 'i-lucide-focus' : 'i-lucide-sparkles'" color="neutral" :variant="focusMode ? 'soft' : 'ghost'" size="md"
+            :aria-label="focusMode ? 'Exit focus mode' : 'Enter focus mode'" :aria-pressed="focusMode" :square="true" @click="toggleFocusMode" />
         </div>
       </div>
 
@@ -49,12 +51,19 @@
       </div>
     </div>
 
-    <div class="calm-workspace-strip after-hours-workspace-strip no-scrollbar" aria-label="Workspace filter">
+    <div v-if="!focusMode" class="calm-workspace-strip after-hours-workspace-strip no-scrollbar" aria-label="Workspace filter">
       <button type="button" :class="{ active: activeId === null }" :aria-pressed="activeId === null" @click="selectWorkspace(null)">All</button>
       <button v-for="workspace in workspaces" :key="workspace.id" type="button"
         :class="{ active: activeId === workspace.id }" :aria-pressed="activeId === workspace.id" @click="selectWorkspace(workspace.id)">
         <span>{{ workspace.emoji }}</span>{{ workspace.name }}
       </button>
+    </div>
+    <div v-else class="daybook-focus-context" aria-label="Focus context">
+      <span class="daybook-focus-context-dot" aria-hidden="true" />
+      <span>Focus page</span>
+      <span class="daybook-focus-context-divider" aria-hidden="true">/</span>
+      <strong>{{ activeWorkspaceLabel }}</strong>
+      <button type="button" @click="toggleFocusMode">Exit focus</button>
     </div>
 
     <!-- Day selector -->
@@ -87,18 +96,17 @@
         <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
           Task
         </UButton>
-        <UButton :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
+        <UButton v-if="!focusMode" :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
           :icon="hideDone ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="hideDone ? 'Show done' : 'Hide done'"
           @click="toggleHideDone" />
-        <UButton :color="editMode ? 'primary' : 'neutral'" :variant="editMode ? 'soft' : 'ghost'" size="sm"
-          :icon="editMode ? 'i-lucide-eye' : 'i-lucide-pencil'" :loading="creatingTasks" @click="toggleEditMode">
-          {{ editMode ? 'Preview' : 'Edit' }}
+        <UButton v-if="focusMode" color="primary" variant="soft" size="sm" icon="i-lucide-x" @click="toggleFocusMode">
+          Exit
         </UButton>
       </div>
     </div>
 
     <!-- Task sort/group toolbar -->
-    <div class="calm-diary-sort after-hours-sort-toolbar flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
+    <div v-if="!focusMode" class="calm-diary-sort after-hours-sort-toolbar flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
       <UDropdownMenu :items="diaryViewMenuItems" :ui="{ content: 'min-w-48' }">
         <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-sliders-horizontal"
           trailing-icon="i-lucide-chevron-down" class="shrink-0">
@@ -112,6 +120,23 @@
       <QuickAdd placeholder="Add a task for this day..." default-status="now" @add="handleAddTask" />
     </div>
 
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0 -translate-y-1"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition ease-in duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0 -translate-y-1">
+      <div v-if="carriedTasks.length && !focusMode" class="daybook-carry-banner mx-4 mt-4">
+        <div class="daybook-carry-icon" aria-hidden="true"><UIcon name="i-lucide-arrow-down-left" class="size-4" /></div>
+        <div class="min-w-0 flex-1">
+          <p class="daybook-carry-title">Carried forward</p>
+          <p class="daybook-carry-copy">{{ carriedTasks.length }} unfinished {{ carriedTasks.length === 1 ? 'thread' : 'threads' }} from your last page.</p>
+        </div>
+        <UButton color="neutral" variant="ghost" size="xs" @click="scrollToTaskSection">Review</UButton>
+      </div>
+    </Transition>
+
     <!-- Loading -->
     <div v-if="loading" class="after-hours-loading px-4 mt-4">
       <USkeleton class="h-40 w-full" />
@@ -120,7 +145,12 @@
     <div v-else class="calm-diary-content after-hours-diary-content px-4 mt-3 pb-8 space-y-6">
       <!-- Notes section -->
       <div class="calm-diary-note after-hours-note-card">
-        <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider mb-2">Journal</p>
+        <div class="daybook-journal-heading">
+          <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Journal</p>
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-copy" :square="true"
+            :loading="copyPreviousLoading" aria-label="Copy notes from previous day" title="Copy notes from previous day"
+            @click="copyPreviousDiary" />
+        </div>
 
         <!-- Edit mode -->
         <div v-if="editMode" class="relative">
@@ -130,7 +160,8 @@
               <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" /> Saving
             </div>
           </Transition>
-          <textarea v-model="editContent" @input="handleContentInput" @blur="saveContent" @keydown.escape="mentionOpen = false" ref="contentRef"
+          <textarea v-model="editContent" @input="handleContentInput" @focus="clearEditIdleTimer" @blur="handleEditorBlur"
+            @keydown.escape="handleEditorEscape" ref="contentRef"
             class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[160px] placeholder:text-(--ui-text-dimmed)"
             placeholder="Write about your day... Type @ to link a task or note" />
           <Transition enter-active-class="transition ease-out duration-150" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0"
@@ -147,7 +178,8 @@
         </div>
 
         <!-- Preview mode -->
-        <div v-else>
+        <div v-else class="daybook-journal-preview" role="button" tabindex="0" aria-label="Edit journal entry"
+          @click="enterEditMode" @keydown.enter.prevent="enterEditMode" @keydown.space.prevent="enterEditMode">
           <div v-if="notesHtml" class="prose prose-invert prose-sm max-w-none
             prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted) prose-p:leading-7
             prose-a:text-(--ui-primary) prose-strong:text-(--ui-text)
@@ -156,13 +188,29 @@
             prose-li:text-(--ui-text-muted) prose-blockquote:border-(--ui-border) prose-blockquote:text-(--ui-text-dimmed)
             prose-hr:border-(--ui-border)"
             v-html="notesHtml" />
-          <p v-else class="text-sm text-(--ui-text-dimmed) italic">No notes yet. Tap the pencil to write.</p>
+          <p v-else class="text-sm text-(--ui-text-dimmed) italic">No notes yet. Tap here to write.</p>
+          <p class="daybook-journal-hint">Tap to edit · pauses save automatically</p>
         </div>
       </div>
 
       <!-- Tasks section -->
-      <div class="calm-diary-tasks after-hours-tasks-card">
-        <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider mb-2">Tasks</p>
+      <div ref="tasksSectionRef" class="calm-diary-tasks after-hours-tasks-card">
+        <div class="daybook-task-heading">
+          <div>
+            <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Tasks</p>
+            <p class="daybook-task-count">{{ pendingTaskIds.length }} open <span aria-hidden="true">·</span> {{ doneTaskIds.length }} done</p>
+          </div>
+          <div class="daybook-task-progress" :aria-label="`${completionPercent}% complete`">
+            <span>{{ completionPercent }}%</span>
+            <div class="daybook-task-progress-track"><i :style="{ width: `${completionPercent}%` }" /></div>
+          </div>
+        </div>
+        <p v-if="reorderState !== 'idle'" class="daybook-reorder-status" :class="`is-${reorderState}`">
+          <UIcon v-if="reorderState === 'saving'" name="i-lucide-loader-2" class="size-3 animate-spin" />
+          <UIcon v-else-if="reorderState === 'saved'" name="i-lucide-check" class="size-3" />
+          <UIcon v-else name="i-lucide-alert-circle" class="size-3" />
+          {{ reorderState === 'saving' ? 'Saving order…' : reorderState === 'saved' ? 'Order saved' : 'Order could not be saved' }}
+        </p>
 
         <!-- Desktop priority board -->
         <div class="daybook-desktop-task-view">
@@ -203,7 +251,7 @@
             {{ allTaskIds.length ? 'All tasks done for this day.' : 'No tasks for this day. Tap + Task to add one.' }}
           </p>
 
-          <div v-if="doneTaskIds.length && !hideDone" class="daybook-desktop-done calm-diary-done after-hours-done-card">
+          <div v-if="doneTaskIds.length && !hideDone && !focusMode" class="daybook-desktop-done calm-diary-done after-hours-done-card">
             <button @click="doneOpen = !doneOpen"
               class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
               <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -273,7 +321,7 @@
         </div>
 
       <!-- Done section (collapsed by default) -->
-      <div v-if="doneTaskIds.length && !hideDone" class="calm-diary-done after-hours-done-card">
+      <div v-if="doneTaskIds.length && !hideDone && !focusMode" class="calm-diary-done after-hours-done-card">
         <button @click="doneOpen = !doneOpen"
           class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
           <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -411,6 +459,30 @@
         </div>
       </template>
     </UModal>
+
+    <!-- Previous-day copy confirmation -->
+    <UModal v-model:open="copyPreviousOpen" :ui="{ content: 'max-w-lg' }">
+      <template #content>
+        <div class="after-hours-modal surface-card rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-(--ui-border)">
+            <div>
+              <p class="text-[11px] uppercase font-semibold tracking-wider text-(--ui-text-dimmed)">Copy previous page</p>
+              <p class="text-sm font-semibold mt-0.5">{{ previousDiaryLabel }}</p>
+            </div>
+            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Close" @click="copyPreviousOpen = false" />
+          </div>
+          <div class="flex-1 overflow-y-auto px-4 py-4">
+            <p class="text-xs uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Preview</p>
+            <div class="daybook-copy-preview">{{ previousDiaryContent }}</div>
+          </div>
+          <div class="flex flex-col gap-2 px-4 py-3 border-t border-(--ui-border) sm:flex-row sm:justify-end">
+            <UButton color="neutral" variant="ghost" @click="copyPreviousOpen = false">Cancel</UButton>
+            <UButton color="neutral" variant="soft" icon="i-lucide-plus" @click="applyPreviousDiary('append')">Append to today</UButton>
+            <UButton color="primary" icon="i-lucide-copy" @click="applyPreviousDiary('replace')">Replace today</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
 
@@ -469,6 +541,15 @@ function runSearch(q: string) {
   }, 300);
 }
 const { prefs, set: setPref } = usePreferences();
+const toast = useToast();
+const focusMode = ref(prefs.value.diaryFocusMode);
+watch(() => prefs.value.diaryFocusMode, value => { focusMode.value = value; });
+
+function toggleFocusMode() {
+  focusMode.value = !focusMode.value;
+  setPref('diaryFocusMode', focusMode.value);
+  if (focusMode.value) closeSearch();
+}
 
 function routeDiaryDate(value: unknown): string | null {
   const candidate = Array.isArray(value) ? value[0] : value;
@@ -488,8 +569,13 @@ const editContent = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const editMode = ref(false);
+const copyPreviousOpen = ref(false);
+const copyPreviousLoading = ref(false);
+const previousDiaryDate = ref('');
+const previousDiaryContent = ref('');
 const carriedTasks = ref<{ id: string; title: string }[]>([]);
 const entryDates = ref<Set<string>>(new Set());
+const tasksSectionRef = ref<HTMLElement>();
 
 const mentionOpen = ref(false);
 const mentionResults = ref<any[]>([]);
@@ -511,6 +597,14 @@ const manualPendingTaskIds = ref<string[]>([]);
 const manualDoneTaskIds = ref<string[]>([]);
 const manualListsReady = ref(false);
 const reorderSaving = ref(false);
+const reorderState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+let reorderStateTimer: ReturnType<typeof setTimeout>;
+
+const activeWorkspaceLabel = computed(() => {
+  if (activeId.value === null) return 'All workspaces';
+  const workspace = workspaces.value.find(item => item.id === activeId.value);
+  return workspace ? `${workspace.emoji} ${workspace.name}` : 'Workspace';
+});
 
 watch(() => prefs.value.diaryTaskSort, value => {
   if (value) taskSort.value = value;
@@ -644,6 +738,10 @@ const allTaskIds = computed(() => {
 
 const pendingTaskIds = computed(() => allTaskIds.value.filter(id => !taskCompleted.value[id]));
 const doneTaskIds = computed(() => allTaskIds.value.filter(id => taskCompleted.value[id]));
+const completionPercent = computed(() => {
+  const total = pendingTaskIds.value.length + doneTaskIds.value.length;
+  return total ? Math.round((doneTaskIds.value.length / total) * 100) : 0;
+});
 
 const allTaskMetadataLoaded = computed(() => allTaskIds.value.every(id => !!taskCache.value[id]));
 
@@ -655,8 +753,14 @@ watch(allTaskIds, async (ids) => {
     missing.map(id => $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`).catch(() => null))
   );
   const next = { ...taskCache.value };
-  results.forEach((r, i) => { if (r) next[missing[i]] = r; });
+  const nextCompleted = { ...taskCompleted.value };
+  results.forEach((r, i) => {
+    if (!r) return;
+    next[missing[i]] = r;
+    nextCompleted[missing[i]] = !!r.completed;
+  });
   taskCache.value = next;
+  taskCompleted.value = nextCompleted;
 }, { immediate: true });
 
 function sortByPosition(ids: string[]): string[] {
@@ -793,8 +897,15 @@ async function handleDiaryReorder() {
   taskCache.value = nextCache;
   manualListsReady.value = true;
   reorderSaving.value = true;
+  reorderState.value = 'saving';
+  clearTimeout(reorderStateTimer);
   try {
     await Promise.all(order.map((id, position) => updateTask(id, { position } as any)));
+    reorderState.value = 'saved';
+    reorderStateTimer = setTimeout(() => { reorderState.value = 'idle'; }, 1800);
+  } catch {
+    reorderState.value = 'error';
+    toast.add({ title: 'Order could not be saved', description: 'Your list is still visible; try moving it again.', color: 'error' });
   } finally {
     reorderSaving.value = false;
   }
@@ -829,8 +940,15 @@ async function handleDesktopBoardChange(event: any, targetPriority: number) {
   taskCache.value = nextCache;
 
   reorderSaving.value = true;
+  reorderState.value = 'saving';
+  clearTimeout(reorderStateTimer);
   try {
     await Promise.all([...patches.entries()].map(([id, patch]) => updateTask(id, patch as any)));
+    reorderState.value = 'saved';
+    reorderStateTimer = setTimeout(() => { reorderState.value = 'idle'; }, 1800);
+  } catch {
+    reorderState.value = 'error';
+    toast.add({ title: 'Board change could not be saved', description: 'The task remains in the current column for now.', color: 'error' });
   } finally {
     reorderSaving.value = false;
   }
@@ -896,6 +1014,10 @@ const notesHtml = computed(() => {
   if (!cleaned) return '';
   return marked.parse(cleaned) as string;
 });
+
+function scrollToTaskSection() {
+  tasksSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 async function selectDay(date: string) {
   selectedDate.value = date;
@@ -1122,6 +1244,40 @@ watch(() => route.query.date, async (value) => {
 
 // Autosave
 let saveTimer: ReturnType<typeof setTimeout>;
+let editIdleTimer: ReturnType<typeof setTimeout>;
+const editIdleDelay = 1400;
+
+const previousDiaryLabel = computed(() => {
+  if (!previousDiaryDate.value) return 'Yesterday';
+  return new Date(`${previousDiaryDate.value}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'short', day: 'numeric',
+  });
+});
+
+function clearEditIdleTimer() {
+  clearTimeout(editIdleTimer);
+}
+
+function scheduleEditIdleView(delay = editIdleDelay) {
+  clearEditIdleTimer();
+  if (!editMode.value) return;
+  editIdleTimer = setTimeout(() => {
+    if (mentionOpen.value) {
+      scheduleEditIdleView(500);
+      return;
+    }
+    void exitEditMode();
+  }, delay);
+}
+
+async function persistDiaryContent(date: string, content: string, workspaceId: string | null) {
+  await $fetch(`/api/diary/${date}`, {
+    method: 'PUT',
+    body: { content, workspace_id: workspaceId },
+  });
+  if (content.trim()) entryDates.value.add(date);
+}
+
 function saveContent() {
   if (!entry.value) return;
   clearTimeout(saveTimer);
@@ -1130,13 +1286,51 @@ function saveContent() {
   const contentToSave = editContent.value;
   const workspaceId = activeId.value;
   saveTimer = setTimeout(async () => {
-    await $fetch(`/api/diary/${dateToSave}`, {
-      method: 'PUT',
-      body: { content: contentToSave, workspace_id: workspaceId },
-    });
-    if (contentToSave.trim()) entryDates.value.add(dateToSave);
-    saving.value = false;
+    try {
+      await persistDiaryContent(dateToSave, contentToSave, workspaceId);
+    } catch {
+      toast.add({ title: 'Diary could not be saved', description: 'Your writing is still here; try again in a moment.', color: 'error' });
+    } finally {
+      saving.value = false;
+    }
   }, 300);
+}
+
+async function flushSaveContent() {
+  clearTimeout(saveTimer);
+  if (!entry.value) return;
+  saving.value = true;
+  try {
+    await persistDiaryContent(selectedDate.value, editContent.value, activeId.value);
+  } catch {
+    toast.add({ title: 'Diary could not be saved', description: 'Your writing is still here; try again in a moment.', color: 'error' });
+  } finally {
+    saving.value = false;
+  }
+}
+
+function enterEditMode() {
+  if (editMode.value) return;
+  editMode.value = true;
+  nextTick(() => {
+    const el = contentRef.value;
+    if (!el) return;
+    el.focus();
+    el.selectionStart = el.selectionEnd = el.value.length;
+  });
+}
+
+function handleEditorBlur() {
+  saveContent();
+  if (!mentionOpen.value) scheduleEditIdleView(350);
+}
+
+function handleEditorEscape() {
+  if (mentionOpen.value) {
+    mentionOpen.value = false;
+    return;
+  }
+  void exitEditMode();
 }
 
 // Debounced mention search
@@ -1153,60 +1347,101 @@ function handleContentInput() {
   if (at >= 0 && (at === 0 || text[at - 1] === ' ' || text[at - 1] === '\n')) {
     const q = text.substring(at + 1);
     if (q.length > 0 && !q.includes(' ') && !q.includes('\n')) {
-      mentionOpen.value = true; debouncedSearchMentions(q); return;
+      mentionOpen.value = true; debouncedSearchMentions(q); scheduleEditIdleView(); return;
     }
   }
   mentionOpen.value = false;
+  scheduleEditIdleView();
 }
 
-async function toggleEditMode() {
-  if (editMode.value && hasChecklist(editContent.value) && entry.value) {
-    // Switching to view mode — auto-convert checklists to tasks
-    creatingTasks.value = true;
-    try {
-      const items = parseChecklist(editContent.value);
-      if (items.length) {
-        // Apply hashtag parsing recursively to every checklist item
-        const applyParse = (it: any): any => {
-          const p = parseHashtags(it.title);
-          return {
-            title: p.title,
-            checked: it.checked,
-            tags: p.tags,
-            priority: p.priority,
-            status: p.status,
-            due_at: p.due_at ? new Date(p.due_at).toISOString() : undefined,
-            children: (it.children || []).map(applyParse),
-          };
+async function convertChecklistToTasks() {
+  if (!hasChecklist(editContent.value) || !entry.value) return;
+  // Leaving the editor still converts checklist lines into linked tasks.
+  creatingTasks.value = true;
+  try {
+    const items = parseChecklist(editContent.value);
+    if (items.length) {
+      // Apply hashtag parsing recursively to every checklist item
+      const applyParse = (it: any): any => {
+        const p = parseHashtags(it.title);
+        return {
+          title: p.title,
+          checked: it.checked,
+          tags: p.tags,
+          priority: p.priority,
+          status: p.status,
+          due_at: p.due_at ? new Date(p.due_at).toISOString() : undefined,
+          children: (it.children || []).map(applyParse),
         };
-        const parsedItems = items.map(applyParse);
+      };
+      const parsedItems = items.map(applyParse);
 
-        await $fetch<any[]>('/api/tasks/from-checklist', {
-          method: 'POST',
-          body: {
-            items: parsedItems,
-            source_type: 'diary',
-            source_id: entry.value.id,
-            workspace_id: activeId.value,
-            due_date: selectedDate.value,
-          },
-        });
+      await $fetch<any[]>('/api/tasks/from-checklist', {
+        method: 'POST',
+        body: {
+          items: parsedItems,
+          source_type: 'diary',
+          source_id: entry.value.id,
+          workspace_id: activeId.value,
+          due_date: selectedDate.value,
+        },
+      });
 
-        const rootPairs = items.map((orig, idx) => ({ original: orig.title.trim(), clean: parsedItems[idx].title }));
-        editContent.value = replaceChecklistWithMentions(editContent.value, rootPairs);
-        saveContent();
+      const rootPairs = items.map((orig, idx) => ({ original: orig.title.trim(), clean: parsedItems[idx].title }));
+      editContent.value = replaceChecklistWithMentions(editContent.value, rootPairs);
 
-        // Reload entry to get updated links
-        const q: Record<string, string> = {};
-        if (activeId.value) q.workspace_id = activeId.value;
-        const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
-        if (full) entry.value = full;
-      }
-    } finally {
-      creatingTasks.value = false;
+      // Reload entry to get updated links
+      const q: Record<string, string> = {};
+      if (activeId.value) q.workspace_id = activeId.value;
+      const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
+      if (full) entry.value = full;
     }
+  } finally {
+    creatingTasks.value = false;
   }
-  editMode.value = !editMode.value;
+}
+
+async function exitEditMode() {
+  if (!editMode.value) return;
+  clearEditIdleTimer();
+  mentionOpen.value = false;
+  await convertChecklistToTasks();
+  await flushSaveContent();
+  editMode.value = false;
+}
+
+async function copyPreviousDiary() {
+  const previousDate = addDays(selectedDate.value, -1);
+  copyPreviousLoading.value = true;
+  try {
+    const q: Record<string, string> = {};
+    if (activeId.value) q.workspace_id = activeId.value;
+    const previous = await $fetch<DiaryEntry>(`/api/diary/${previousDate}`, { query: q }).catch(() => null);
+    const content = previous?.content?.trim();
+    if (!content) {
+      toast.add({ title: 'No notes on the previous page', color: 'neutral' });
+      return;
+    }
+    previousDiaryDate.value = previousDate;
+    previousDiaryContent.value = previous.content;
+    if (editContent.value.trim()) {
+      copyPreviousOpen.value = true;
+      return;
+    }
+    await applyPreviousDiary('replace');
+  } finally {
+    copyPreviousLoading.value = false;
+  }
+}
+
+async function applyPreviousDiary(mode: 'append' | 'replace') {
+  const source = previousDiaryContent.value.trim();
+  if (!source) return;
+  const current = editContent.value.trim();
+  editContent.value = mode === 'append' && current ? `${current}\n\n${source}` : source;
+  copyPreviousOpen.value = false;
+  await flushSaveContent();
+  toast.add({ title: mode === 'append' ? 'Previous notes appended' : 'Previous notes copied', color: 'success' });
 }
 
 async function handleAddTask(data: { title: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }) {
