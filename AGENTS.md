@@ -15,11 +15,11 @@
 - This is a mobile-first **todo/reminder + notes app** called **rc-notes**
 - Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar
 - Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + MotherDuck (cloud DuckDB) + Bruin CLI
-- Runs on localhost, no auth needed (yet — schema has user_id/user_name columns ready)
+- Runs on localhost; it includes setup and login flows, but data endpoints are not yet consistently scoped by `user_id`
 - Primary use: phone browser
 
 ## Key File Locations
-- `PLAN.md` — full requirements, schema, API reference, known issues
+- `README.md` — public project overview, setup, and pointers to implementation sources of truth
 - `.bruin.yml` — Bruin pipeline config (root, gitignored — contains MotherDuck connection)
 - `app/.env` — `MOTHERDUCK_NOTEBOOK_RC` token (gitignored)
 - `pipeline/` — Bruin SQL assets
@@ -42,30 +42,12 @@ All content tables include `user_id` and `user_name` for future multi-user suppo
 - **event_log**: audit log of all API actions with user_id, user_name
 
 ## Color System — CRITICAL
-The app uses a **single dim theme** with NO light/dark mode toggle. All colors are defined in `app/assets/css/main.css` as CSS utility classes.
+The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app/assets/css/main.css` is the source of truth: use its `--daybook-*` variables and mapped `--ui-*` tokens rather than reintroducing a separate palette.
 
-**Palette** (Tailwind zinc scale):
-- Body: #18181b (zinc-900)
-- Card: #27272a (zinc-800) — `.surface-card`
-- Input: #3f3f46 (zinc-700) — `.surface-input`
-- Overlay: #27272a with #52525b border — `.surface-overlay`
-- Text: #fafafa primary, #a1a1aa `.text-muted`, #71717a `.text-faint`
-- Accent: teal-400/#2dd4bf `.accent-text`, teal-600/#0d9488 `.accent-bg`
-
-**Reusable classes** defined in CSS:
-- `.surface-card`, `.surface-input`, `.surface-overlay` — background surfaces
-- `.text-muted`, `.text-faint` — text hierarchy
-- `.accent-text`, `.accent-bg` — teal accent
-- `.btn-primary`, `.btn-secondary`, `.btn-danger` — buttons
-- `.btn-tap` — press feedback (scale 0.97)
-- `.touch-target` — 44px min touch area
-- `.section-label` — uppercase section headers
-- `.checkbox-unchecked`, `.checkbox-checked` — checkbox states
-- `.tag` — tag pill styling
-- `.badge-task`, `.badge-note` — type badges with proper contrast
-- `.divider` — horizontal rule
-
-**DO NOT use Tailwind `dark:` prefix** — there is no dark mode toggle. DO NOT use `bg-white`, `bg-zinc-50`, `bg-zinc-100`, `text-zinc-900`, or any light-mode Tailwind classes. These will render as white/light on the dark body and look broken.
+- Canvas/surfaces: `#171716`, `#20201e`, `#282723`; borders: `#38362f`
+- Text: `#f1ede5` primary, `#b9b4aa` muted, `#989289` faint
+- Accent: muted sage `#9fb9aa` / `#c0d9c9`; warm state `#d7b17a`; danger `#d48f82`
+- Preserve strong contrast and 44px touch targets. Do not use light-mode utility classes or a `dark:` variant.
 
 ## Database Connection
 - **MotherDuck** (cloud): set `MOTHERDUCK_NOTEBOOK_RC` env var → `db.ts` does `INSTALL motherduck; LOAD motherduck; ATTACH 'md:'; CREATE DATABASE IF NOT EXISTS rc_notes; USE rc_notes`
@@ -120,7 +102,7 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 
 ## User Preferences
 - Keep things simple — this is a personal tool
-- Document everything in PLAN.md
+- Document durable contributor conventions here and public product context in `README.md`; use source code, migrations, and pipeline assets as the schema/API authority
 - Track agent learnings in this file
 - Optimize for phone browser usage
 - Color-blind friendly, high contrast
