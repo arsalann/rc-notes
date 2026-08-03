@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { VARCHAR } from '@duckdb/node-api';
 
 // Returns incomplete parent tasks that are currently in 'now' status OR overdue.
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
     types.ws = VARCHAR;
   }
 
-  return await queryAll(`
+  const tasks = await queryAll(`
     SELECT t.id, t.display_id, t.workspace_id, t.title, t.status, t.priority,
       t.completed, t.completed_at, t.due_at, t.tags, t.created_at, t.updated_at,
       (t.due_at IS NOT NULL AND t.due_at < current_timestamp) AS is_overdue
@@ -34,4 +35,6 @@ export default defineEventHandler(async (event) => {
       t.priority DESC,
       t.created_at DESC
   `, params, types);
+
+  return tasks.map(task => withDerivedTaskTags(task));
 });

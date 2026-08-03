@@ -1,6 +1,7 @@
 import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { isWithinNextDays } from '~/server/utils/dates';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -8,16 +9,18 @@ export default defineEventHandler(async (event) => {
   const title = body.title?.trim() || '';
   const description = body.description?.trim() || '';
   const parentId = body.parent_id || null;
+  const parentTask = parentId
+    ? (await queryAll(
+      'SELECT workspace_id, display_id, title FROM tasks WHERE id = $pid',
+      { pid: parentId }, { pid: VARCHAR },
+    ))[0]
+    : null;
   // For subtasks, inherit workspace from the parent task unless explicitly provided.
   let workspaceId: string | null;
   if (body.workspace_id !== undefined && body.workspace_id !== null) {
     workspaceId = body.workspace_id;
   } else if (parentId) {
-    const parentWs = await queryAll(
-      'SELECT workspace_id FROM tasks WHERE id = $pid',
-      { pid: parentId }, { pid: VARCHAR }
-    );
-    workspaceId = (parentWs[0]?.workspace_id as string | null) ?? null;
+    workspaceId = (parentTask?.workspace_id as string | null) ?? null;
   } else {
     workspaceId = await getDefaultWorkspaceId();
   }
@@ -32,12 +35,7 @@ export default defineEventHandler(async (event) => {
   // Generate display_id
   let displayId: string;
   if (parentId) {
-    // Get parent's display_id
-    const parentRows = await queryAll(
-      'SELECT display_id FROM tasks WHERE id = $pid',
-      { pid: parentId }, { pid: VARCHAR }
-    );
-    const parentDisplayId = parentRows[0]?.display_id || parentId.slice(0, 8);
+    const parentDisplayId = parentTask?.display_id || parentId.slice(0, 8);
     displayId = await generateSubtaskDisplayId(parentDisplayId, parentId);
   } else {
     displayId = await generateTaskDisplayId(title, tags);
@@ -93,5 +91,5 @@ export default defineEventHandler(async (event) => {
   }
 
   setResponseStatus(event, 201);
-  return task;
+  return withDerivedTaskTags(task, (parentTask?.title as string | null | undefined) ?? null);
 });

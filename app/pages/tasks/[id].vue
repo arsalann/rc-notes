@@ -63,6 +63,7 @@
           <div v-for="sub in subtasks" :key="sub.id"
             class="flex items-center gap-2.5 py-2.5 px-2 -mx-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
             <UCheckbox :model-value="sub.completed" @update:model-value="toggleSubtask(sub.id)" />
+            <TaskTagIcons :tags="sub.resolved_tags" />
             <span class="text-sm flex-1 transition-all duration-200" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
             <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ sub.display_id }}</UBadge>
             <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-archive"
@@ -115,13 +116,29 @@
       <!-- Tags -->
       <UCard class="calm-detail-surface">
         <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-3">Tags</p>
-        <div class="flex items-center gap-2 flex-wrap">
-          <UBadge v-for="(tag, i) in editTags" :key="i" color="neutral" variant="subtle" size="sm" class="gap-1.5 py-1">
-            {{ tag }}
-            <button @click="removeTag(i)" class="p-0.5 -mr-0.5 rounded-full active:bg-white/10 transition-colors">&times;</button>
-          </UBadge>
-          <input v-model="newTag" @keydown.enter.prevent="addTag" @keydown.comma.prevent="addTag"
-            placeholder="+ add tag" class="bg-transparent outline-none w-24 text-(--ui-text-muted) py-1.5 placeholder:text-(--ui-text-dimmed)" />
+        <div v-if="task.detected_tags?.length" class="mb-4">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Detected</p>
+          <div class="flex items-center gap-2 flex-wrap">
+            <UBadge v-for="tag in task.detected_tags" :key="tag.key" color="primary" variant="subtle" size="sm" class="gap-1.5 py-1">
+              <span aria-hidden="true">{{ tag.emoji }}</span>
+              <span>{{ tag.label }}</span>
+              <span class="text-(--ui-text-dimmed)">· {{ detectedTagReason(tag) }}</span>
+            </UBadge>
+          </div>
+        </div>
+        <div>
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">Manual</p>
+            <TaskTagPicker :model-value="editTags" :disabled="savingTags" @update:model-value="saveManualTags" />
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <UBadge v-for="(tag, i) in editTags" :key="i" color="neutral" variant="subtle" size="sm" class="gap-1.5 py-1">
+              {{ tag }}
+              <button @click="removeTag(i)" class="p-0.5 -mr-0.5 rounded-full active:bg-white/10 transition-colors">&times;</button>
+            </UBadge>
+            <input v-model="newTag" @keydown.enter.prevent="addTag" @keydown.comma.prevent="addTag"
+              :disabled="savingTags" placeholder="+ add tag" class="bg-transparent outline-none w-24 text-(--ui-text-muted) py-1.5 placeholder:text-(--ui-text-dimmed) disabled:opacity-50" />
+          </div>
         </div>
       </UCard>
 
@@ -161,6 +178,7 @@
 <script setup lang="ts">
 import { marked } from 'marked';
 import type { Task } from '~/composables/useNotes';
+import type { ResolvedTaskTag } from '~/utils/taskTags';
 import { parseUTC, todayLocal, localDateOffset } from '~/composables/useDate';
 import { PRIORITY_OPTIONS, type PriorityValue } from '~/composables/usePriority';
 import { parseHashtags } from '~/composables/useHashtagParse';
@@ -179,6 +197,7 @@ const toast = useToast();
 const task = ref<Task | null>(null); const subtasks = ref<Task[]>([]); const loadingTask = ref(true); const confirmArchive = ref(false);
 const copied = ref(false);
 const newSubtask = ref(''); const newTag = ref(''); const editTitle = ref(''); const editDescription = ref(''); const editTags = ref<string[]>([]); const editDue = ref('');
+const savingTags = ref(false);
 const taskLinks = ref<any[]>([]);
 const linkedNoteContent = ref('');
 
@@ -291,8 +310,34 @@ async function saveTitle() {
 }
 async function saveDescription() { if (!task.value || editDescription.value === task.value.description) return; task.value = await updateTask(id, { description: editDescription.value }); }
 async function saveDue(v: string) { task.value = await updateTask(id, { due_at: v ? new Date(v).toISOString() : null } as any); editDue.value = v; }
-function addTag() { const t = newTag.value.replace(',', '').trim(); if (t && !editTags.value.includes(t)) { editTags.value.push(t); updateTask(id, { tags: editTags.value } as any); } newTag.value = ''; }
-function removeTag(i: number) { editTags.value.splice(i, 1); updateTask(id, { tags: editTags.value } as any); }
+async function saveManualTags(nextTags: string[]) {
+  if (!task.value || savingTags.value) return;
+  savingTags.value = true;
+  try {
+    const updated = await updateTask(id, { tags: nextTags } as any);
+    editTags.value = [...(updated.tags || nextTags)];
+    task.value = updated;
+  } finally {
+    savingTags.value = false;
+  }
+}
+async function addTag() {
+  const tag = newTag.value.replace(',', '').trim();
+  if (!tag || editTags.value.includes(tag)) { newTag.value = ''; return; }
+  await saveManualTags([...editTags.value, tag]);
+  newTag.value = '';
+}
+async function removeTag(index: number) {
+  await saveManualTags(editTags.value.filter((_, currentIndex) => currentIndex !== index));
+}
+function detectedTagReason(tag: ResolvedTaskTag): string {
+  const source = [
+    tag.sources.includes('title') ? 'task title' : '',
+    tag.sources.includes('parent') ? 'parent title' : '',
+  ].filter(Boolean).join(' + ');
+  const terms = tag.matched_terms.filter(term => term.trim());
+  return terms.length ? `${source}: ${terms.join(', ')}` : source;
+}
 async function setStatus(status: string) {
   if (!task.value) return;
   task.value = await updateTask(id, { status } as any);

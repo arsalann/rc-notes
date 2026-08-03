@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { BOOLEAN, VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
     types.workspace_id = VARCHAR;
   }
 
-  return await queryAll(`
+  const tasks = await queryAll(`
     SELECT t.id, t.display_id, t.workspace_id, t.title, t.description, t.status, t.completed, t.completed_at,
       t.pinned, t.archived, t.due_at, t.tags, t.position,
       t.created_at, t.updated_at,
@@ -34,4 +35,6 @@ export default defineEventHandler(async (event) => {
     ${where}
     ORDER BY t.completed ASC, t.pinned DESC, t.position ASC, t.created_at DESC
   `, params, types);
+
+  return tasks.map(task => withDerivedTaskTags(task));
 });

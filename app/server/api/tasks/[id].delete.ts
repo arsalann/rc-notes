@@ -1,4 +1,5 @@
 import { queryAll, execute } from '~/server/utils/db';
+import { withStoredTaskTags } from '~/server/utils/taskTagPresenter';
 import { VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -20,5 +21,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Task not found' });
   }
 
-  return rows[0];
+  return await withStoredTaskTags(rows[0]);
 });

@@ -1,5 +1,6 @@
 import { queryAll, linkTaskToDiary } from '~/server/utils/db';
 import { isWithinNextDays } from '~/server/utils/dates';
+import { withStoredTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -123,5 +124,5 @@ export default defineEventHandler(async (event) => {
     ).catch(() => {});
   }
 
-  return task;
+  return await withStoredTaskTags(task);
 });

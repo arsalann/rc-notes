@@ -1,3 +1,5 @@
+import type { ResolvedTaskTag } from '~/utils/taskTags';
+
 export interface Task {
   id: string;
   display_id: string;
@@ -17,6 +19,8 @@ export interface Task {
   due_at: string | null;
   reminder_at: string | null;
   tags: string[];
+  detected_tags?: ResolvedTaskTag[];
+  resolved_tags?: ResolvedTaskTag[];
   position: number;
   created_at: string;
   updated_at: string;

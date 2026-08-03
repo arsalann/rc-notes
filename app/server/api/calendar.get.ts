@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -18,8 +19,10 @@ export default defineEventHandler(async (event) => {
 
   const tasks = await queryAll(`
     SELECT t.id, t.title, t.completed, t.pinned, t.due_at, t.tags,
+      t.parent_id, p.title AS parent_title,
       t.due_at::DATE as due_date
     FROM tasks t
+    LEFT JOIN tasks p ON p.id = t.parent_id
     ${where}
     ORDER BY t.due_at ASC
   `, params, Object.keys(types).length ? types : undefined);
@@ -33,7 +36,8 @@ export default defineEventHandler(async (event) => {
     days[key] = [];
   }
 
-  for (const task of tasks) {
+  for (const rawTask of tasks) {
+    const task = withDerivedTaskTags(rawTask);
     const dateKey = typeof task.due_date === 'string'
       ? task.due_date.split('T')[0]
       : String(task.due_date);

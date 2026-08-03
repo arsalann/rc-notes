@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { VARCHAR } from '@duckdb/node-api';
 
 // Returns tasks whose completed_at falls within [from, to] (UTC dates, inclusive,
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
     types.ws = VARCHAR;
   }
 
-  return await queryAll(`
+  const tasks = await queryAll(`
     SELECT t.id, t.display_id, t.workspace_id, t.title, t.status, t.priority,
       t.completed, t.completed_at, t.due_at, t.tags, t.created_at, t.updated_at,
       t.parent_id,
@@ -32,4 +33,6 @@ export default defineEventHandler(async (event) => {
       ${wsFilter}
     ORDER BY t.completed_at DESC
   `, params, types);
+
+  return tasks.map(task => withDerivedTaskTags(task));
 });
