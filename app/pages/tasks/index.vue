@@ -124,8 +124,10 @@
           </template>
           <!-- Grouped by tag -->
           <template v-else-if="groupBy === 'tag'">
-            <div v-for="group in tagGroups" :key="group.label" class="px-4 mt-4">
-              <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">{{ group.label }}</p>
+            <div v-for="group in tagGroups" :key="group.key" class="px-4 mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">
+                <span v-if="group.emoji" aria-hidden="true" class="mr-1">{{ group.emoji }}</span>{{ group.label }}
+              </p>
               <div class="space-y-2.5">
                 <TaskItem v-for="task in group.tasks" :key="task.id" :task="task" :select-mode="selectMode" :selected="selectedIds.has(task.id)" @toggle="handleToggle" @select="toggleSelect(task.id)" />
               </div>
@@ -208,6 +210,7 @@ import draggable from 'vuedraggable';
 import type { Task } from '~/composables/useNotes';
 import { parseUTC } from '~/composables/useDate';
 import { PRIORITY_OPTIONS } from '~/composables/usePriority';
+import { resolveTaskTags, TASK_TAG_CATALOG } from '~/utils/taskTags';
 
 const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask, toggleArchive } = useTasks();
 const { activeId } = useWorkspace();
@@ -361,17 +364,30 @@ const priorityGroups = computed(() => {
 });
 
 const tagGroups = computed(() => {
-  const groups = new Map<string, Task[]>();
+  const catalogOrder = new Map(TASK_TAG_CATALOG.map((tag, index) => [tag.key, index]));
+  const groups = new Map<string, { key: string; label: string; emoji: string | null; tasks: Task[] }>();
   for (const task of sortedTasks.value) {
-    const tags = task.tags?.length ? task.tags : ['Untagged'];
+    const tags = task.resolved_tags ?? resolveTaskTags({ title: task.title, manualTags: task.tags }).resolved_tags;
+    if (!tags.length) {
+      const group = groups.get('untagged') || { key: 'untagged', label: 'Untagged', emoji: null, tasks: [] };
+      group.tasks.push(task);
+      groups.set(group.key, group);
+      continue;
+    }
     for (const tag of tags) {
-      if (!groups.has(tag)) groups.set(tag, []);
-      groups.get(tag)!.push(task);
+      const label = tag.label;
+      const group = groups.get(tag.key) || { key: tag.key, label, emoji: tag.emoji, tasks: [] };
+      group.tasks.push(task);
+      groups.set(group.key, group);
     }
   }
-  return [...groups.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([label, tasks]) => ({ label, tasks }));
+  return [...groups.values()].sort((a, b) => {
+    if (a.key === 'untagged') return 1;
+    if (b.key === 'untagged') return -1;
+    const catalogDifference = (catalogOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER)
+      - (catalogOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER);
+    return catalogDifference || a.label.localeCompare(b.label);
+  });
 });
 
 async function handleReorder() {

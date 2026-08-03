@@ -6,6 +6,7 @@
     <div class="flex items-center gap-2.5 px-3 py-2.5">
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
       <UIcon v-if="priority" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
+      <TaskTagIcons :tags="task.resolved_tags" />
       <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
         <span class="text-sm font-medium" :class="task.completed && 'line-through text-(--ui-text-muted)'">{{ task.title }}</span>
       </NuxtLink>
@@ -17,6 +18,8 @@
     <div v-if="expanded" class="border-t border-(--ui-border) px-3 py-1.5">
       <div v-for="sub in visibleSubtasks" :key="sub.id" class="flex items-center gap-2 py-1.5 pl-4">
         <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub.id)" />
+        <UIcon v-if="subPriority(sub)" :name="subPriority(sub)?.icon" class="size-3.5 shrink-0" :class="subPriority(sub)?.textClass" />
+        <TaskTagIcons :tags="sub.resolved_tags" />
         <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0">
           <span class="text-sm" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
         </NuxtLink>
@@ -43,8 +46,12 @@ const props = withDefaults(defineProps<{
   taskId: string;
   initialData?: Task & { subtasks?: Task[] };
   hideDoneSubtasks?: boolean;
+  /** Incremented by a parent view when every task's subtask list should change together. */
+  subtaskExpansionToken?: number;
+  /** The expansion state to apply when subtaskExpansionToken changes. */
+  subtasksExpanded?: boolean;
   variant?: 'default' | 'after-hours';
-}>(), { variant: 'default' });
+}>(), { variant: 'default', subtaskExpansionToken: 0, subtasksExpanded: true });
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete, createTask } = useTasks();
 const { activeId } = useWorkspace();
@@ -52,14 +59,19 @@ const { activeId } = useWorkspace();
 const task = ref<Task | null>(props.initialData || null);
 const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
 const loading = ref(!props.initialData);
-const expanded = ref((props.initialData?.subtasks?.length || 0) > 0);
+const expanded = ref(props.subtasksExpanded && (props.initialData?.subtasks?.length || 0) > 0);
 const newSubtask = ref('');
 const addingSubtask = ref(false);
 
 const priority = computed(() => getPriorityOption(task.value?.priority));
+const subPriority = (subtask: Task) => getPriorityOption(subtask.priority);
 const visibleSubtasks = computed(() =>
   props.hideDoneSubtasks ? subtasks.value.filter(s => !s.completed) : subtasks.value
 );
+
+watch(() => props.subtaskExpansionToken, (token) => {
+  if (token) expanded.value = props.subtasksExpanded && subtasks.value.length > 0;
+});
 
 onMounted(async () => {
   if (props.initialData) {
@@ -70,7 +82,7 @@ onMounted(async () => {
     const data = await $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${props.taskId}`);
     task.value = data;
     subtasks.value = data.subtasks || [];
-    if (subtasks.value.length) expanded.value = true;
+    expanded.value = props.subtasksExpanded && subtasks.value.length > 0;
     emit('update:completed', { id: props.taskId, completed: !!data.completed });
   } catch { /* task may not exist */ }
   finally { loading.value = false; }

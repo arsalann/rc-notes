@@ -37,6 +37,7 @@
               {{ dueAt ? formatDate(dueAt) : 'Due date' }}
             </UButton>
             <UButton v-if="dueAt" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" @click="dueAt = ''" />
+            <TaskTagPicker v-model="selectedTags" label="Tags" />
           </div>
           <div v-if="showDatePicker" class="flex gap-2 flex-wrap">
             <UButton v-for="opt in dateShortcuts" :key="opt.label" color="neutral" variant="soft" size="sm"
@@ -72,6 +73,7 @@
 <script setup lang="ts">
 import { PRIORITY_OPTIONS, getPriorityOption, type PriorityValue } from '~/composables/usePriority';
 import { parseHashtags } from '~/composables/useHashtagParse';
+import { resolveTaskTags } from '~/utils/taskTags';
 
 const props = withDefaults(
   defineProps<{ placeholder?: string; parentId?: string; defaultStatus?: 'next' | 'now' | 'done' }>(),
@@ -79,6 +81,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }] }>();
 const title = ref(''); const dueAt = ref(''); const subtasks = ref<string[]>([]); const newSubtask = ref('');
+const selectedTags = ref<string[]>([]);
 const priority = ref<PriorityValue>(2);
 const status = ref<'next' | 'now' | 'done'>(props.defaultStatus);
 const expanded = ref(false); const showDatePicker = ref(false); const showSubtaskInput = ref(false);
@@ -114,6 +117,11 @@ const dateShortcuts = computed(() => [
 
 // Reactive parse — drives preview and auto-applies recognized hashtags to the buttons.
 const parsed = computed(() => parseHashtags(title.value));
+const manualTagsForCreate = computed(() => mergeManualTags(parsed.value.tags, selectedTags.value));
+const previewTags = computed(() => resolveTaskTags({
+  title: parsed.value.title,
+  manualTags: manualTagsForCreate.value,
+}).resolved_tags);
 const captureSummary = computed(() => {
   const summary: string[] = [];
   if (parsed.value.priority !== undefined) {
@@ -121,7 +129,7 @@ const captureSummary = computed(() => {
   }
   if (parsed.value.status) summary.push(parsed.value.status === 'now' ? 'Now' : parsed.value.status === 'done' ? 'Done' : 'Next');
   if (parsed.value.due_at) summary.push(formatDate(parsed.value.due_at));
-  summary.push(...parsed.value.tags.map(tag => `#${tag}`));
+  summary.push(...previewTags.value.map(tag => tag.emoji ? `${tag.emoji} ${tag.label}` : `#${tag.label}`));
   return summary;
 });
 
@@ -131,13 +139,26 @@ watch(() => parsed.value.status, v => { if (v) status.value = v as 'next' | 'now
 watch(() => parsed.value.due_at, v => { if (v) dueAt.value = v; });
 
 function addSubtask() { const t=newSubtask.value.trim(); if(t){subtasks.value.push(t);newSubtask.value='';} }
+function mergeManualTags(hashtagTags: string[], pickerTags: string[]): string[] {
+  // Keep parsed hashtags exactly as entered. In particular, #doc and #read
+  // are separate manual values even though they resolve to the same catalog tag.
+  const seenRawTags = new Set(hashtagTags.map(tag => tag.trim().toLocaleLowerCase()));
+  const pickerOnlyTags = pickerTags.filter((tag) => {
+    const normalized = tag.trim().toLocaleLowerCase();
+    if (!normalized || seenRawTags.has(normalized)) return false;
+    seenRawTags.add(normalized);
+    return true;
+  });
+  return [...hashtagTags, ...pickerOnlyTags];
+}
 function collapse() { expanded.value=false; showDatePicker.value=false; showSubtaskInput.value=false; }
 function submit() { const t=title.value.trim(); if(!t)return;
   const p = parseHashtags(t);
   const finalDue = p.due_at ? new Date(p.due_at).toISOString() : (dueAt.value ? new Date(dueAt.value).toISOString() : undefined);
   const finalPriority = p.priority !== undefined ? p.priority : priority.value;
   const finalStatus = p.status || status.value;
-  emit('add',{title:p.title,parent_id:props.parentId,due_at:finalDue,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:p.tags.length?p.tags:undefined,priority:finalPriority,status:finalStatus});
-  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';showSubtaskInput.value=false;showDatePicker.value=false;priority.value=2;status.value=props.defaultStatus;collapse(); }
+  const finalTags = mergeManualTags(p.tags, selectedTags.value);
+  emit('add',{title:p.title,parent_id:props.parentId,due_at:finalDue,subtasks:subtasks.value.length?[...subtasks.value]:undefined,tags:finalTags.length?finalTags:undefined,priority:finalPriority,status:finalStatus});
+  title.value='';dueAt.value='';subtasks.value=[];newSubtask.value='';selectedTags.value=[];showSubtaskInput.value=false;showDatePicker.value=false;priority.value=2;status.value=props.defaultStatus;collapse(); }
 function formatDate(s:string){return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 </script>

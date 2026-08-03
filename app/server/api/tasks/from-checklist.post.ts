@@ -1,5 +1,6 @@
 import { queryAll, getDefaultWorkspaceId } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
 interface ChecklistItem {
@@ -86,7 +87,7 @@ export default defineEventHandler(async (event) => {
       params, types
     );
     const parentTask = parentRows[0];
-    createdTasks.push(parentTask);
+    createdTasks.push(withDerivedTaskTags(parentTask, null));
 
     // Create link from source to this task
     await queryAll(

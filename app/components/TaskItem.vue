@@ -32,6 +32,7 @@
               <UIcon :name="priority.icon" class="size-3 mr-1" />
               {{ priority.label }}
             </UBadge>
+            <TaskTagIcons :tags="task.resolved_tags" />
             <UBadge v-if="statusLabel" :color="statusColor" variant="subtle" size="xs">{{ statusLabel }}</UBadge>
             <UBadge v-if="task.due_at" :color="isOverdue ? 'error' : 'neutral'" variant="subtle" size="xs">
               <UIcon :name="isOverdue ? 'i-lucide-alert-triangle' : 'i-lucide-clock'" class="size-3 mr-1" />
@@ -40,9 +41,6 @@
             <UBadge v-if="task.subtask_count && !expanded" color="neutral" variant="subtle" size="xs">
               <UIcon name="i-lucide-list-checks" class="size-3 mr-1" />
               {{ task.subtask_done }}/{{ task.subtask_count }}
-            </UBadge>
-            <UBadge v-for="tag in (task.tags || []).slice(0, 2)" :key="tag" color="neutral" variant="subtle" size="xs">
-              {{ tag }}
             </UBadge>
           </div>
         </NuxtLink>
@@ -57,6 +55,7 @@
       <div v-for="sub in subtasks" :key="sub.id"
         class="flex items-center gap-2.5 py-2.5 px-2 rounded-lg transition-colors active:bg-(--ui-bg-elevated)">
         <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub)" />
+        <TaskTagIcons :tags="sub.resolved_tags" />
         <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0 text-sm transition-all duration-200"
           :class="sub.completed && 'line-through text-(--ui-text-muted)'">
           {{ sub.title }}
@@ -94,7 +93,7 @@ const isOverdue = computed(() => { if (!props.task.due_at || props.task.complete
 const statusLabel = computed(() => { const s = props.task.status; if (s === 'now') return 'Now'; if (s === 'next') return 'Next'; return ''; });
 const statusColor = computed(() => props.task.status === 'now' ? 'primary' as const : 'neutral' as const);
 const priority = computed(() => getPriorityOption(props.task.priority));
-const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.tags?.length || statusLabel.value || priority.value);
+const hasMeta = computed(() => props.task.due_at || props.task.subtask_count || props.task.resolved_tags?.some(tag => tag.emoji) || statusLabel.value || priority.value);
 
 async function toggleExpand() {
   expanded.value = !expanded.value;

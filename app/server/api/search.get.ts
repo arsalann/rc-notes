@@ -1,4 +1,5 @@
 import { queryAll } from '~/server/utils/db';
+import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
     types.ws = VARCHAR;
   }
 
-  return await queryAll(`
+  const results = await queryAll(`
     SELECT * FROM (
       SELECT id, display_id, 'task' as type, title, description as detail, completed, pinned, due_at, tags, updated_at
       FROM tasks
@@ -33,4 +34,6 @@ export default defineEventHandler(async (event) => {
     ) combined
     ORDER BY updated_at DESC LIMIT 30
   `, params, types);
+
+  return results.map(result => result.type === 'task' ? withDerivedTaskTags(result) : result);
 });

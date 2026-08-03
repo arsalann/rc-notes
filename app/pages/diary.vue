@@ -99,9 +99,6 @@
         <UButton v-if="!focusMode" :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
           :icon="hideDone ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="hideDone ? 'Show done' : 'Hide done'"
           @click="toggleHideDone" />
-        <UButton v-if="focusMode" color="primary" variant="soft" size="sm" icon="i-lucide-x" @click="toggleFocusMode">
-          Exit
-        </UButton>
       </div>
     </div>
 
@@ -197,7 +194,17 @@
       <div ref="tasksSectionRef" class="calm-diary-tasks after-hours-tasks-card">
         <div class="daybook-task-heading">
           <div>
-            <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Tasks</p>
+            <div class="flex items-center gap-1.5">
+              <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Tasks</p>
+              <UButton color="neutral" variant="ghost" size="xs"
+                :icon="subtasksExpanded ? 'i-lucide-chevrons-up' : 'i-lucide-chevrons-down'"
+                :disabled="!hasSubtasks"
+                :aria-label="subtasksExpanded ? 'Collapse all subtasks' : 'Expand all subtasks'"
+                :title="subtasksExpanded ? 'Collapse all subtasks' : 'Expand all subtasks'"
+                @click="toggleAllSubtasks">
+                {{ subtasksExpanded ? 'Collapse' : 'Expand' }}
+              </UButton>
+            </div>
             <p class="daybook-task-count">{{ pendingTaskIds.length }} open <span aria-hidden="true">·</span> {{ doneTaskIds.length }} done</p>
           </div>
           <div class="daybook-task-progress" :aria-label="`${completionPercent}% complete`">
@@ -239,6 +246,8 @@
                     <InlineTask :task-id="element.id"
                       :initial-data="element"
                       :hide-done-subtasks="hideDone"
+                      :subtask-expansion-token="subtaskExpansionToken"
+                      :subtasks-expanded="subtasksExpanded"
                       variant="after-hours"
                       @update:completed="onTaskStatus" />
                   </div>
@@ -261,6 +270,8 @@
             <div v-if="doneOpen" class="space-y-1.5">
               <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
                 :initial-data="taskCache[id]"
+                :subtask-expansion-token="subtaskExpansionToken"
+                :subtasks-expanded="subtasksExpanded"
                 variant="after-hours"
                 @update:completed="onTaskStatus" />
             </div>
@@ -300,6 +311,8 @@
                       <InlineTask :task-id="element"
                         :initial-data="taskCache[element]"
                         :hide-done-subtasks="hideDone"
+                        :subtask-expansion-token="subtaskExpansionToken"
+                        :subtasks-expanded="subtasksExpanded"
                         variant="after-hours"
                         @update:completed="onTaskStatus" />
                     </div>
@@ -310,6 +323,8 @@
                 <InlineTask v-for="id in group.ids" :key="id" :task-id="id"
                   :initial-data="taskCache[id]"
                   :hide-done-subtasks="hideDone"
+                  :subtask-expansion-token="subtaskExpansionToken"
+                  :subtasks-expanded="subtasksExpanded"
                   variant="after-hours"
                   @update:completed="onTaskStatus" />
               </template>
@@ -347,6 +362,8 @@
                 <div class="min-w-0 flex-1">
                   <InlineTask :task-id="element"
                     :initial-data="taskCache[element]"
+                    :subtask-expansion-token="subtaskExpansionToken"
+                    :subtasks-expanded="subtasksExpanded"
                     variant="after-hours"
                     @update:completed="onTaskStatus" />
                 </div>
@@ -356,6 +373,8 @@
           <template v-else>
             <InlineTask v-for="id in sortedDoneTaskIds" :key="id" :task-id="id"
               :initial-data="taskCache[id]"
+              :subtask-expansion-token="subtaskExpansionToken"
+              :subtasks-expanded="subtasksExpanded"
               variant="after-hours"
               @update:completed="onTaskStatus" />
           </template>
@@ -564,6 +583,8 @@ const initialDate = routeDiaryDate(route.query.date) || todayLocal();
 const selectedDate = ref(initialDate);
 const dateWindowCenter = ref(initialDate);
 const showAddTask = ref(false);
+const subtaskExpansionToken = ref(0);
+const subtasksExpanded = ref(true);
 const entry = ref<DiaryEntry | null>(null);
 const editContent = ref('');
 const loading = ref(false);
@@ -587,9 +608,16 @@ function toggleHideDone() {
   hideDone.value = !hideDone.value;
   setPref('diaryHideDone', hideDone.value);
 }
+
+function toggleAllSubtasks() {
+  subtasksExpanded.value = !subtasksExpanded.value;
+  subtaskExpansionToken.value += 1;
+}
+
 watch(() => prefs.value.diaryHideDone, v => { hideDone.value = v; });
 const taskCompleted = ref<Record<string, boolean>>({});
 const taskCache = ref<Record<string, Task & { subtasks?: Task[] }>>({});
+const hasSubtasks = computed(() => Object.values(taskCache.value).some(task => (task.subtasks?.length || 0) > 0));
 type DiaryTaskSort = 'manual' | 'created' | 'priority';
 const taskSort = ref<DiaryTaskSort>(prefs.value.diaryTaskSort);
 const taskGroup = ref<'none' | 'created' | 'priority'>('none');
@@ -1168,6 +1196,8 @@ async function fetchEntry() {
   loading.value = true;
   entry.value = null;
   editContent.value = '';
+  subtaskExpansionToken.value = 0;
+  subtasksExpanded.value = true;
   carriedTasks.value = [];
   taskCompleted.value = {};
   taskCache.value = {};
@@ -1245,7 +1275,7 @@ watch(() => route.query.date, async (value) => {
 // Autosave
 let saveTimer: ReturnType<typeof setTimeout>;
 let editIdleTimer: ReturnType<typeof setTimeout>;
-const editIdleDelay = 1400;
+const editIdleDelay = 6000;
 
 const previousDiaryLabel = computed(() => {
   if (!previousDiaryDate.value) return 'Yesterday';
@@ -1266,6 +1296,9 @@ function scheduleEditIdleView(delay = editIdleDelay) {
       scheduleEditIdleView(500);
       return;
     }
+    // Keeping the journal focused means the person is still writing or thinking.
+    // Only return to preview after they have moved on from the editor.
+    if (contentRef.value === document.activeElement) return;
     void exitEditMode();
   }, delay);
 }
