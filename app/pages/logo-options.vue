@@ -5,33 +5,47 @@
         <span aria-hidden="true">←</span>
         Back to Daybook
       </NuxtLink>
-      <p class="logo-options-kicker">Identity study · 02</p>
-      <h1>Five geometric marks for Daybook.</h1>
+      <p class="logo-options-kicker">Identity study · 03 — Sun</p>
+      <h1>Just the sun.</h1>
       <p class="logo-options-intro">
-        This round keeps the pen, book, and sun, but builds them from a restrained motif system:
-        clean cuts, strong negative space, and one warm focal accent.
+        Pared all the way down to the sun — same gold disc and delicate rays from option 01, now
+        centered as the whole mark. Two versions: a full sun, and a rising sun that keeps only the
+        upper rays.
       </p>
     </header>
 
-    <section class="logo-options-grid" aria-label="Daybook logo options">
-      <article v-for="logo in logos" :key="logo.id" class="logo-option">
+    <section class="logo-options-grid" aria-label="Daybook sun options">
+      <article
+        v-for="logo in logos"
+        :key="logo.id"
+        class="logo-option"
+        :class="{ 'logo-option--pick': logo.recommended }"
+      >
         <div class="logo-option-stage">
-          <img :src="logo.src" :alt="`${logo.name} logo option`" width="640" height="640">
+          <img :src="logo.src" :alt="`${logo.name} mark`" width="512" height="512">
         </div>
+
         <div class="logo-option-copy">
           <div class="logo-option-meta">
-            <span>0{{ logo.id }}</span>
-            <span v-if="logo.active" class="logo-option-active">Current favicon</span>
+            <span>{{ logo.tag }}</span>
+            <span v-if="logo.recommended" class="logo-option-motif">Recommended</span>
           </div>
           <h2>{{ logo.name }}</h2>
           <p>{{ logo.description }}</p>
+
+          <div class="logo-option-sizes" aria-label="Scaled previews">
+            <img :src="logo.src" :alt="`${logo.name} at 96px`" width="96" height="96">
+            <img :src="logo.src" :alt="`${logo.name} at 56px`" width="56" height="56">
+            <img :src="logo.src" :alt="`${logo.name} at 32px`" width="32" height="32">
+            <span class="logo-option-sizes-note">favicon &amp; app-icon sizes</span>
+          </div>
         </div>
       </article>
     </section>
 
     <p class="logo-options-note">
-      Option 05 is now the active favicon and app icon. The other directions remain here as visual
-      alternatives if you want to explore the motif further.
+      Tell me A or B and any tweak — bigger disc, longer or thicker rays, no rays at all — and I’ll
+      wire it through the favicon, PWA icon, and in-app mark.
     </p>
   </main>
 </template>
@@ -39,39 +53,22 @@
 <script setup lang="ts">
 const logos = [
   {
-    id: 1,
-    name: 'Open / pen',
-    description: 'The clearest journal read: two page planes, a centered pen nib, and a quiet sun above.',
-    src: '/logo-options-v4/daybook-logo-geometric-2d-option-1-open-pen.png',
-    active: false,
+    id: 'a',
+    tag: 'A · Full sun',
+    name: 'Full sun',
+    recommended: true,
+    description:
+      'The gold disc centered with a full ring of eight rays. Balanced and complete — the calmest, most symmetric standalone mark.',
+    src: '/logo-v5/daybook-sun.svg',
   },
   {
-    id: 2,
-    name: 'Modular note',
-    description: 'A more graphic direction with floating blocks that make the journal feel like a designed system.',
-    src: '/logo-options-v4/daybook-logo-geometric-2d-option-2-modular.png',
-    active: false,
-  },
-  {
-    id: 3,
-    name: 'Horizon',
-    description: 'The calmest option: an open book becomes a line, with the sun held above the fold.',
-    src: '/logo-options-v4/daybook-logo-geometric-2d-option-3-horizon.png',
-    active: false,
-  },
-  {
-    id: 4,
-    name: 'Folded sun',
-    description: 'A compact badge-free mark where the pen sits inside the fold and the sun rises behind it.',
-    src: '/logo-options-v4/daybook-logo-geometric-2d-option-4-fold.png',
-    active: false,
-  },
-  {
-    id: 5,
-    name: 'Selected motif',
-    description: 'The chosen flat version of the geometric pen, book, and sun emblem from the latest reference.',
-    src: '/logo-options-v4/daybook-logo-geometric-2d-option-5-selected.png',
-    active: true,
+    id: 'b',
+    tag: 'B · Rising sun',
+    name: 'Rising sun',
+    recommended: false,
+    description:
+      'The exact sun from option 01, centered but keeping only the upper rays — so it still reads as a sunrise, with open space below.',
+    src: '/logo-v5/daybook-sun-rising.svg',
   },
 ] as const;
 </script>
@@ -86,7 +83,7 @@ const logos = [
 }
 
 .logo-options-header {
-  max-width: 38rem;
+  max-width: 40rem;
   padding: 0.25rem 0 2.4rem;
 }
 
@@ -141,36 +138,40 @@ const logos = [
   background: var(--daybook-surface);
 }
 
+.logo-option--pick { border-color: var(--daybook-accent); }
+
 .logo-option-stage {
+  display: grid;
+  place-items: center;
   aspect-ratio: 1;
-  padding: clamp(1.4rem, 7vw, 3.2rem);
-  background: #171716;
+  padding: clamp(1.6rem, 8vw, 3.6rem);
+  background: #111110;
 }
 
 .logo-option-stage img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 0.45rem;
+  height: auto;
+  max-width: 15rem;
 }
 
-.logo-option-copy { padding: 1rem 1.1rem 1.2rem; }
+.logo-option-copy { padding: 1.1rem 1.15rem 1.3rem; }
 
 .logo-option-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   color: var(--daybook-ink-faint);
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.logo-option-active { color: var(--daybook-accent); letter-spacing: 0.04em; }
+.logo-option-motif { color: var(--daybook-accent); letter-spacing: 0.04em; }
 
 .logo-option h2 {
-  margin: 0.5rem 0 0.35rem;
+  margin: 0.5rem 0 0.4rem;
   color: var(--daybook-ink);
   font-size: 1.35rem;
   font-weight: 500;
@@ -181,7 +182,30 @@ const logos = [
   margin: 0;
   color: var(--daybook-ink-muted);
   font-size: 0.92rem;
-  line-height: 1.5;
+  line-height: 1.55;
+}
+
+.logo-option-sizes {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--daybook-line);
+}
+
+.logo-option-sizes img {
+  display: block;
+  border-radius: 0.4rem;
+  flex: none;
+}
+
+.logo-option-sizes-note {
+  margin-left: auto;
+  color: var(--daybook-ink-faint);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .logo-options-note {
@@ -192,17 +216,12 @@ const logos = [
   line-height: 1.55;
 }
 
-@media (min-width: 42rem) {
+@media (min-width: 52rem) {
   .logo-options-page { padding: 2.5rem 2rem 4rem; }
-  .logo-options-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .logo-option:first-child { grid-column: span 2; display: grid; grid-template-columns: minmax(16rem, 0.85fr) 1fr; align-items: stretch; }
-  .logo-option:first-child .logo-option-stage { aspect-ratio: auto; min-height: 22rem; }
-  .logo-option:first-child .logo-option-copy { display: flex; flex-direction: column; justify-content: center; padding: 2rem; }
+  .logo-options-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (min-width: 68rem) {
   .logo-options-page { padding-inline: 3rem; }
-  .logo-options-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .logo-option:first-child { grid-column: span 2; }
 }
 </style>
