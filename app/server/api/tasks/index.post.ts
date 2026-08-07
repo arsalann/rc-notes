@@ -41,9 +41,11 @@ export default defineEventHandler(async (event) => {
     displayId = await generateTaskDisplayId(title, tags);
   }
 
+  // New top-level tasks go to the TOP of the list (lowest position sorts first).
+  // Subtasks keep appending to the bottom so their entry order is preserved.
   const posQuery = parentId
     ? 'SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_id = $pid'
-    : 'SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_id IS NULL';
+    : 'SELECT COALESCE(MIN(position), 1) - 1 as next_pos FROM tasks WHERE parent_id IS NULL';
   const posParams = parentId ? { pid: parentId } : {};
   const posTypes = parentId ? { pid: VARCHAR } : undefined;
   const posRows = await queryAll(posQuery, posParams, posTypes);

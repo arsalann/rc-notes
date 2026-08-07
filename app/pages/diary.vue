@@ -228,8 +228,22 @@
                   <UIcon :name="column.icon" class="size-4 shrink-0" :class="column.textClass" />
                   <h2 class="text-sm font-semibold truncate" :class="column.textClass">{{ column.label }}</h2>
                 </div>
-                <span class="daybook-kanban-count">{{ column.tasks.length }}</span>
+                <div class="flex items-center gap-1">
+                  <UButton v-if="column.value !== 0"
+                    :icon="quickAddPriority === column.value ? 'i-lucide-x' : 'i-lucide-plus'"
+                    color="neutral" variant="ghost" size="xs" :square="true"
+                    :aria-label="`Add ${column.label} task`" @click="openQuickAdd(column.value)" />
+                  <span class="daybook-kanban-count">{{ column.tasks.length }}</span>
+                </div>
               </header>
+
+              <div v-if="quickAddPriority === column.value && column.value !== 0" class="pt-3">
+                <input ref="quickAddInputDesktop" v-model="quickAddTitle"
+                  :placeholder="`Add to ${column.label}…`"
+                  class="w-full px-3 py-2 bg-(--ui-bg-elevated) rounded-lg border border-(--ui-border) outline-none placeholder:text-(--ui-text-dimmed) text-(--ui-text) text-sm transition-all focus:border-(--ui-primary)/50 focus:ring-1 focus:ring-(--ui-primary)/20"
+                  @keydown.enter.prevent="submitQuickAdd(column.value)"
+                  @keydown.escape="cancelQuickAdd" />
+              </div>
 
               <draggable
                 :list="column.tasks"
@@ -282,16 +296,29 @@
         <div class="daybook-mobile-task-view">
         <template v-if="pendingGroups.length">
           <div v-for="group in pendingGroups" :key="group.key" class="after-hours-task-group mb-4 last:mb-0">
-            <button v-if="taskGroup !== 'none'" type="button"
-              class="w-full flex items-center text-[11px] font-semibold uppercase tracking-wider mb-1.5 py-1"
-              :class="group.labelClass || 'text-(--ui-text-dimmed)'"
-              @click="toggleGroupCollapsed(group.key)">
-              <UIcon :name="isGroupCollapsed(group.key) ? 'i-lucide-chevron-right' : 'i-lucide-chevron-down'" class="size-3.5 mr-1" />
-              <UIcon v-if="group.icon" :name="group.icon" class="size-3.5 mr-1 align-[-2px]" />
-              {{ group.label }}
-              <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ group.ids.length }})</span>
-            </button>
+            <div v-if="taskGroup !== 'none'" class="flex items-center mb-1.5">
+              <button type="button"
+                class="flex-1 min-w-0 flex items-center text-[11px] font-semibold uppercase tracking-wider py-1"
+                :class="group.labelClass || 'text-(--ui-text-dimmed)'"
+                @click="toggleGroupCollapsed(group.key)">
+                <UIcon :name="isGroupCollapsed(group.key) ? 'i-lucide-chevron-right' : 'i-lucide-chevron-down'" class="size-3.5 mr-1" />
+                <UIcon v-if="group.icon" :name="group.icon" class="size-3.5 mr-1 align-[-2px]" />
+                {{ group.label }}
+                <span class="text-(--ui-text-dimmed) font-mono normal-case ml-1">({{ group.ids.length }})</span>
+              </button>
+              <UButton v-if="taskGroup === 'priority' && group.value !== undefined && group.value !== 0"
+                :icon="quickAddPriority === group.value ? 'i-lucide-x' : 'i-lucide-plus'"
+                color="neutral" variant="ghost" size="xs" :square="true"
+                :aria-label="`Add ${group.label} task`" @click="openQuickAdd(group.value)" />
+            </div>
             <div v-if="!isGroupCollapsed(group.key)" class="after-hours-task-group-list space-y-1.5">
+              <div v-if="taskGroup === 'priority' && group.value !== undefined && quickAddPriority === group.value">
+                <input ref="quickAddInputMobile" v-model="quickAddTitle"
+                  :placeholder="`Add to ${group.label}…`"
+                  class="w-full px-3 py-2.5 bg-(--ui-bg-elevated) rounded-xl border border-(--ui-border) outline-none placeholder:text-(--ui-text-dimmed) text-(--ui-text) text-sm transition-all focus:border-(--ui-primary)/50 focus:ring-1 focus:ring-(--ui-primary)/20"
+                  @keydown.enter.prevent="submitQuickAdd(group.value)"
+                  @keydown.escape="cancelQuickAdd" />
+              </div>
               <draggable
                 v-if="taskSort === 'manual' && taskGroup === 'none'"
                 :list="manualPendingTaskIds"
@@ -807,8 +834,9 @@ function sortByPosition(ids: string[]): string[] {
 function preserveExistingOrder(current: string[], next: string[]): string[] {
   const allowed = new Set(next);
   const retained = current.filter(id => allowed.has(id));
-  const appended = next.filter(id => !retained.includes(id));
-  return [...retained, ...appended];
+  // Newly-appearing tasks (e.g. just-created ones) go to the TOP of the list.
+  const added = next.filter(id => !retained.includes(id));
+  return [...added, ...retained];
 }
 
 function syncManualTaskLists() {
@@ -982,7 +1010,7 @@ async function handleDesktopBoardChange(event: any, targetPriority: number) {
   }
 }
 
-interface TaskGroup { key: string; label: string; ids: string[]; icon?: string; labelClass?: string; }
+interface TaskGroup { key: string; label: string; ids: string[]; icon?: string; labelClass?: string; value?: number; }
 
 const pendingGroups = computed<TaskGroup[]>(() => {
   const ids = sortedPendingTaskIds.value;
@@ -1000,10 +1028,10 @@ const pendingGroups = computed<TaskGroup[]>(() => {
     const out: TaskGroup[] = [];
     for (const opt of PRIORITY_OPTIONS) {
       const list = groups.get(opt.value);
-      if (list?.length) out.push({ key: `p${opt.value}`, label: opt.label, ids: list, icon: opt.icon, labelClass: opt.textClass });
+      if (list?.length) out.push({ key: `p${opt.value}`, label: opt.label, ids: list, icon: opt.icon, labelClass: opt.textClass, value: opt.value });
     }
     const none = groups.get(0);
-    if (none?.length) out.push({ key: 'p0', label: 'No priority', ids: none, icon: 'i-lucide-minus' });
+    if (none?.length) out.push({ key: 'p0', label: 'No priority', ids: none, icon: 'i-lucide-minus', value: 0 });
     return out;
   }
   // group by created date
@@ -1207,6 +1235,8 @@ async function fetchEntry() {
   desktopBoardColumns.value = [];
   doneOpen.value = false;
   collapsedGroups.value = new Set();
+  quickAddPriority.value = null;
+  quickAddTitle.value = '';
   try {
     const q: Record<string, string> = {};
     if (requestedWorkspaceId) q.workspace_id = requestedWorkspaceId;
@@ -1493,6 +1523,57 @@ async function handleAddTask(data: { title: string; due_at?: string; subtasks?: 
   entryDates.value.add(selectedDate.value);
   saveContent();
   showAddTask.value = false;
+}
+
+// --- Per-priority-group quick add ---
+const quickAddPriority = ref<number | null>(null);
+const quickAddTitle = ref('');
+const quickAddInputMobile = ref<HTMLInputElement>();
+const quickAddInputDesktop = ref<HTMLInputElement>();
+
+function focusQuickAddInputs() {
+  // Only one of these is visible (mobile vs desktop layout); focusing the
+  // hidden one is a harmless no-op.
+  quickAddInputMobile.value?.focus();
+  quickAddInputDesktop.value?.focus();
+}
+
+function openQuickAdd(priority: number) {
+  if (quickAddPriority.value === priority) {
+    cancelQuickAdd();
+    return;
+  }
+  quickAddPriority.value = priority;
+  quickAddTitle.value = '';
+  // Make sure the target group is expanded so its input is visible.
+  const key = `p${priority}`;
+  if (collapsedGroups.value.has(key)) {
+    const next = new Set(collapsedGroups.value);
+    next.delete(key);
+    collapsedGroups.value = next;
+  }
+  nextTick(focusQuickAddInputs);
+}
+
+function cancelQuickAdd() {
+  quickAddPriority.value = null;
+  quickAddTitle.value = '';
+}
+
+async function submitQuickAdd(priority: number) {
+  const title = quickAddTitle.value.trim();
+  if (!title) return;
+  quickAddTitle.value = '';
+  const dueAt = new Date(`${selectedDate.value}T09:00`).toISOString();
+  const task = await createTask({ title, due_at: dueAt, workspace_id: activeId.value, priority, status: 'now' });
+  if (entry.value) {
+    await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: 'task', target_id: task.id } }).catch(() => {});
+    const newLink = { link_id: '', target_type: 'task', target_id: task.id, target_title: task.title };
+    entry.value.links = [...(entry.value.links || []), newLink];
+  }
+  entryDates.value.add(selectedDate.value);
+  // Keep the input open for rapid multi-add.
+  nextTick(focusQuickAddInputs);
 }
 
 async function searchMentions(q: string) { mentionResults.value = await $fetch<any[]>('/api/mention', { query: { q } }); }
