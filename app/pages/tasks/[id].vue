@@ -348,7 +348,7 @@ async function setPriority(priority: PriorityValue) {
 }
 async function handleToggleComplete() { const u = await toggleComplete(id); if (task.value) { task.value.completed = u.completed; task.value.status = u.status; } }
 async function handlePin() { const u = await togglePin(id); if (task.value) task.value.pinned = u.pinned; }
-async function handleArchiveTask() { await deleteTask(id); navigateTo('/tasks'); }
+async function handleArchiveTask() { await deleteTask(id); navigateTo('/diary'); }
 const mentionOpen = ref(false);
 const mentionResults = ref<any[]>([]);
 let mentionTimer: ReturnType<typeof setTimeout>;
