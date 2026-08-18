@@ -63,14 +63,65 @@ export function useTasks() {
     }
   }
 
-  async function createTask(data: { title: string; description?: string; parent_id?: string; workspace_id?: string | null; tags?: string[]; due_at?: string; priority?: number; status?: string }) {
+  async function createTask(data: { title: string; description?: string; parent_id?: string; workspace_id?: string | null; tags?: string[]; due_at?: string; priority?: number; status?: string; id?: string }) {
     const task = await $fetch<Task>('/api/tasks', { method: 'POST', body: data });
     if (!data.parent_id) tasks.value = [task, ...tasks.value];
     return task;
   }
 
+  /**
+   * Mint an id on the client so `POST /api/tasks` is idempotent — a retried create resolves to the
+   * same row instead of a second task. Also means an optimistic row already carries its final id,
+   * so there is no provisional-to-real transition for links or positions to trip over.
+   */
+  function newTaskId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    // Fallback for older WebViews, which lack randomUUID on non-secure origins.
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+      const r = (Math.random() * 16) | 0;
+      return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+
+  /**
+   * Replace a task in `tasks` with whatever the server last told us, discarding an optimistic guess.
+   *
+   * Refetch rather than invert the local flag: `$fetch` rejects on a network timeout even when the
+   * write actually landed, so inverting would leave the UI silently disagreeing with the database.
+   * Asking the server is the only way to know which happened.
+   */
+  async function resyncTask(id: string) {
+    try {
+      const fresh = await $fetch<Task>(`/api/tasks/${id}`);
+      const idx = tasks.value.findIndex(t => t.id === id);
+      if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...fresh };
+      return fresh;
+    } catch {
+      // 404 means it is genuinely gone; drop it rather than leaving a phantom row.
+      tasks.value = tasks.value.filter(t => t.id !== id);
+      return null;
+    }
+  }
+
+  function patchLocalTask(id: string, patch: Partial<Task>) {
+    const idx = tasks.value.findIndex(t => t.id === id);
+    if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...patch };
+  }
+
   async function updateTask(id: string, data: Partial<Task>) {
     return await $fetch<Task>(`/api/tasks/${id}`, { method: 'PUT', body: data });
+  }
+
+  /**
+   * Bulk position/priority write for drag reorder — one request instead of one per task.
+   * All-or-nothing: either every row moves or none does.
+   */
+  async function updateTaskPositions(items: { id: string; position: number; priority?: number }[]) {
+    if (!items.length) return { requested: 0, updated: 0, ids: [] as string[] };
+    return await $fetch<{ requested: number; updated: number; ids: string[] }>('/api/tasks/positions', {
+      method: 'PATCH',
+      body: { items },
+    });
   }
 
   async function deleteTask(id: string) {
@@ -78,18 +129,54 @@ export function useTasks() {
     tasks.value = tasks.value.filter(t => t.id !== id);
   }
 
-  async function toggleComplete(id: string) {
-    const updated = await $fetch<Task>(`/api/tasks/${id}/complete`, { method: 'PATCH' });
-    const idx = tasks.value.findIndex(t => t.id === id);
-    if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...updated };
-    return updated;
+  /**
+   * Flip completion locally first, then confirm with the server.
+   *
+   * `next` is sent explicitly so the write is idempotent — see `complete.patch.ts`. Callers that
+   * hold their own copy of the task (InlineTask, TaskItem) pass the value they are rendering.
+   */
+  async function toggleComplete(id: string, next?: boolean) {
+    const current = tasks.value.find(t => t.id === id);
+    const target = typeof next === 'boolean' ? next : !current?.completed;
+
+    // Optimistic: paint the new state before the round trip.
+    patchLocalTask(id, {
+      completed: target,
+      status: target ? 'done' : 'next',
+      completed_at: target ? (current?.completed_at ?? new Date().toISOString()) : null,
+    });
+
+    try {
+      const updated = await $fetch<Task>(`/api/tasks/${id}/complete`, {
+        method: 'PATCH',
+        body: { completed: target },
+      });
+      // Server response is the authority — it carries the real completed_at and status.
+      patchLocalTask(id, updated);
+      return updated;
+    } catch (e) {
+      await resyncTask(id);
+      throw e;
+    }
   }
 
-  async function togglePin(id: string) {
-    const updated = await $fetch<Task>(`/api/tasks/${id}/pin`, { method: 'PATCH' });
-    const idx = tasks.value.findIndex(t => t.id === id);
-    if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...updated };
-    return updated;
+  async function togglePin(id: string, next?: boolean) {
+    const current = tasks.value.find(t => t.id === id);
+    const target = typeof next === 'boolean' ? next : !current?.pinned;
+
+    patchLocalTask(id, { pinned: target });
+
+    try {
+      const updated = await $fetch<Task>(`/api/tasks/${id}/pin`, {
+        method: 'PATCH',
+        body: { pinned: target },
+      });
+      patchLocalTask(id, updated);
+      return updated;
+    } catch (e) {
+      await resyncTask(id);
+      throw e;
+    }
   }
 
   async function toggleArchive(id: string) {
@@ -97,7 +184,7 @@ export function useTasks() {
     tasks.value = tasks.value.filter(t => t.id !== id);
   }
 
-  return { tasks, loading, fetchTasks, createTask, updateTask, deleteTask, toggleComplete, togglePin, toggleArchive };
+  return { tasks, loading, fetchTasks, createTask, newTaskId, updateTask, updateTaskPositions, deleteTask, toggleComplete, togglePin, toggleArchive, resyncTask };
 }
 
 export function useNotesCrud() {

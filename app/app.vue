@@ -35,7 +35,9 @@ import Login from '~/pages/login.vue';
 const { appState, checkAuth } = useAuth();
 const { fetchWorkspaces } = useWorkspace();
 const route = useRoute();
-const isDesignLab = computed(() => route.path.startsWith('/mockups') || route.path === '/daily-spread' || route.path === '/logo-options');
+// Shared with the `pages:extend` hook in nuxt.config.ts that strips these routes from production,
+// so the auth bypass and the route removal cannot drift apart.
+const isDesignLab = computed(() => isDesignLabPath(route.path));
 
 onMounted(async () => {
   if (isDesignLab.value) return;

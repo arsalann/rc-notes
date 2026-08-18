@@ -1,5 +1,6 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { hydrateTasksByIds, taskIdsFromLinks } from '~/server/utils/taskHydration';
+import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -86,12 +87,22 @@ export default defineEventHandler(async (event) => {
     `, undoneParams, undoneTypes);
 
     if (undone.length) {
-      // Batch insert all carry-forward links in one query
-      const valuesClauses = undone.map((task: any) =>
-        `(uuid()::VARCHAR, 'diary', '${(newEntry.id as string).replace(/'/g, "''")}', 'task', '${(task.target_id as string).replace(/'/g, "''")}')`
-      ).join(', ');
+      // Batch insert all carry-forward links in one query.
+      // Bound list parameter rather than interpolated IDs with hand-rolled quote escaping, and
+      // guarded by NOT EXISTS so a duplicate POST for the same date cannot double-link. (Two
+      // concurrent POSTs can still create two diary_entries rows for one date — that needs a
+      // uniqueness constraint on (entry_date, workspace_id); tracked in the plan's out-of-scope list.)
       await queryAll(
-        `INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES ${valuesClauses}`
+        `INSERT INTO links (id, source_type, source_id, target_type, target_id)
+         SELECT uuid()::VARCHAR, 'diary', $did, 'task', tid
+         FROM unnest($tids) AS u(tid)
+         WHERE NOT EXISTS (
+           SELECT 1 FROM links l
+           WHERE l.source_type = 'diary' AND l.source_id = $did
+             AND l.target_type = 'task' AND l.target_id = u.tid
+         )`,
+        { did: String(newEntry.id), tids: listValue(undone.map((t: any) => String(t.target_id))) },
+        { did: VARCHAR, tids: LIST(VARCHAR) }
       ).catch(() => {});
 
       for (const task of undone) {
@@ -126,6 +137,10 @@ export default defineEventHandler(async (event) => {
     WHERE l.source_type = 'diary' AND l.source_id = $id ${wsMatch}
   `, linksReadParams, linksReadTypes);
 
+  // Hydrate here too. This is the create-on-first-visit path, so without it the very first visit to
+  // a new day would keep the N+1 that item 1 removes from the GET.
+  const tasks = await hydrateTasksByIds(taskIdsFromLinks(links));
+
   setResponseStatus(event, 201);
-  return { ...newEntry, links, carried_tasks: carriedTasks };
+  return { ...newEntry, links, tasks, carried_tasks: carriedTasks };
 });
