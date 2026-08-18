@@ -7,7 +7,11 @@
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
       <UIcon v-if="priority" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
       <TaskTagIcons :tags="task.resolved_tags" />
-      <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
+      <!-- While a create is in flight the row exists only locally, so navigating would 404. -->
+      <span v-if="isPending" class="flex-1 min-w-0">
+        <span class="text-sm font-medium opacity-70">{{ task.title }}</span>
+      </span>
+      <NuxtLink v-else :to="`/tasks/${task.id}`" class="flex-1 min-w-0">
         <span class="text-sm font-medium" :class="task.completed && 'line-through text-(--ui-text-muted)'">{{ task.title }}</span>
       </NuxtLink>
       <UBadge color="neutral" variant="subtle" size="xs" class="font-mono">{{ task.display_id }}</UBadge>
@@ -55,6 +59,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete, createTask } = useTasks();
 const { activeId } = useWorkspace();
+// A silent rollback is worse than a slow update, so every failure branch below surfaces a toast.
+const toast = useToast();
 
 const task = ref<Task | null>(props.initialData || null);
 const subtasks = ref<Task[]>(props.initialData?.subtasks || []);
@@ -62,6 +68,9 @@ const loading = ref(!props.initialData);
 const expanded = ref(props.subtasksExpanded && (props.initialData?.subtasks?.length || 0) > 0);
 const newSubtask = ref('');
 const addingSubtask = ref(false);
+
+/** Set by an optimistic create until the server confirms the row. */
+const isPending = computed(() => !!(task.value as any)?._pending);
 
 const priority = computed(() => getPriorityOption(task.value?.priority));
 const subPriority = (subtask: Task) => getPriorityOption(subtask.priority);
@@ -71,6 +80,16 @@ const visibleSubtasks = computed(() =>
 
 watch(() => props.subtaskExpansionToken, (token) => {
   if (token) expanded.value = props.subtasksExpanded && subtasks.value.length > 0;
+});
+
+// `task` is seeded from initialData once, so without this a later cache update never reaches the
+// component — an optimistically-created row would stay flagged `_pending` (and unlinkable) forever
+// after the server confirmed it.
+watch(() => props.initialData, (fresh) => {
+  if (!fresh) return;
+  task.value = fresh;
+  if (fresh.subtasks) subtasks.value = fresh.subtasks;
+  loading.value = false;
 });
 
 onMounted(async () => {
@@ -88,17 +107,65 @@ onMounted(async () => {
   finally { loading.value = false; }
 });
 
+/**
+ * Optimistic completion toggle. Paints the new state, sends the explicit target, and on failure
+ * refetches the row rather than inverting the flag back — a timeout can mean the write landed.
+ * In-flight guards stop a double-tap from racing itself.
+ */
+const togglingIds = ref(new Set<string>());
+
 async function handleToggle() {
-  if (!task.value) return;
-  const u = await toggleComplete(task.value.id);
-  task.value = { ...task.value, ...u };
-  emit('update:completed', { id: props.taskId, completed: !!task.value.completed });
+  const current = task.value;
+  // Pending rows have no server-side row yet, so a toggle would 404.
+  if (!current || isPending.value || togglingIds.value.has(current.id)) return;
+  const target = !current.completed;
+
+  togglingIds.value = new Set(togglingIds.value).add(current.id);
+  task.value = { ...current, completed: target };
+  emit('update:completed', { id: props.taskId, completed: target });
+
+  try {
+    const u = await toggleComplete(current.id, target);
+    task.value = { ...current, ...u };
+    emit('update:completed', { id: props.taskId, completed: !!u.completed });
+  } catch {
+    const fresh = await $fetch<Task & { subtasks?: Task[] }>(`/api/tasks/${current.id}`).catch(() => null);
+    if (fresh) {
+      task.value = fresh;
+      emit('update:completed', { id: props.taskId, completed: !!fresh.completed });
+    } else {
+      task.value = current;
+      emit('update:completed', { id: props.taskId, completed: !!current.completed });
+    }
+    toast.add({ title: 'Could not update that task', description: 'Showing the saved state.', color: 'error' });
+  } finally {
+    const next = new Set(togglingIds.value);
+    next.delete(current.id);
+    togglingIds.value = next;
+  }
 }
 
 async function handleSubToggle(sid: string) {
-  const u = await toggleComplete(sid);
   const i = subtasks.value.findIndex(s => s.id === sid);
-  if (i >= 0) subtasks.value[i] = { ...subtasks.value[i], ...u };
+  if (i < 0 || togglingIds.value.has(sid)) return;
+  const original = subtasks.value[i]!;
+  const target = !original.completed;
+
+  togglingIds.value = new Set(togglingIds.value).add(sid);
+  subtasks.value[i] = { ...original, completed: target };
+
+  try {
+    const u = await toggleComplete(sid, target);
+    subtasks.value[i] = { ...original, ...u };
+  } catch {
+    const fresh = await $fetch<Task>(`/api/tasks/${sid}`).catch(() => null);
+    subtasks.value[i] = fresh ? { ...original, ...fresh } : original;
+    toast.add({ title: 'Could not update that subtask', description: 'Showing the saved state.', color: 'error' });
+  } finally {
+    const next = new Set(togglingIds.value);
+    next.delete(sid);
+    togglingIds.value = next;
+  }
 }
 
 async function addSubtask() {

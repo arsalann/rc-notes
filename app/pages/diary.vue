@@ -547,10 +547,13 @@ interface DiaryEntry {
   entry_date: string;
   content: string;
   links?: any[];
+  // Linked tasks, hydrated server-side by GET /api/diary/[date] and POST /api/diary in two queries.
+  // Removes the per-task request the watcher below used to make. See .context/perf-plan.md item 1.
+  tasks?: (Task & { subtasks?: Task[] })[];
 }
 
 const { activeId, workspaces, setActive } = useWorkspace();
-const { createTask, updateTask } = useTasks();
+const { createTask, newTaskId, updateTask, updateTaskPositions } = useTasks();
 const route = useRoute();
 const router = useRouter();
 
@@ -800,22 +803,34 @@ const completionPercent = computed(() => {
 
 const allTaskMetadataLoaded = computed(() => allTaskIds.value.every(id => !!taskCache.value[id]));
 
-// Fetch task metadata for sorting/grouping (dedupes + parallelizes)
+/**
+ * Merge hydrated tasks into the cache. Merges rather than replaces: the batch response from
+ * fetchEntry() seeds the bulk of it, and the fallback watcher below tops up individual residual IDs
+ * afterwards — an overwrite there would discard the seed.
+ */
+function mergeTaskCache(tasks: (Task & { subtasks?: Task[] })[]) {
+  if (!tasks.length) return;
+  const next = { ...taskCache.value };
+  const nextCompleted = { ...taskCompleted.value };
+  for (const task of tasks) {
+    if (!task?.id) continue;
+    next[task.id] = task;
+    nextCompleted[task.id] = !!task.completed;
+  }
+  taskCache.value = next;
+  taskCompleted.value = nextCompleted;
+}
+
+// Fallback hydration only. `entry.tasks` already covers every *linked* task, but allTaskIds also
+// mines `@[...]` mentions out of editContent and picks up tasks created after load, so this handles
+// the residual set — normally empty. One batch request rather than one per ID.
 watch(allTaskIds, async (ids) => {
   const missing = ids.filter(id => !taskCache.value[id]);
   if (!missing.length) return;
-  const results = await Promise.all(
-    missing.map(id => $fetch<Task & { subtasks: Task[] }>(`/api/tasks/${id}`).catch(() => null))
-  );
-  const next = { ...taskCache.value };
-  const nextCompleted = { ...taskCompleted.value };
-  results.forEach((r, i) => {
-    if (!r) return;
-    next[missing[i]] = r;
-    nextCompleted[missing[i]] = !!r.completed;
-  });
-  taskCache.value = next;
-  taskCompleted.value = nextCompleted;
+  const results = await $fetch<(Task & { subtasks?: Task[] })[]>('/api/tasks/batch', {
+    query: { ids: missing.join(',') },
+  }).catch(() => null);
+  if (results) mergeTaskCache(results);
 }, { immediate: true });
 
 function sortByPosition(ids: string[]): string[] {
@@ -956,12 +971,14 @@ async function handleDiaryReorder() {
   reorderState.value = 'saving';
   clearTimeout(reorderStateTimer);
   try {
-    await Promise.all(order.map((id, position) => updateTask(id, { position } as any)));
+    // One request for the whole order. Was one PUT per task (~180ms each, serialized server-side).
+    await updateTaskPositions(order.map((id, position) => ({ id, position })));
     reorderState.value = 'saved';
     reorderStateTimer = setTimeout(() => { reorderState.value = 'idle'; }, 1800);
   } catch {
     reorderState.value = 'error';
-    toast.add({ title: 'Order could not be saved', description: 'Your list is still visible; try moving it again.', color: 'error' });
+    // All-or-nothing now, so nothing was written — "try moving it again" is accurate.
+    toast.add({ title: 'Order could not be saved', description: 'No changes were written; try moving it again.', color: 'error' });
   } finally {
     reorderSaving.value = false;
   }
@@ -971,12 +988,13 @@ async function handleDiaryReorder() {
 async function handleDesktopBoardChange(event: any, targetPriority: number) {
   if (!event.added && !event.moved) return;
 
-  const patches = new Map<string, Partial<Task>>();
+  // The task dragged into this column, if its priority actually changed.
+  let movedId: string | null = null;
   if (event.added) {
     const task = event.added.element as Task & { subtasks?: Task[] };
     if (task.priority !== targetPriority) {
       task.priority = targetPriority;
-      patches.set(task.id, { priority: targetPriority });
+      movedId = task.id;
     }
   }
 
@@ -988,10 +1006,11 @@ async function handleDesktopBoardChange(event: any, targetPriority: number) {
   manualListsReady.value = true;
 
   const nextCache = { ...taskCache.value };
+  const items: { id: string; position: number; priority?: number }[] = [];
   order.forEach((id, position) => {
     if (!nextCache[id]) return;
     nextCache[id] = { ...nextCache[id], position };
-    patches.set(id, { ...(patches.get(id) || {}), position });
+    items.push(id === movedId ? { id, position, priority: targetPriority } : { id, position });
   });
   taskCache.value = nextCache;
 
@@ -999,12 +1018,18 @@ async function handleDesktopBoardChange(event: any, targetPriority: number) {
   reorderState.value = 'saving';
   clearTimeout(reorderStateTimer);
   try {
-    await Promise.all([...patches.entries()].map(([id, patch]) => updateTask(id, patch as any)));
+    // Single request carrying both the new order and the moved task's priority.
+    await updateTaskPositions(items);
+    // If the moved task somehow isn't in the rendered order, its priority change would be dropped
+    // from the bulk payload — fall back to the single-task PUT for that one case.
+    if (movedId && !items.some(i => i.id === movedId)) {
+      await updateTask(movedId, { priority: targetPriority } as any);
+    }
     reorderState.value = 'saved';
     reorderStateTimer = setTimeout(() => { reorderState.value = 'idle'; }, 1800);
   } catch {
     reorderState.value = 'error';
-    toast.add({ title: 'Board change could not be saved', description: 'The task remains in the current column for now.', color: 'error' });
+    toast.add({ title: 'Board change could not be saved', description: 'No changes were written; the task remains in the current column.', color: 'error' });
   } finally {
     reorderSaving.value = false;
   }
@@ -1245,18 +1270,22 @@ async function fetchEntry() {
     const data = await $fetch<DiaryEntry>(`/api/diary/${requestedDate}`, { query: q }).catch(() => null);
     if (data) {
       if (requestId !== entryRequestId) return;
+      // Seed before assigning `entry`, so the fallback watcher sees an already-populated cache and
+      // finds nothing missing instead of firing a redundant batch request.
+      mergeTaskCache(data.tasks || []);
       entry.value = data;
       editContent.value = data.content;
       editMode.value = false;
       return;
     }
 
-    // Create new entry (triggers carry-forward) — POST now returns links
+    // Create new entry (triggers carry-forward) — POST returns links and hydrated tasks
     const created = await $fetch<DiaryEntry & { carried_tasks?: { id: string; title: string }[] }>('/api/diary', {
       method: 'POST',
       body: { entry_date: requestedDate, workspace_id: requestedWorkspaceId },
     });
     if (requestId !== entryRequestId) return;
+    mergeTaskCache(created.tasks || []);
     entry.value = created;
     editContent.value = created.content;
     carriedTasks.value = created.carried_tasks || [];
@@ -1457,7 +1486,10 @@ async function convertChecklistToTasks() {
       const q: Record<string, string> = {};
       if (activeId.value) q.workspace_id = activeId.value;
       const full = await $fetch<DiaryEntry>(`/api/diary/${selectedDate.value}`, { query: q }).catch(() => null);
-      if (full) entry.value = full;
+      if (full) {
+        mergeTaskCache(full.tasks || []);
+        entry.value = full;
+      }
     }
   } finally {
     creatingTasks.value = false;
@@ -1565,15 +1597,49 @@ async function submitQuickAdd(priority: number) {
   if (!title) return;
   quickAddTitle.value = '';
   const dueAt = new Date(`${selectedDate.value}T09:00`).toISOString();
-  const task = await createTask({ title, due_at: dueAt, workspace_id: activeId.value, priority, status: 'now' });
-  if (entry.value) {
-    await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: 'task', target_id: task.id } }).catch(() => {});
-    const newLink = { link_id: '', target_type: 'task', target_id: task.id, target_title: task.title };
-    entry.value.links = [...(entry.value.links || []), newLink];
-  }
+
+  // Mint the id here so the row can be painted immediately and the create stays idempotent.
+  const id = newTaskId();
+  const optimistic = {
+    id,
+    title,
+    priority,
+    status: 'now',
+    completed: false,
+    due_at: dueAt,
+    workspace_id: activeId.value,
+    subtasks: [],
+    // Suppresses navigation until the server row exists — tapping a not-yet-created task would 404.
+    _pending: true,
+  } as unknown as Task & { subtasks?: Task[] };
+
+  mergeTaskCache([optimistic]);
+  const optimisticLink = { link_id: '', target_type: 'task', target_id: id, target_title: title };
+  if (entry.value) entry.value.links = [...(entry.value.links || []), optimisticLink];
   entryDates.value.add(selectedDate.value);
   // Keep the input open for rapid multi-add.
   nextTick(focusQuickAddInputs);
+
+  try {
+    const task = await createTask({ id, title, due_at: dueAt, workspace_id: activeId.value, priority, status: 'now' });
+    // Replace the guess with the stored row (real display_id, position, resolved_tags).
+    mergeTaskCache([{ ...task, subtasks: [] } as Task & { subtasks?: Task[] }]);
+    if (entry.value) {
+      await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: 'task', target_id: task.id } }).catch(() => {});
+    }
+  } catch {
+    // Roll the optimistic row back out. Safe to retry: the same id would resolve to the same task.
+    const next = { ...taskCache.value };
+    delete next[id];
+    taskCache.value = next;
+    const nextCompleted = { ...taskCompleted.value };
+    delete nextCompleted[id];
+    taskCompleted.value = nextCompleted;
+    if (entry.value) {
+      entry.value.links = (entry.value.links || []).filter((l: any) => l.target_id !== id);
+    }
+    toast.add({ title: 'Task could not be added', description: 'Nothing was saved; try again.', color: 'error' });
+  }
 }
 
 async function searchMentions(q: string) { mentionResults.value = await $fetch<any[]>('/api/mention', { query: { q } }); }

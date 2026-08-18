@@ -1,4 +1,23 @@
-import { logEvent } from '~/server/utils/eventLog';
+import { logEvent, bufferEvent } from '~/server/utils/eventLog';
+
+/**
+ * Keys whose values must never reach event_log. `middleware/auth.ts` returns early for
+ * `/api/auth/*`, but this middleware still runs, so login and signup bodies were being recorded
+ * verbatim — plaintext passwords in the audit table.
+ */
+const SECRET_KEYS = /^(password|password_confirmation|new_password|current_password|password_hash|token|secret)$/i;
+
+function redact(value: any): any {
+  if (Array.isArray(value)) return value.map(redact);
+  if (value && typeof value === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = SECRET_KEYS.test(k) ? '[redacted]' : redact(v);
+    }
+    return out;
+  }
+  return value;
+}
 
 export default defineEventHandler(async (event) => {
   const path = getRequestURL(event).pathname;
@@ -25,7 +44,7 @@ export default defineEventHandler(async (event) => {
       const body = await readBody(event);
       bodyWsId = body?.workspace_id;
       // Truncate to 4KB to avoid blowing up event_log on large payloads.
-      const json = JSON.stringify(body ?? null);
+      const json = JSON.stringify(redact(body) ?? null);
       bodySnapshot = json.length > 4096 ? json.slice(0, 4096) + '…[truncated]' : json;
     } catch {}
   }
@@ -45,7 +64,7 @@ export default defineEventHandler(async (event) => {
   // Log on response — Nitro's `afterResponse` hook gives us status + duration.
   event.context._logEventOnEnd = () => {
     const status = event.node?.res?.statusCode ?? null;
-    logEvent({
+    const entry = {
       method,
       path,
       workspace_id: workspaceId || bodyWsId,
@@ -57,7 +76,15 @@ export default defineEventHandler(async (event) => {
       response_status: status,
       request_ip: ip,
       duration_ms: Date.now() - start,
-    });
+      // Left unset on purpose: eventLog stamps it in the DB's own naive server-local format.
+    };
+    // Reads are buffered; every mutation is written immediately so the recovery log cannot lose a
+    // write to a crash. See .context/perf-plan.md item 7.
+    if (method === 'GET' || method === 'HEAD') {
+      bufferEvent(entry);
+    } else {
+      logEvent(entry);
+    }
   };
 
   // Fire on response close

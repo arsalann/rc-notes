@@ -23,6 +23,7 @@
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.123",
     "@types/bcryptjs": "^2.4.6",
     "vitest": "^3.2.4"
   }

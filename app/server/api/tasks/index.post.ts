@@ -4,6 +4,8 @@ import { isWithinNextDays } from '~/server/utils/dates';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
   const title = body.title?.trim() || '';
@@ -56,10 +58,20 @@ export default defineEventHandler(async (event) => {
     ? body.status
     : (dueAt && isWithinNextDays(dueAt, 7) ? 'now' : 'next');
 
+  // A client may supply the id so that a retried create is the SAME write rather than a second task.
+  // Without this, an optimistic client whose request times out has no safe move: dropping the local
+  // row invites the user to retry and create a duplicate, keeping it risks a phantom.
+  // `id` is the primary key, so ON CONFLICT below makes the create idempotent.
+  const clientId = typeof body.id === 'string' && UUID_RE.test(body.id.trim()) ? body.id.trim() : null;
+
   const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status', 'priority'];
-  const vals = ['uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
+  const vals = [clientId ? '$id' : 'uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
   const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId, status, priority };
   const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR, status: VARCHAR, priority: INTEGER };
+  if (clientId) {
+    params.id = clientId;
+    types.id = VARCHAR;
+  }
 
   if (parentId) {
     cols.push('parent_id');
@@ -81,11 +93,27 @@ export default defineEventHandler(async (event) => {
   }
 
   const rows = await queryAll(
-    `INSERT INTO tasks (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING *`,
+    `INSERT INTO tasks (${cols.join(', ')}) VALUES (${vals.join(', ')})
+     ${clientId ? 'ON CONFLICT (id) DO NOTHING' : ''} RETURNING *`,
     params, types
   );
 
+  // No rows means this exact id already exists — a retry of a create that actually succeeded.
+  // Return the stored row and skip the side effects, so the retry is a no-op rather than a duplicate.
+  if (!rows.length && clientId) {
+    const existing = await queryAll(
+      `SELECT t.*, p.title AS parent_title FROM tasks t
+       LEFT JOIN tasks p ON p.id = t.parent_id WHERE t.id = $id`,
+      { id: clientId }, { id: VARCHAR }
+    );
+    if (existing.length) {
+      setResponseStatus(event, 200);
+      return withDerivedTaskTags(existing[0]);
+    }
+  }
+
   const task = rows[0];
+  if (!task) throw createError({ statusCode: 500, statusMessage: 'Task could not be created' });
 
   // Auto-link task to diary entry for the due date
   if (dueAt && !parentId) {

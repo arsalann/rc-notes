@@ -104,7 +104,7 @@ export function deriveUpdatedBy(clientKind: string, isAuthed: boolean): string {
   return 'unknown';
 }
 
-export async function logEvent(opts: {
+export interface EventLogInput {
   method: string;
   path: string;
   workspace_id?: string | null;
@@ -116,51 +116,145 @@ export async function logEvent(opts: {
   response_status?: number | null;
   request_ip?: string | null;
   duration_ms?: number | null;
-}) {
-  try {
-    const eventType = resolveEventType(opts.method, opts.path);
-    const { entity_type, entity_id } = resolveEntity(opts.path);
-    const metadata = opts.metadata ? JSON.stringify(opts.metadata) : '{}';
-    const clientKind = classifyClient(opts.user_agent);
-    const updatedBy = deriveUpdatedBy(clientKind, !!opts.user_id);
+  /**
+   * When the event was observed, not when it is written. Matters for buffered rows.
+   * Must be a naive server-local timestamp string — see `localTimestamp`.
+   */
+  occurred_at?: string;
+}
 
-    await queryAll(
-      `INSERT INTO event_log (
-         id, event_type, method, path, entity_type, entity_id,
-         workspace_id, metadata, user_agent, user_id, user_name,
-         updated_by, request_body, response_status, client_kind, request_ip, duration_ms
-       ) VALUES (
-         uuid()::VARCHAR, $event_type, $method, $path, $entity_type, $entity_id,
-         $workspace_id, $metadata, $user_agent, $user_id, $user_name,
-         $updated_by, $request_body, $response_status, $client_kind, $request_ip, $duration_ms
-       ) RETURNING id`,
-      {
-        event_type: eventType,
-        method: opts.method.toUpperCase(),
-        path: opts.path,
-        entity_type: entity_type || '',
-        entity_id: entity_id || '',
-        workspace_id: opts.workspace_id || '',
-        metadata,
-        user_agent: opts.user_agent || '',
-        user_id: opts.user_id || '',
-        user_name: opts.user_name || '',
-        updated_by: updatedBy,
-        request_body: opts.request_body || '',
-        response_status: opts.response_status ?? null,
-        client_kind: clientKind,
-        request_ip: opts.request_ip || '',
-        duration_ms: opts.duration_ms ?? null,
-      },
-      {
-        event_type: VARCHAR, method: VARCHAR, path: VARCHAR,
-        entity_type: VARCHAR, entity_id: VARCHAR, workspace_id: VARCHAR,
-        metadata: VARCHAR, user_agent: VARCHAR, user_id: VARCHAR, user_name: VARCHAR,
-        updated_by: VARCHAR, request_body: VARCHAR, response_status: INTEGER,
-        client_kind: VARCHAR, request_ip: VARCHAR, duration_ms: INTEGER,
-      }
-    );
+/** The 17 bound columns, in insert order. `created_at` is appended separately. */
+const FIELDS = [
+  'event_type', 'method', 'path', 'entity_type', 'entity_id',
+  'workspace_id', 'metadata', 'user_agent', 'user_id', 'user_name',
+  'updated_by', 'request_body', 'response_status', 'client_kind', 'request_ip', 'duration_ms',
+] as const;
+
+const FIELD_TYPES: Record<string, any> = {
+  event_type: VARCHAR, method: VARCHAR, path: VARCHAR,
+  entity_type: VARCHAR, entity_id: VARCHAR, workspace_id: VARCHAR,
+  metadata: VARCHAR, user_agent: VARCHAR, user_id: VARCHAR, user_name: VARCHAR,
+  updated_by: VARCHAR, request_body: VARCHAR, response_status: INTEGER,
+  client_kind: VARCHAR, request_ip: VARCHAR, duration_ms: INTEGER,
+  created_at: VARCHAR,
+};
+
+/**
+ * `event_log.created_at` is a naive TIMESTAMP, and every existing row was written by
+ * `current_timestamp`, i.e. server-local wall time. Formatting as a UTC ISO string instead would
+ * silently offset new rows by the server's UTC offset and scramble the log's ordering against
+ * historical rows — so match what the database itself would have written.
+ */
+function localTimestamp(d = new Date()): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+
+function buildRow(opts: EventLogInput): Record<string, any> {
+  const { entity_type, entity_id } = resolveEntity(opts.path);
+  const clientKind = classifyClient(opts.user_agent);
+  return {
+    event_type: resolveEventType(opts.method, opts.path),
+    method: opts.method.toUpperCase(),
+    path: opts.path,
+    entity_type: entity_type || '',
+    entity_id: entity_id || '',
+    workspace_id: opts.workspace_id || '',
+    metadata: opts.metadata ? JSON.stringify(opts.metadata) : '{}',
+    user_agent: opts.user_agent || '',
+    user_id: opts.user_id || '',
+    user_name: opts.user_name || '',
+    updated_by: deriveUpdatedBy(clientKind, !!opts.user_id),
+    request_body: opts.request_body || '',
+    response_status: opts.response_status ?? null,
+    client_kind: clientKind,
+    request_ip: opts.request_ip || '',
+    duration_ms: opts.duration_ms ?? null,
+    created_at: opts.occurred_at || localTimestamp(),
+  };
+}
+
+async function insertRows(rows: Record<string, any>[]) {
+  if (!rows.length) return;
+  const params: Record<string, any> = {};
+  const types: Record<string, any> = {};
+  const tuples = rows.map((row, i) => {
+    const placeholders = [...FIELDS, 'created_at'].map((f) => {
+      const key = `${f}_${i}`;
+      params[key] = row[f];
+      types[key] = FIELD_TYPES[f];
+      return f === 'created_at' ? `$${key}::TIMESTAMP` : `$${key}`;
+    });
+    return `(uuid()::VARCHAR, ${placeholders.join(', ')})`;
+  });
+
+  await queryAll(
+    `INSERT INTO event_log (id, ${[...FIELDS, 'created_at'].join(', ')})
+     VALUES ${tuples.join(', ')}`,
+    params,
+    types
+  );
+}
+
+/**
+ * Write one event immediately. Used for every mutation (POST/PUT/PATCH/DELETE).
+ *
+ * These are deliberately NOT buffered: `pipeline/assets/main/event_log.asset.yml` declares this
+ * table the source of truth for data-loss and damage-recovery investigations, so losing mutation
+ * rows to a hard crash would break it in exactly the scenario it exists for. Reads are buffered
+ * instead — see `bufferEvent`. See .context/perf-plan.md item 7.
+ */
+export async function logEvent(opts: EventLogInput) {
+  try {
+    await insertRows([buildRow(opts)]);
   } catch {
     // Never let logging errors break the app
+  }
+}
+
+// --- Buffered path, for reads only ---
+
+const FLUSH_ROWS = 25;
+const FLUSH_MS = 2000;
+
+let buffer: Record<string, any>[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Buffer a read event. GETs are ~78% of event_log rows and each INSERT occupied the single shared
+ * DuckDB connection, delaying the *next* request — which is why a one-SELECT endpoint measured
+ * 150-250ms against a ~55ms network floor.
+ *
+ * `created_at` is captured here, at observation time, not at insert time, so ordering and durations
+ * in the log are not skewed by up to the flush interval.
+ */
+export function bufferEvent(opts: EventLogInput) {
+  buffer.push(buildRow(opts));
+  if (buffer.length >= FLUSH_ROWS) {
+    void flushEvents();
+    return;
+  }
+  if (!flushTimer) {
+    flushTimer = setTimeout(() => { void flushEvents(); }, FLUSH_MS);
+    // Do not hold the process open just for a pending flush.
+    (flushTimer as any).unref?.();
+  }
+}
+
+export async function flushEvents() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (!buffer.length) return;
+  const batch = buffer;
+  buffer = [];
+  try {
+    await insertRows(batch);
+  } catch (e) {
+    // A failed flush drops the whole batch rather than one row, so make it observable rather than
+    // silent. Not re-queued: retrying indefinitely on a broken connection would grow without bound.
+    console.warn(`[event-log] dropped ${batch.length} buffered read events:`, (e as Error)?.message);
   }
 }

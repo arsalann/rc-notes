@@ -1,5 +1,6 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { hydrateTasksByIds } from '~/server/utils/taskHydration';
+import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
 
 export default defineEventHandler(async (event) => {
   const date = String(getRouterParam(event, 'date'));
@@ -23,24 +24,13 @@ export default defineEventHandler(async (event) => {
   const entry = rows[0];
   const entryWorkspaceId = entry.workspace_id as string | null;
 
-  // Auto-bump overdue tasks (scoped to this diary entry's workspace)
-  const newDueAt = `${date}T12:00:00`;
-  const bumpParams: Record<string, any> = { due: newDueAt, date };
-  const bumpTypes: Record<string, any> = { due: VARCHAR, date: VARCHAR };
-  let bumpWs = '';
-  if (entryWorkspaceId) {
-    bumpWs = ' AND workspace_id = $ws';
-    bumpParams.ws = entryWorkspaceId;
-    bumpTypes.ws = VARCHAR;
-  } else {
-    bumpWs = ' AND workspace_id IS NULL';
-  }
-  await queryAll(
-    `UPDATE tasks SET due_at = $due::TIMESTAMP, updated_at = now()
-     WHERE due_at IS NOT NULL AND due_at::DATE < $date::DATE
-       AND completed = false AND deleted_at IS NULL${bumpWs}`,
-    bumpParams, bumpTypes
-  ).catch(() => {});
+  // NOTE: this handler used to "auto-bump" every overdue task in the workspace to the requested
+  // date. That made a read mutate unrelated rows: navigating to a future date (one tap on "next
+  // day") rewrote due_at across the entire incomplete backlog. Removed deliberately.
+  //
+  // Nothing is lost in the UI — what appears on a day is driven by diary→task *links*, not by
+  // due_at, so a carried-forward task still shows on this page. It now reads as overdue, which is
+  // the truth. See .context/perf-plan.md item 0.
 
   // Batch-create diary links for every task due on this date (same workspace only)
   const linkParams: Record<string, any> = { did: entry.id as string, date };
@@ -91,18 +81,21 @@ export default defineEventHandler(async (event) => {
     WHERE l.source_type = 'diary' AND l.source_id = $id ${wsMatch}
   `, linksReadParams, linksReadTypes);
 
-  // Batch auto-set due_at on linked tasks that don't have one yet
-  const taskLinkIds = links.filter((l: any) => l.target_type === 'task').map((l: any) => l.target_id);
+  // Batch auto-set due_at on linked tasks that don't have one yet.
+  // Bound list parameter rather than interpolated IDs — see plan item 5's note on that pattern.
+  const taskLinkIds = links.filter((l: any) => l.target_type === 'task').map((l: any) => String(l.target_id));
   if (taskLinkIds.length) {
-    const dueAt = `${date}T12:00:00`;
-    const idList = taskLinkIds.map((tid: string) => `'${tid.replace(/'/g, "''")}'`).join(',');
     await queryAll(
       `UPDATE tasks SET due_at = $due_at::TIMESTAMP, updated_at = now()
-       WHERE id IN (${idList}) AND due_at IS NULL`,
-      { due_at: dueAt },
-      { due_at: VARCHAR }
+       WHERE list_contains($ids, id) AND due_at IS NULL`,
+      { due_at: `${date}T12:00:00`, ids: listValue(taskLinkIds) },
+      { due_at: VARCHAR, ids: LIST(VARCHAR) }
     ).catch(() => {});
   }
 
-  return { ...entry, links };
+  // Hydrate the linked tasks here rather than letting the client fetch them one at a time.
+  // Two queries instead of ~114 round trips. See .context/perf-plan.md item 1.
+  const tasks = await hydrateTasksByIds(taskLinkIds);
+
+  return { ...entry, links, tasks };
 });
