@@ -262,6 +262,25 @@ const DATA_REPAIRS: { name: string; statements: string[] }[] = [
          )`,
     ],
   },
+  {
+    // Subtasks used to be created with a hard-coded default priority of 2 (Focus) regardless of
+    // their parent, so they landed in the wrong kanban lane. The create endpoint now inherits the
+    // parent's priority; this repairs the rows created before that fix. Idempotent: it only touches
+    // subtasks still at the buggy default (2) whose parent sits in a different lane (0/1/3), so a
+    // second run matches nothing. A subtask at 0/1/3 was explicitly edited by the user (creation
+    // always produced 2) and is left alone; a Focus parent (2) already matches. Applied to
+    // production out-of-band with backups on 2026-08-25 and recorded in the ledger there.
+    name: 'v12_subtask_priority_inherit',
+    statements: [
+      `UPDATE tasks
+       SET priority = (SELECT p.priority FROM tasks p WHERE p.id = tasks.parent_id),
+           updated_at = current_timestamp,
+           updated_by = 'migration_v12_subtask_priority'
+       WHERE parent_id IS NOT NULL
+         AND priority = 2
+         AND (SELECT p.priority FROM tasks p WHERE p.id = tasks.parent_id) IN (0, 1, 3)`,
+    ],
+  },
 ];
 
 async function ensureSchema(connection: any) {

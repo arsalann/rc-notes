@@ -5,8 +5,8 @@
       : ['my-3 rounded-xl ring-2 bg-teal-900/80 overflow-hidden', priority ? priority.ringClass : 'ring-teal-600/60']">
     <div class="flex items-center gap-2.5 px-3 py-2.5">
       <UCheckbox :model-value="task.completed" @update:model-value="handleToggle" size="sm" />
-      <UIcon v-if="priority" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
-      <TaskTagIcons :tags="task.resolved_tags" />
+      <UIcon v-if="priority && showPriorityIcon" :name="priority.icon" class="size-4 shrink-0" :class="priority.textClass" />
+      <TaskTagIcons v-if="showTags" :tags="task.resolved_tags" />
       <!-- While a create is in flight the row exists only locally, so navigating would 404. -->
       <span v-if="isPending" class="flex-1 min-w-0">
         <span class="text-sm font-medium opacity-70">{{ task.title }}</span>
@@ -22,8 +22,8 @@
     <div v-if="expanded" class="border-t border-(--ui-border) px-3 py-1.5">
       <div v-for="sub in visibleSubtasks" :key="sub.id" class="flex items-center gap-2 py-1.5 pl-4">
         <UCheckbox :model-value="sub.completed" @update:model-value="handleSubToggle(sub.id)" />
-        <UIcon v-if="subPriority(sub)" :name="subPriority(sub)?.icon" class="size-3.5 shrink-0" :class="subPriority(sub)?.textClass" />
-        <TaskTagIcons :tags="sub.resolved_tags" />
+        <UIcon v-if="subPriority(sub) && showPriorityIcon" :name="subPriority(sub)?.icon" class="size-3.5 shrink-0" :class="subPriority(sub)?.textClass" />
+        <TaskTagIcons v-if="showTags" :tags="sub.resolved_tags" />
         <NuxtLink :to="`/tasks/${sub.id}`" class="flex-1 min-w-0">
           <span class="text-sm" :class="sub.completed && 'line-through text-(--ui-text-muted)'">{{ sub.title }}</span>
         </NuxtLink>
@@ -55,7 +55,11 @@ const props = withDefaults(defineProps<{
   /** The expansion state to apply when subtaskExpansionToken changes. */
   subtasksExpanded?: boolean;
   variant?: 'default' | 'after-hours';
-}>(), { variant: 'default', subtaskExpansionToken: 0, subtasksExpanded: true });
+  /** Whether to render the task's tag icons. Off on the today/daybook page. */
+  showTags?: boolean;
+  /** Whether to render the priority icon. Off on the today/daybook page (rows already sit in priority lanes). */
+  showPriorityIcon?: boolean;
+}>(), { variant: 'default', subtaskExpansionToken: 0, subtasksExpanded: true, showTags: true, showPriorityIcon: true });
 const emit = defineEmits<{ 'update:completed': [{ id: string; completed: boolean }] }>();
 const { toggleComplete, createTask } = useTasks();
 const { activeId } = useWorkspace();

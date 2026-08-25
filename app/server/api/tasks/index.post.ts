@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const parentId = body.parent_id || null;
   const parentTask = parentId
     ? (await queryAll(
-      'SELECT workspace_id, display_id, title FROM tasks WHERE id = $pid',
+      'SELECT workspace_id, display_id, title, priority FROM tasks WHERE id = $pid',
       { pid: parentId }, { pid: VARCHAR },
     ))[0]
     : null;
@@ -28,9 +28,16 @@ export default defineEventHandler(async (event) => {
   }
   const tags = Array.isArray(body.tags) ? body.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
   const dueAt = body.due_at || null;
-  const priority = body.priority !== undefined && [0, 1, 2, 3].includes(Number(body.priority))
+  // Priority resolution: an explicit client value wins; a subtask otherwise inherits its parent's
+  // priority (so it lands in the same kanban lane, not the "Focus" default); top-level tasks fall
+  // back to 2 (Focus). Note 0 is a valid priority ("none"), so use ?? rather than || below.
+  const explicitPriority = body.priority !== undefined && [0, 1, 2, 3].includes(Number(body.priority))
     ? Number(body.priority)
-    : 2;
+    : null;
+  const parentPriority = parentTask && [0, 1, 2, 3].includes(Number(parentTask.priority))
+    ? Number(parentTask.priority)
+    : null;
+  const priority = explicitPriority ?? parentPriority ?? 2;
 
   if (!title) throw createError({ statusCode: 400, statusMessage: 'Title is required' });
 

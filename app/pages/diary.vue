@@ -258,6 +258,8 @@
                       :subtask-expansion-token="subtaskExpansionToken"
                       :subtasks-expanded="subtasksExpanded"
                       variant="after-hours"
+                      :show-tags="false"
+                      :show-priority-icon="false"
                       @update:completed="onTaskStatus" />
                   </div>
                 </template>
@@ -282,6 +284,8 @@
                 :subtask-expansion-token="subtaskExpansionToken"
                 :subtasks-expanded="subtasksExpanded"
                 variant="after-hours"
+                :show-tags="false"
+                :show-priority-icon="false"
                 @update:completed="onTaskStatus" />
             </div>
           </div>
@@ -336,6 +340,8 @@
                         :subtask-expansion-token="subtaskExpansionToken"
                         :subtasks-expanded="subtasksExpanded"
                         variant="after-hours"
+                        :show-tags="false"
+                        :show-priority-icon="false"
                         @update:completed="onTaskStatus" />
                     </div>
                   </div>
@@ -348,6 +354,8 @@
                   :subtask-expansion-token="subtaskExpansionToken"
                   :subtasks-expanded="subtasksExpanded"
                   variant="after-hours"
+                  :show-tags="false"
+                  :show-priority-icon="false"
                   @update:completed="onTaskStatus" />
               </template>
             </div>
@@ -387,6 +395,8 @@
                     :subtask-expansion-token="subtaskExpansionToken"
                     :subtasks-expanded="subtasksExpanded"
                     variant="after-hours"
+                    :show-tags="false"
+                    :show-priority-icon="false"
                     @update:completed="onTaskStatus" />
                 </div>
               </div>
@@ -398,6 +408,8 @@
               :subtask-expansion-token="subtaskExpansionToken"
               :subtasks-expanded="subtasksExpanded"
               variant="after-hours"
+              :show-tags="false"
+              :show-priority-icon="false"
               @update:completed="onTaskStatus" />
           </template>
         </div>

@@ -124,6 +124,24 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Use `CREATE OR REPLACE TABLE rc_notes.backup.<name>_<date>_<n> AS SELECT * FROM rc_notes.main.<name>` (fully qualified — DuckDB has a built-in "backup" catalog that conflicts with bare `backup.foo`).
 - Backups are cheap (MotherDuck dedupes storage) and have already saved a 43-task corruption incident — take them aggressively.
 
+### Retroactive data fixes — use the `DATA_REPAIRS` ledger
+When existing rows are wrong because of a bug (not just a schema gap), the correct mechanism is a gated one-time repair in `DATA_REPAIRS` in `app/server/utils/db.ts`, recorded in the `applied_migrations` ledger so it runs **exactly once** per database. Do NOT hand-run a one-off UPDATE and walk away — a repair that can re-run on boot will re-clobber values the user later edited by hand (see the `v6_status_now` note in `db.ts`).
+
+Procedure that was validated on `v12_subtask_priority_inherit` (2026-08-25, fixed 243 subtasks whose priority defaulted to 2/Focus instead of inheriting the parent's lane):
+1. **Make the repair idempotent.** Scope the `WHERE` so a second run matches nothing (e.g. only touch rows still at the buggy default *and* whose target differs), and so user-edited rows and orphans are excluded. Set `updated_at` and `updated_by = 'migration_<name>'` in the same statement.
+2. **Backup #1** — snapshot *all* tables to `rc_notes.backup.<table>_<YYYYMMDD>_1` before doing anything.
+3. **Test on an isolated fixture** — build a throwaway schema (`rc_notes.fixtest`) mirroring the table, populate every case (buggy default, already-correct, user-edited, orphan), run the exact fix SQL, assert expected priorities, drop it. Never test by mutating `main.*`.
+4. **Backup #2** — snapshot all tables again to `..._2` immediately before the write, so revert restores the exact pre-fix state.
+5. **Apply** to `main.*`, then `INSERT` the repair name into `applied_migrations` so boot skips it. Add the same entry to `DATA_REPAIRS` so fresh restores self-heal (prod ledger already marks it done → no re-run).
+6. **Backfill provenance** on exactly the rows changed, identified by diffing against backup #2 (`WHERE m.priority <> b.priority`) — an out-of-band apply that forgot `updated_by` can be repaired precisely this way.
+7. **Verify** the affected-count is 0 and row totals are unchanged. Revert = restore `main.tasks` from a backup + delete the ledger row.
+
+Gotchas:
+- Ad-hoc maintenance scripts must live **under `app/`** (ESM resolves `@duckdb/node-api` from the script's own directory, not cwd) and should connect directly (`INSTALL/LOAD motherduck; SET token; ATTACH 'md:'; USE rc_notes`) *without* calling `ensureSchema()`, so no migration/backfill side effects fire mid-procedure.
+- Fully qualify the backup/test schemas as `rc_notes.backup` / `rc_notes.fixtest` — `ATTACH 'md:'` exposes a built-in `backup` catalog and bare `backup.foo` is ambiguous.
+- The `@duckdb/node-api` native addon can crash a process (`libc++abi: terminating due to uncaught exception of type Napi::Error`) when a second connection hits MotherDuck concurrently — expect the dev server to die while a script runs against the same DB; just restart it, the data is unaffected.
+- Only backup snapshots + no `main` schema change means **no Bruin asset refresh is needed** (backup tables are excluded from `pipeline/` anyway).
+
 ### Provenance: every write should set `updated_by`
 All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values:
 - `user_in_app` — real user via the Nuxt UI in a browser
@@ -131,6 +149,7 @@ All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `u
 - `test_playwright` — automated browser test
 - `agent_query` — agent or operator running raw SQL via MotherDuck
 - `agent_query_<purpose>_<date>` — agent running a one-off purposeful job (e.g. `agent_query_recovery_2026-04-27`)
+- `migration_<name>` — a gated one-time `DATA_REPAIRS` migration (e.g. `migration_v12_subtask_priority`); use the same value in the SQL and when backfilling provenance on rows an out-of-band apply already changed
 - `recovery_script` — generic recovery SQL
 - `unknown` — fallback (only used by middleware when classification fails)
 
