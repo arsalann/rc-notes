@@ -1,18 +1,16 @@
 <template>
-  <div class="calm-diary after-hours-diary max-w-lg lg:max-w-[90rem] mx-auto min-h-screen" :class="{ 'is-focus-mode': focusMode }">
+  <div class="calm-diary after-hours-diary max-w-lg lg:max-w-[90rem] mx-auto min-h-screen">
     <div class="calm-diary-header after-hours-diary-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
       <div class="flex items-center gap-2">
         <span class="calm-brand-mark after-hours-diary-mark" aria-hidden="true">✦</span>
         <h1 class="text-2xl font-bold tracking-tight">daybook</h1>
         <div class="ml-auto flex items-center gap-1.5">
-          <UButton v-if="!focusMode" icon="i-lucide-search" color="neutral" variant="soft" size="md"
+          <UButton icon="i-lucide-search" color="neutral" variant="soft" size="md"
             aria-label="Search" :square="true" @click="toggleSearch" />
-          <UButton v-if="!focusMode && selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
+          <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"
             aria-label="Jump to today" :square="true" @click="goToToday" />
-          <UButton v-if="!focusMode" icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
+          <UButton icon="i-lucide-calendar-range" color="neutral" variant="soft" size="md"
             aria-label="Week summary" :square="true" @click="openWeekSummary" />
-          <UButton :icon="focusMode ? 'i-lucide-focus' : 'i-lucide-sparkles'" color="neutral" :variant="focusMode ? 'soft' : 'ghost'" size="md"
-            :aria-label="focusMode ? 'Exit focus mode' : 'Enter focus mode'" :aria-pressed="focusMode" :square="true" @click="toggleFocusMode" />
         </div>
       </div>
 
@@ -51,19 +49,12 @@
       </div>
     </div>
 
-    <div v-if="!focusMode" class="calm-workspace-strip after-hours-workspace-strip no-scrollbar" aria-label="Workspace filter">
+    <div class="calm-workspace-strip after-hours-workspace-strip no-scrollbar" aria-label="Workspace filter">
       <button type="button" :class="{ active: activeId === null }" :aria-pressed="activeId === null" @click="selectWorkspace(null)">All</button>
       <button v-for="workspace in workspaces" :key="workspace.id" type="button"
         :class="{ active: activeId === workspace.id }" :aria-pressed="activeId === workspace.id" @click="selectWorkspace(workspace.id)">
         <span>{{ workspace.emoji }}</span>{{ workspace.name }}
       </button>
-    </div>
-    <div v-else class="daybook-focus-context" aria-label="Focus context">
-      <span class="daybook-focus-context-dot" aria-hidden="true" />
-      <span>Focus page</span>
-      <span class="daybook-focus-context-divider" aria-hidden="true">/</span>
-      <strong>{{ activeWorkspaceLabel }}</strong>
-      <button type="button" @click="toggleFocusMode">Exit focus</button>
     </div>
 
     <!-- Day selector -->
@@ -96,14 +87,14 @@
         <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
           Task
         </UButton>
-        <UButton v-if="!focusMode" :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
+        <UButton :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
           :icon="hideDone ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="hideDone ? 'Show done' : 'Hide done'"
           @click="toggleHideDone" />
       </div>
     </div>
 
     <!-- Task sort/group toolbar -->
-    <div v-if="!focusMode" class="calm-diary-sort after-hours-sort-toolbar flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
+    <div class="calm-diary-sort after-hours-sort-toolbar flex items-center gap-1.5 px-4 mt-3 overflow-x-auto no-scrollbar scroll-hint pb-0.5">
       <UDropdownMenu :items="diaryViewMenuItems" :ui="{ content: 'min-w-48' }">
         <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-sliders-horizontal"
           trailing-icon="i-lucide-chevron-down" class="shrink-0">
@@ -124,7 +115,7 @@
       leave-active-class="transition ease-in duration-150"
       leave-from-class="opacity-100"
       leave-to-class="opacity-0 -translate-y-1">
-      <div v-if="carriedTasks.length && !focusMode" class="daybook-carry-banner mx-4 mt-4">
+      <div v-if="carriedTasks.length" class="daybook-carry-banner mx-4 mt-4">
         <div class="daybook-carry-icon" aria-hidden="true"><UIcon name="i-lucide-arrow-down-left" class="size-4" /></div>
         <div class="min-w-0 flex-1">
           <p class="daybook-carry-title">Carried forward</p>
@@ -141,16 +132,20 @@
 
     <div v-else class="calm-diary-content after-hours-diary-content px-4 mt-3 pb-8 space-y-6">
       <!-- Notes section -->
-      <div class="calm-diary-note after-hours-note-card">
+      <div class="calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !journalOpen }">
         <div class="daybook-journal-heading">
-          <p class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Journal</p>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-copy" :square="true"
+          <button type="button" class="daybook-journal-toggle" :aria-expanded="journalOpen"
+            aria-label="Toggle journal" @click="toggleJournal">
+            <UIcon :name="journalOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
+            <span class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Journal</span>
+          </button>
+          <UButton v-if="journalOpen" color="neutral" variant="ghost" size="xs" icon="i-lucide-copy" :square="true"
             :loading="copyPreviousLoading" aria-label="Copy notes from previous day" title="Copy notes from previous day"
             @click="copyPreviousDiary" />
         </div>
 
         <!-- Edit mode -->
-        <div v-if="editMode" class="relative">
+        <div v-if="journalOpen && editMode" class="relative">
           <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
             leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
             <div v-if="saving" class="absolute top-2 right-2 flex items-center gap-1.5 text-xs text-(--ui-text-dimmed)">
@@ -175,7 +170,7 @@
         </div>
 
         <!-- Preview mode -->
-        <div v-else class="daybook-journal-preview" role="button" tabindex="0" aria-label="Edit journal entry"
+        <div v-else-if="journalOpen" class="daybook-journal-preview" role="button" tabindex="0" aria-label="Edit journal entry"
           @click="enterEditMode" @keydown.enter.prevent="enterEditMode" @keydown.space.prevent="enterEditMode">
           <div v-if="notesHtml" class="prose prose-invert prose-sm max-w-none
             prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted) prose-p:leading-7
@@ -274,7 +269,7 @@
             {{ allTaskIds.length ? 'All tasks done for this day.' : 'No tasks for this day. Tap + Task to add one.' }}
           </p>
 
-          <div v-if="doneTaskIds.length && !hideDone && !focusMode" class="daybook-desktop-done calm-diary-done after-hours-done-card">
+          <div v-if="doneTaskIds.length && !hideDone" class="daybook-desktop-done calm-diary-done after-hours-done-card">
             <button @click="doneOpen = !doneOpen"
               class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
               <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -363,7 +358,7 @@
         </div>
 
       <!-- Done section (collapsed by default) -->
-      <div v-if="doneTaskIds.length && !hideDone && !focusMode" class="calm-diary-done after-hours-done-card">
+      <div v-if="doneTaskIds.length && !hideDone" class="calm-diary-done after-hours-done-card">
         <button @click="doneOpen = !doneOpen"
           class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
           <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -591,13 +586,12 @@ function runSearch(q: string) {
 }
 const { prefs, set: setPref } = usePreferences();
 const toast = useToast();
-const focusMode = ref(prefs.value.diaryFocusMode);
-watch(() => prefs.value.diaryFocusMode, value => { focusMode.value = value; });
 
-function toggleFocusMode() {
-  focusMode.value = !focusMode.value;
-  setPref('diaryFocusMode', focusMode.value);
-  if (focusMode.value) closeSearch();
+const journalOpen = ref(!prefs.value.diaryJournalCollapsed);
+watch(() => prefs.value.diaryJournalCollapsed, value => { journalOpen.value = !value; });
+function toggleJournal() {
+  journalOpen.value = !journalOpen.value;
+  setPref('diaryJournalCollapsed', !journalOpen.value);
 }
 
 function routeDiaryDate(value: unknown): string | null {
@@ -657,12 +651,6 @@ const manualListsReady = ref(false);
 const reorderSaving = ref(false);
 const reorderState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
 let reorderStateTimer: ReturnType<typeof setTimeout>;
-
-const activeWorkspaceLabel = computed(() => {
-  if (activeId.value === null) return 'All workspaces';
-  const workspace = workspaces.value.find(item => item.id === activeId.value);
-  return workspace ? `${workspace.emoji} ${workspace.name}` : 'Workspace';
-});
 
 watch(() => prefs.value.diaryTaskSort, value => {
   if (value) taskSort.value = value;
