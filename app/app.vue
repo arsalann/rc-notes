@@ -35,6 +35,12 @@ import Login from '~/pages/login.vue';
 const { appState, checkAuth } = useAuth();
 const { fetchWorkspaces } = useWorkspace();
 const route = useRoute();
+
+// Keep the mobile status bar in step with the active theme (beige vs dark canvas).
+const colorMode = useColorMode();
+useHead({
+  meta: [{ name: 'theme-color', content: computed(() => (colorMode.value === 'light' ? '#f4ecdd' : '#171716')) }],
+});
 // Shared with the `pages:extend` hook in nuxt.config.ts that strips these routes from production,
 // so the auth bypass and the route removal cannot drift apart.
 const isDesignLab = computed(() => isDesignLabPath(route.path));

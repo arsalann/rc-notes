@@ -5,9 +5,19 @@
 /*
   Daybook / quiet utility system
 
-  The app stays single-theme and intentionally dim, but the palette is now
-  neutral and warm. Color is reserved for state; hierarchy comes from spacing,
-  weight, and proximity instead of a stack of cards and gradients.
+  Two themes share one token set. Dark is the warm, dim default; Bright is a
+  soft beige daylight palette. Everything downstream reads the --daybook-*
+  tokens (directly or via color-mix), so a theme is fully described by the two
+  blocks below — no component needs to know which theme is active.
+
+  Theme selection follows the OS by default (@nuxtjs/color-mode `system`) and is
+  overridable via the ThemeToggle in each page header. The active theme is set
+  by a `.dark` / `.light` class on <html>. `:root` inherits the dark values so
+  there is no flash before the class resolves.
+
+  Accents are chosen to stay distinguishable for color-vision deficiencies:
+  the teal accent, ochre warm, and red-orange danger separate on the blue–yellow
+  axis and by luminance, avoiding a pure red-vs-green pairing.
 */
 
 :root,
@@ -37,6 +47,38 @@
   --ui-border-inverted: var(--daybook-ink);
   --ui-text: var(--daybook-ink);
   --ui-text-highlighted: #fffaf1;
+  --ui-text-muted: var(--daybook-ink-muted);
+  --ui-text-dimmed: var(--daybook-ink-faint);
+  --ui-text-toned: var(--daybook-accent);
+  --ui-primary: var(--daybook-accent);
+}
+
+/* Bright — a soft beige daylight palette. Same token names, light values. */
+.light {
+  color-scheme: light;
+  --daybook-canvas: #f4ecdd;
+  --daybook-surface: #ede2cd;
+  --daybook-surface-raised: #e6d9bf;
+  --daybook-line: #dccdac;
+  --daybook-line-strong: #c7b58d;
+  --daybook-ink: #2e2a21;
+  --daybook-ink-muted: #5c5346;
+  --daybook-ink-faint: #837a68;
+  --daybook-accent: #2c6f64;
+  --daybook-accent-strong: #1e5349;
+  --daybook-warm: #a56a12;
+  --daybook-danger: #b23a26;
+
+  --ui-bg: var(--daybook-canvas);
+  --ui-bg-muted: #efe5d1;
+  --ui-bg-elevated: var(--daybook-surface);
+  --ui-bg-accented: var(--daybook-surface-raised);
+  --ui-bg-inverted: var(--daybook-ink);
+  --ui-border: var(--daybook-line);
+  --ui-border-muted: #e5dabf;
+  --ui-border-inverted: var(--daybook-ink);
+  --ui-text: var(--daybook-ink);
+  --ui-text-highlighted: #1a160e;
   --ui-text-muted: var(--daybook-ink-muted);
   --ui-text-dimmed: var(--daybook-ink-faint);
   --ui-text-toned: var(--daybook-accent);
@@ -345,8 +387,9 @@
 }
 .calm-day-rail > div > button[class*="bg-purple"],
 .calm-day-rail > div > button[aria-current="date"] {
+  border-bottom-width: 2.5px;
   border-bottom-color: var(--daybook-accent);
-  background: transparent !important;
+  background: color-mix(in srgb, var(--daybook-accent) 14%, transparent) !important;
   color: var(--daybook-ink) !important;
   box-shadow: none !important;
 }
@@ -574,10 +617,16 @@
   color: var(--daybook-accent-strong) !important;
 }
 .after-hours-day-selector > div > button[class*="bg-purple"] {
-  background: transparent !important;
+  background: color-mix(in srgb, var(--daybook-accent) 14%, transparent) !important;
   color: var(--daybook-ink) !important;
   box-shadow: none !important;
-  border-bottom: 2px solid var(--daybook-accent) !important;
+  border-bottom: 2.5px solid var(--daybook-accent) !important;
+}
+/* The weekday eyebrow ships an inline text-white/70; readable on the old dark
+   fill but invisible on the quiet/beige cell. Tie it to the accent instead. */
+.after-hours-day-selector > div > button[class*="bg-purple"] > span:first-of-type,
+.calm-day-rail > div > button[aria-current="date"] > span:first-of-type {
+  color: var(--daybook-accent-strong) !important;
 }
 .calendar-page button[class*="bg-purple"] {
   background: color-mix(in srgb, var(--daybook-accent) 18%, transparent) !important;
