@@ -32,7 +32,7 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'theme-color', content: '#171716' },
+        // theme-color is set reactively in app.vue so the mobile status bar tracks the active theme.
       ],
       link: [
         { rel: 'manifest', href: '/manifest.json' },
@@ -50,7 +50,8 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   colorMode: {
-    preference: 'dark',
+    // Follow the OS by default; the ThemeToggle overrides and persists a choice.
+    preference: 'system',
     fallback: 'dark',
   },
 

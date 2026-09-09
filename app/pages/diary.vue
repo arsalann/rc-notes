@@ -5,6 +5,7 @@
         <span class="calm-brand-mark after-hours-diary-mark" aria-hidden="true">✦</span>
         <h1 class="text-2xl font-bold tracking-tight">daybook</h1>
         <div class="ml-auto flex items-center gap-1.5">
+          <ThemeToggle />
           <UButton icon="i-lucide-search" color="neutral" variant="soft" size="md"
             aria-label="Search" :square="true" @click="toggleSearch" />
           <UButton v-if="selectedDate !== todayDate" icon="i-lucide-calendar-clock" color="neutral" variant="soft" size="md"

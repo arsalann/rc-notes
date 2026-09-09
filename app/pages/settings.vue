@@ -1,7 +1,10 @@
 <template>
   <div class="calm-page settings-page max-w-lg mx-auto">
     <div class="calm-page-header sticky top-0 z-30 px-4 pt-5 pb-3 safe-top">
-      <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
+        <ThemeToggle />
+      </div>
     </div>
 
     <div class="px-4 mt-4 space-y-6 pb-36">

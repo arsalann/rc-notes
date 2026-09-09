@@ -7,6 +7,7 @@
           <WorkspaceSwitcher />
         </div>
         <div class="flex items-center gap-1">
+          <ThemeToggle />
           <UButton :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'" color="neutral"
             :variant="showArchived ? 'soft' : 'ghost'" size="sm" @click="toggleArchived" />
           <UButton icon="i-lucide-list-checks" color="neutral"
