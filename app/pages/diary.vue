@@ -131,8 +131,11 @@
     </div>
 
     <div v-else class="calm-diary-content after-hours-diary-content px-4 mt-3 pb-8 space-y-6">
-      <!-- Notes section -->
-      <div class="calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !journalOpen }">
+      <!-- Reflect grid: journal + weekly goals. Desktop: journal left, goals right.
+           Mobile: goals on top, journal below (via column-reverse). -->
+      <div class="daybook-reflect-grid">
+      <!-- Journal section -->
+      <div class="daybook-reflect-journal calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !journalOpen }">
         <div class="daybook-journal-heading">
           <button type="button" class="daybook-journal-toggle" :aria-expanded="journalOpen"
             aria-label="Toggle journal" @click="toggleJournal">
@@ -183,6 +186,48 @@
           <p v-else class="text-sm text-(--ui-text-dimmed) italic">No notes yet. Tap here to write.</p>
           <p class="daybook-journal-hint">Tap to edit · pauses save automatically</p>
         </div>
+      </div>
+
+      <!-- Weekly goals section (shared across the whole week) -->
+      <div class="daybook-reflect-goals calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !goalsOpen }">
+        <div class="daybook-journal-heading">
+          <button type="button" class="daybook-journal-toggle" :aria-expanded="goalsOpen"
+            aria-label="Toggle goals" @click="toggleGoals">
+            <UIcon :name="goalsOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
+            <span class="after-hours-card-kicker text-xs font-semibold uppercase tracking-wider">Goals</span>
+          </button>
+          <span v-if="goalsOpen" class="text-[10px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed)">{{ goalsWeekLabel }}</span>
+        </div>
+
+        <!-- Edit mode -->
+        <div v-if="goalsOpen && goalsEditMode" class="relative">
+          <Transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-150" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <div v-if="goalsSaving" class="absolute top-2 right-2 flex items-center gap-1.5 text-xs text-(--ui-text-dimmed)">
+              <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" /> Saving
+            </div>
+          </Transition>
+          <textarea v-model="goalsContent" @input="handleGoalsInput" @blur="handleGoalsBlur"
+            @keydown.escape="exitGoalsEditMode" ref="goalsRef"
+            class="w-full leading-7 bg-transparent outline-none resize-none text-(--ui-text-muted) min-h-[160px] placeholder:text-(--ui-text-dimmed)"
+            placeholder="What do you want to achieve this week?" />
+        </div>
+
+        <!-- Preview mode -->
+        <div v-else-if="goalsOpen" class="daybook-journal-preview" role="button" tabindex="0" aria-label="Edit weekly goals"
+          @click="enterGoalsEditMode" @keydown.enter.prevent="enterGoalsEditMode" @keydown.space.prevent="enterGoalsEditMode">
+          <div v-if="goalsHtml" class="prose prose-invert prose-sm max-w-none
+            prose-headings:text-(--ui-text) prose-p:text-(--ui-text-muted) prose-p:leading-7
+            prose-a:text-(--ui-primary) prose-strong:text-(--ui-text)
+            prose-code:text-(--ui-primary) prose-code:bg-(--ui-bg-elevated) prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+            prose-pre:bg-(--ui-bg-elevated) prose-pre:border prose-pre:border-(--ui-border)
+            prose-li:text-(--ui-text-muted) prose-blockquote:border-(--ui-border) prose-blockquote:text-(--ui-text-dimmed)
+            prose-hr:border-(--ui-border)"
+            v-html="goalsHtml" />
+          <p v-else class="text-sm text-(--ui-text-dimmed) italic">No goals yet. Tap here to set your week's goals.</p>
+          <p class="daybook-journal-hint">Shared across the whole week · pauses save automatically</p>
+        </div>
+      </div>
       </div>
 
       <!-- Tasks section -->
@@ -606,6 +651,91 @@ function toggleJournal() {
   setPref('diaryJournalCollapsed', !journalOpen.value);
 }
 
+// --- Weekly goals: one shared markdown entry per week (Sunday-start), reflected across every
+// day of that week. Keyed on the week of the currently selected day.
+interface GoalsEntry { id: string; week_start: string; content: string; workspace_id: string | null }
+const goalsOpen = ref(!prefs.value.diaryGoalsCollapsed);
+watch(() => prefs.value.diaryGoalsCollapsed, value => { goalsOpen.value = !value; });
+function toggleGoals() {
+  goalsOpen.value = !goalsOpen.value;
+  setPref('diaryGoalsCollapsed', !goalsOpen.value);
+}
+const goalsEntry = ref<GoalsEntry | null>(null);
+const goalsContent = ref('');
+const goalsEditMode = ref(false);
+const goalsSaving = ref(false);
+const goalsRef = ref<HTMLTextAreaElement>();
+let goalsRequestId = 0;
+let goalsSaveTimer: ReturnType<typeof setTimeout>;
+
+const goalsHtml = computed(() => {
+  if (!goalsContent.value) return '';
+  const cleaned = goalsContent.value.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  if (!cleaned) return '';
+  return marked.parse(cleaned) as string;
+});
+
+async function fetchGoals() {
+  const requestId = ++goalsRequestId;
+  const week = selectedWeekStart.value;
+  const ws = activeId.value;
+  try {
+    const q: Record<string, string> = {};
+    if (ws) q.workspace_id = ws;
+    const data = await $fetch<GoalsEntry>(`/api/goals/${week}`, { query: q });
+    if (requestId !== goalsRequestId) return;
+    goalsEntry.value = data;
+    goalsContent.value = data.content || '';
+    goalsEditMode.value = false;
+  } catch {
+    if (requestId !== goalsRequestId) return;
+    goalsEntry.value = null;
+    goalsContent.value = '';
+    goalsEditMode.value = false;
+  }
+}
+
+async function persistGoals(week: string, content: string, ws: string | null) {
+  await $fetch(`/api/goals/${week}`, { method: 'PUT', body: { content, workspace_id: ws } });
+}
+
+function saveGoals() {
+  clearTimeout(goalsSaveTimer);
+  goalsSaving.value = true;
+  const week = selectedWeekStart.value;
+  const content = goalsContent.value;
+  const ws = activeId.value;
+  goalsSaveTimer = setTimeout(async () => {
+    try {
+      await persistGoals(week, content, ws);
+    } catch {
+      toast.add({ title: 'Goals could not be saved', description: 'Your writing is still here; try again in a moment.', color: 'error' });
+    } finally {
+      goalsSaving.value = false;
+    }
+  }, 300);
+}
+
+function handleGoalsInput() { saveGoals(); }
+
+function enterGoalsEditMode() {
+  if (goalsEditMode.value) return;
+  goalsEditMode.value = true;
+  nextTick(() => {
+    const el = goalsRef.value;
+    if (!el) return;
+    el.focus();
+    el.selectionStart = el.selectionEnd = el.value.length;
+  });
+}
+
+function exitGoalsEditMode() { goalsEditMode.value = false; }
+
+function handleGoalsBlur() {
+  saveGoals();
+  goalsEditMode.value = false;
+}
+
 function routeDiaryDate(value: unknown): string | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (typeof candidate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return null;
@@ -746,6 +876,18 @@ function addDays(dateStr: string, n: number): string {
 
 const currentWeekStart = computed(() => startOfWeekSunday(todayDate.value));
 const weekEnd = computed(() => addDays(weekStart.value || currentWeekStart.value, 6));
+
+// Sunday of the selected day's week — the shared key for weekly goals. Declared here (after
+// selectedDate / startOfWeekSunday / addDays) so the watcher below doesn't read them in the TDZ.
+const selectedWeekStart = computed(() => startOfWeekSunday(selectedDate.value));
+const goalsWeekLabel = computed(() => {
+  const start = selectedWeekStart.value;
+  const end = addDays(start, 6);
+  const fmt = (s: string) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(end)}`;
+});
+// Refetch only when the week actually changes (navigating within a week keeps the shared entry).
+watch(selectedWeekStart, () => { fetchGoals(); });
 
 const weekRangeLabel = computed(() => {
   if (!weekStart.value) return '';
@@ -1317,10 +1459,12 @@ async function fetchDateIndicators() {
 onMounted(async () => {
   await fetchEntry();
   fetchDateIndicators();
+  fetchGoals();
 });
 watch(activeId, async () => {
   await fetchEntry();
   fetchDateIndicators();
+  fetchGoals();
 });
 watch(() => route.query.date, async (value) => {
   const date = routeDiaryDate(value);

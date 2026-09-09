@@ -94,6 +94,19 @@ const TABLE_DDL: Record<string, string> = {
       created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
       updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
     )`,
+  goals_weekly: `
+    CREATE TABLE goals_weekly (
+      id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
+      user_id VARCHAR DEFAULT NULL,
+      user_name VARCHAR DEFAULT NULL,
+      workspace_id VARCHAR DEFAULT NULL,
+      week_start DATE NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      deleted_at TIMESTAMP DEFAULT NULL,
+      updated_by VARCHAR DEFAULT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+      updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+    )`,
   event_log: `
     CREATE TABLE event_log (
       id VARCHAR PRIMARY KEY DEFAULT uuid()::VARCHAR,
@@ -204,6 +217,8 @@ const INDEX_MIGRATIONS: { name: string; ddl: string }[] = [
   { name: 'idx_notes_display_id', ddl: 'CREATE INDEX idx_notes_display_id ON notes (display_id)' },
   { name: 'idx_diary_date', ddl: 'CREATE INDEX idx_diary_date ON diary_entries (entry_date)' },
   { name: 'idx_diary_workspace', ddl: 'CREATE INDEX idx_diary_workspace ON diary_entries (workspace_id)' },
+  { name: 'idx_goals_week', ddl: 'CREATE INDEX idx_goals_week ON goals_weekly (week_start)' },
+  { name: 'idx_goals_workspace', ddl: 'CREATE INDEX idx_goals_workspace ON goals_weekly (workspace_id)' },
   { name: 'idx_links_source', ddl: 'CREATE INDEX idx_links_source ON links (source_type, source_id)' },
   { name: 'idx_links_target', ddl: 'CREATE INDEX idx_links_target ON links (target_type, target_id)' },
 ];

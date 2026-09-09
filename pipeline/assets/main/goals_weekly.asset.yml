@@ -1,0 +1,47 @@
+name: main.goals_weekly
+type: empty
+description: |-
+  Weekly goals are one free-form markdown entry per week (Sunday-start), shared
+  across every day of that week in the daybook. Editing the goals on any day of a
+  week updates the single row for that week, so the change is reflected on every
+  other day of the same week.
+
+  The table is created and mutated by the app (`app/server/utils/db.ts` DDL +
+  `app/server/api/goals/*`), not by Bruin — this asset documents the schema.
+  Entries are created lazily on first read/write of a week. Soft-delete via
+  `deleted_at` preserves history.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: workspace_id
+    type: VARCHAR
+    description: FK → workspaces.id. Defaults to the "Work" workspace when unset.
+  - name: week_start
+    type: DATE
+    description: Sunday of the week this entry represents (one entry per workspace per week by convention; not enforced as a uniqueness constraint).
+  - name: content
+    type: VARCHAR
+    description: Markdown body of the week's goals. Empty string when the row is auto-created and the user hasn't written anything yet.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp.
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last-write timestamp.
+  - name: user_id
+    type: VARCHAR
+    description: Owner user id. Multi-user not wired up yet.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized owner username.
+  - name: deleted_at
+    type: TIMESTAMP
+    description: Soft-delete timestamp.
+  - name: updated_by
+    type: VARCHAR
+    description: |-
+      Provenance for the last write. Standard values: `user_in_app`,
+      `user_in_test`, `test_playwright`, `agent_query`,
+      `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.

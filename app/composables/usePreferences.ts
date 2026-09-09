@@ -5,6 +5,7 @@ export interface Preferences {
   taskShowDone: boolean;
   diaryHideDone: boolean;
   diaryJournalCollapsed: boolean;
+  diaryGoalsCollapsed: boolean;
   diaryTaskSort: 'manual' | 'created' | 'priority';
   navWorkspaceIds: string[];
 }
@@ -18,6 +19,7 @@ const defaults: Preferences = {
   taskShowDone: true,
   diaryHideDone: false,
   diaryJournalCollapsed: false,
+  diaryGoalsCollapsed: false,
   diaryTaskSort: 'manual',
   navWorkspaceIds: [],
 };
