@@ -635,6 +635,16 @@
   border-radius: 0.7rem;
 }
 
+/* Journal + weekly goals. Mobile: single column, goals on top, journal below
+   (column-reverse keeps journal first in the DOM for desktop's left column). */
+.daybook-reflect-grid {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 1rem;
+}
+.daybook-reflect-journal,
+.daybook-reflect-goals { min-width: 0; }
+
 .daybook-desktop-task-view { display: none; }
 .daybook-mobile-task-view { display: block; }
 
@@ -646,6 +656,15 @@
 
   .daybook-desktop-task-view { display: block; }
   .daybook-mobile-task-view { display: none; }
+
+  /* Full-screen (desktop) layout: journal left, goals right, equal columns. */
+  .daybook-reflect-grid {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+  .daybook-reflect-journal,
+  .daybook-reflect-goals { flex: 1 1 0; }
 
   .daybook-kanban-grid {
     display: grid;
