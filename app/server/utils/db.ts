@@ -394,6 +394,34 @@ const DATA_REPAIRS: { name: string; statements: string[] }[] = [
          AND recovered.content IS NOT NULL`,
     ],
   },
+  {
+    // PR #40's draft recovery saved the previously loaded journal under the newly selected date,
+    // then immediately replayed that false draft. Backups and event_log prove these nine exact Work
+    // entries were empty immediately before the incident. Guard on both immutable identity and the
+    // copied Sep 14 content hash so a user edit made after the incident is never overwritten.
+    name: 'v15_restore_corrupted_diary_copies',
+    statements: [
+      `WITH targets(entry_date, id) AS (VALUES
+         (DATE '2026-09-10', '4210ce0c-74a4-4405-9f0d-962d5527cf2a'),
+         (DATE '2026-09-11', 'e40f5ea0-3ae6-4e5b-9f7d-34c2b3deaf5f'),
+         (DATE '2026-09-12', '572d359f-5694-4fc0-a4e8-0e33b8f02ed6'),
+         (DATE '2026-09-13', '1929575e-d36a-49c0-80db-d84ed6aba6a5'),
+         (DATE '2026-09-15', '0db496f5-e8b4-4ec7-a751-afd75655b907'),
+         (DATE '2026-09-16', '07412c9c-0b2d-4472-87bb-b93a1260b74a'),
+         (DATE '2026-09-17', 'c9da86f7-a078-4726-b862-fa20da0426d6'),
+         (DATE '2026-09-20', 'b8d274c5-0e7f-4e00-b987-648042772f5c'),
+         (DATE '2026-09-21', '9625fcf9-c30e-4fed-acf6-0c751f7d341b')
+       )
+       UPDATE diary_entries AS d
+       SET content = '',
+           updated_at = current_timestamp,
+           updated_by = 'migration_v15_restore_diary_copies'
+       FROM targets t
+       WHERE d.id = t.id
+         AND d.entry_date = t.entry_date
+         AND md5(d.content) = '76c6797331d39c3be94e03df684f5af0'`,
+    ],
+  },
 ];
 
 async function ensureSchema(connection: any) {

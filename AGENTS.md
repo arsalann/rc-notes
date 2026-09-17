@@ -100,6 +100,19 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Flat list uses drag handles for reordering
 - Empty workspace groups are hidden
 
+## Daybook Journal Write Safety
+- Bind every journal draft and save to the immutable loaded entry identity: user, entry ID,
+  actual workspace ID, entry date, and server revision. Never derive a save target from selectors
+  that may already point at the next day or workspace.
+- A recovered local draft must never write automatically. Show Restore/Discard, and require the
+  user to choose before sending a divergent draft to the server.
+- Version local draft keys. Quarantine legacy drafts instead of replaying them after draft logic
+  changes.
+- Journal updates must target exactly one entry and use optimistic concurrency. A NULL workspace is
+  an exact value, never a wildcard for writes.
+- Any change to date/workspace navigation, autosave, or session recovery requires regression tests
+  proving distinct journal contents cannot cross dates or workspaces.
+
 ## User Preferences
 - Keep things simple — this is a personal tool
 - Document durable contributor conventions here and public product context in `README.md`; use source code, migrations, and pipeline assets as the schema/API authority
