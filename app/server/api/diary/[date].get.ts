@@ -111,15 +111,17 @@ export default defineEventHandler(async (event) => {
   }
 
   // Fetch linked items — task/note workspace must match this entry's workspace
-  const linksReadParams: Record<string, any> = { id: entry.id };
-  const linksReadTypes: Record<string, any> = { id: VARCHAR };
   const sourceFilter = requestedWorkspaceId
     ? 'l.source_id = $id'
     : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
-  if (!requestedWorkspaceId) {
-    linksReadParams.date = date;
-    linksReadTypes.date = VARCHAR;
-  }
+  // DuckDB rejects a bound name that does not occur in the query. In the All-workspaces case the
+  // source filter uses $date rather than $id, so bind exactly the placeholder the query contains.
+  const linksReadParams: Record<string, any> = requestedWorkspaceId
+    ? { id: String(entry.id) }
+    : { date };
+  const linksReadTypes: Record<string, any> = requestedWorkspaceId
+    ? { id: VARCHAR }
+    : { date: VARCHAR };
   let wsMatch = '';
   if (requestedWorkspaceId) {
     wsMatch = `AND (
