@@ -296,6 +296,104 @@ const DATA_REPAIRS: { name: string; statements: string[] }[] = [
          AND (SELECT p.priority FROM tasks p WHERE p.id = tasks.parent_id) IN (0, 1, 3)`,
     ],
   },
+  {
+    // Rapid day navigation could create future diary pages out of order. Carry-forward only ran at
+    // creation time, so the Work pages for Sep 14–15 were left empty even though Sep 13 had 33
+    // incomplete linked tasks. This repair is deliberately narrow and idempotent: it only fills
+    // those two still-empty pages from their latest prior page that has incomplete task links.
+    name: 'v13_daybook_carry_forward_repair',
+    statements: [
+      `WITH target_pages AS (
+         SELECT d.id, d.user_id, d.workspace_id, d.entry_date
+         FROM diary_entries d
+         JOIN workspaces w ON w.id = d.workspace_id
+         WHERE w.name = 'Work'
+           AND d.entry_date IN (DATE '2026-09-14', DATE '2026-09-15')
+           AND d.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM links current_links
+             WHERE current_links.source_type = 'diary'
+               AND current_links.source_id = d.id
+               AND current_links.target_type = 'task'
+           )
+       ), source_pages AS (
+         SELECT target.id AS target_id, target.user_id,
+           (
+             SELECT previous.id
+             FROM diary_entries previous
+             WHERE previous.workspace_id = target.workspace_id
+               AND previous.entry_date < target.entry_date
+               AND previous.deleted_at IS NULL
+               AND EXISTS (
+                 SELECT 1
+                 FROM links previous_links
+                 JOIN tasks previous_tasks ON previous_tasks.id = previous_links.target_id
+                 WHERE previous_links.source_type = 'diary'
+                   AND previous_links.source_id = previous.id
+                   AND previous_links.target_type = 'task'
+                   AND previous_tasks.completed = false
+               )
+             ORDER BY previous.entry_date DESC
+             LIMIT 1
+           ) AS source_id
+         FROM target_pages target
+       )
+       INSERT INTO links (id, user_id, source_type, source_id, target_type, target_id, updated_by)
+       SELECT uuid()::VARCHAR, source_pages.user_id, 'diary', source_pages.target_id,
+         'task', previous_links.target_id, 'migration_v13_daybook_carry_forward'
+       FROM source_pages
+       JOIN links previous_links
+         ON previous_links.source_type = 'diary'
+        AND previous_links.source_id = source_pages.source_id
+        AND previous_links.target_type = 'task'
+       JOIN tasks previous_tasks ON previous_tasks.id = previous_links.target_id
+       WHERE previous_tasks.completed = false
+         AND NOT EXISTS (
+           SELECT 1 FROM links existing_links
+           WHERE existing_links.source_type = 'diary'
+             AND existing_links.source_id = source_pages.target_id
+             AND existing_links.target_type = 'task'
+             AND existing_links.target_id = previous_links.target_id
+         )`,
+    ],
+  },
+  {
+    // The Sep 14 Work journal was overwritten by an empty autosave after the UI loaded it without
+    // its previously saved content. The event log retains the request bodies, so restore only this
+    // exact still-empty row from its most recent successful non-empty save. Once restored, the
+    // content predicate makes this a no-op forever; the ledger prevents any future replay.
+    name: 'v14_restore_sep14_diary_from_event_log',
+    statements: [
+      `WITH recovered AS (
+         SELECT d.id,
+           (
+             SELECT json_extract_string(e.request_body, '$.content')
+             FROM event_log e
+             WHERE e.method = 'PUT'
+               AND e.path = '/api/diary/2026-09-14'
+               AND e.response_status BETWEEN 200 AND 299
+               AND json_valid(e.request_body)
+               AND COALESCE(json_extract_string(e.request_body, '$.content'), '') <> ''
+             ORDER BY e.created_at DESC
+             LIMIT 1
+           ) AS content
+         FROM diary_entries d
+         JOIN workspaces w ON w.id = d.workspace_id
+         WHERE d.id = '75db2cce-e092-45a5-b866-504b15ed41e7'
+           AND w.name = 'Work'
+           AND d.entry_date = DATE '2026-09-14'
+           AND d.deleted_at IS NULL
+           AND d.content = ''
+       )
+       UPDATE diary_entries AS d
+       SET content = recovered.content,
+           updated_at = current_timestamp,
+           updated_by = 'migration_v14_restore_sep14_diary'
+       FROM recovered
+       WHERE d.id = recovered.id
+         AND recovered.content IS NOT NULL`,
+    ],
+  },
 ];
 
 async function ensureSchema(connection: any) {

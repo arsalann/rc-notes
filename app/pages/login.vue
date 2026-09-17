@@ -1,6 +1,10 @@
 <template>
   <div class="min-h-screen flex items-center justify-center px-6">
     <div class="w-full max-w-sm space-y-8">
+      <div v-if="authNotice" class="rounded-xl border border-(--daybook-warm)/40 bg-(--daybook-warm)/10 px-4 py-3 text-sm text-(--ui-text-muted)" role="alert">
+        <UIcon name="i-lucide-clock" class="mr-1.5 inline size-4 align-[-2px] text-(--daybook-warm)" />
+        {{ authNotice }}
+      </div>
       <!-- Welcome screen -->
       <template v-if="mode === 'choose'">
         <div class="text-center space-y-2">
@@ -104,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-const { login, signup } = useAuth();
+const { login, signup, authNotice } = useAuth();
 
 const mode = ref<'choose' | 'login' | 'signup'>('choose');
 const isSignup = computed(() => mode.value === 'signup');

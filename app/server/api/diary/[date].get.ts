@@ -5,14 +5,15 @@ import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
 export default defineEventHandler(async (event) => {
   const date = String(getRouterParam(event, 'date'));
   const { workspace_id } = getQuery(event);
+  const requestedWorkspaceId = workspace_id ? String(workspace_id) : null;
 
   let where = "entry_date = $date::DATE";
   const params: Record<string, any> = { date };
   const types: Record<string, any> = { date: VARCHAR };
 
-  if (workspace_id) {
+  if (requestedWorkspaceId) {
     where += " AND workspace_id = $ws";
-    params.ws = workspace_id;
+    params.ws = requestedWorkspaceId;
     types.ws = VARCHAR;
   }
 
@@ -22,7 +23,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const entry = rows[0];
-  const entryWorkspaceId = entry.workspace_id as string | null;
+  // With "All" selected there can be one diary entry per workspace. The selected entry is
+  // still used for the journal text, but task links must be read across every entry for the date.
 
   // NOTE: this handler used to "auto-bump" every overdue task in the workspace to the requested
   // date. That made a read mutate unrelated rows: navigating to a future date (one tap on "next
@@ -36,12 +38,10 @@ export default defineEventHandler(async (event) => {
   const linkParams: Record<string, any> = { did: entry.id as string, date };
   const linkTypes: Record<string, any> = { did: VARCHAR, date: VARCHAR };
   let linkWs = '';
-  if (entryWorkspaceId) {
+  if (requestedWorkspaceId) {
     linkWs = ' AND t.workspace_id = $ws';
-    linkParams.ws = entryWorkspaceId;
+    linkParams.ws = requestedWorkspaceId;
     linkTypes.ws = VARCHAR;
-  } else {
-    linkWs = ' AND t.workspace_id IS NULL';
   }
   await queryAll(
     `INSERT INTO links (id, source_type, source_id, target_type, target_id)
@@ -55,22 +55,79 @@ export default defineEventHandler(async (event) => {
     linkParams, linkTypes
   ).catch(() => {});
 
+  // If a page was created before its preceding page finished carrying tasks (rapid navigation can
+  // overlap requests), repair the empty page from the latest earlier page in the same workspace.
+  // This is intentionally limited to pages with no task links, so it never overwrites a page that
+  // already has its own task list.
+  const carryWorkspaceId = entry.workspace_id ? String(entry.workspace_id) : null;
+  if (carryWorkspaceId) {
+    await queryAll(
+      `INSERT INTO links (id, user_id, source_type, source_id, target_type, target_id, updated_by)
+       SELECT uuid()::VARCHAR, $user_id, 'diary', $target_id, 'task', previous_links.target_id, 'user_in_app'
+       FROM links previous_links
+       JOIN tasks previous_tasks ON previous_tasks.id = previous_links.target_id
+       WHERE previous_links.source_type = 'diary'
+         AND previous_links.source_id = (
+           SELECT previous.id
+           FROM diary_entries previous
+           WHERE previous.workspace_id = $workspace_id
+             AND previous.entry_date < $date::DATE
+             AND previous.deleted_at IS NULL
+             AND EXISTS (
+               SELECT 1
+               FROM links previous_page_links
+               JOIN tasks previous_page_tasks ON previous_page_tasks.id = previous_page_links.target_id
+               WHERE previous_page_links.source_type = 'diary'
+                 AND previous_page_links.source_id = previous.id
+                 AND previous_page_links.target_type = 'task'
+                 AND previous_page_tasks.completed = false
+             )
+           ORDER BY previous.entry_date DESC
+           LIMIT 1
+         )
+         AND previous_links.target_type = 'task'
+         AND previous_tasks.completed = false
+         AND NOT EXISTS (
+           SELECT 1 FROM links current_page_links
+           WHERE current_page_links.source_type = 'diary'
+             AND current_page_links.source_id = $target_id
+             AND current_page_links.target_type = 'task'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM links duplicate_links
+           WHERE duplicate_links.source_type = 'diary'
+             AND duplicate_links.source_id = $target_id
+             AND duplicate_links.target_type = 'task'
+             AND duplicate_links.target_id = previous_links.target_id
+         )`,
+      {
+        target_id: String(entry.id),
+        user_id: entry.user_id ? String(entry.user_id) : null,
+        workspace_id: carryWorkspaceId,
+        date,
+      },
+      { target_id: VARCHAR, user_id: VARCHAR, workspace_id: VARCHAR, date: VARCHAR }
+    ).catch(() => {});
+  }
+
   // Fetch linked items — task/note workspace must match this entry's workspace
   const linksReadParams: Record<string, any> = { id: entry.id };
   const linksReadTypes: Record<string, any> = { id: VARCHAR };
+  const sourceFilter = requestedWorkspaceId
+    ? 'l.source_id = $id'
+    : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
+  if (!requestedWorkspaceId) {
+    linksReadParams.date = date;
+    linksReadTypes.date = VARCHAR;
+  }
   let wsMatch = '';
-  if (entryWorkspaceId) {
+  if (requestedWorkspaceId) {
     wsMatch = `AND (
       (l.target_type = 'task' AND t.workspace_id = $ws)
       OR (l.target_type = 'note' AND n.workspace_id = $ws)
     )`;
-    linksReadParams.ws = entryWorkspaceId;
+    linksReadParams.ws = requestedWorkspaceId;
     linksReadTypes.ws = VARCHAR;
-  } else {
-    wsMatch = `AND (
-      (l.target_type = 'task' AND t.workspace_id IS NULL)
-      OR (l.target_type = 'note' AND n.workspace_id IS NULL)
-    )`;
   }
   const links = await queryAll(`
     SELECT l.id as link_id, l.target_type, l.target_id,
@@ -78,7 +135,7 @@ export default defineEventHandler(async (event) => {
     FROM links l
     LEFT JOIN tasks t ON l.target_type = 'task' AND t.id = l.target_id
     LEFT JOIN notes n ON l.target_type = 'note' AND n.id = l.target_id
-    WHERE l.source_type = 'diary' AND l.source_id = $id ${wsMatch}
+    WHERE l.source_type = 'diary' AND ${sourceFilter} ${wsMatch}
   `, linksReadParams, linksReadTypes);
 
   // Batch auto-set due_at on linked tasks that don't have one yet.
