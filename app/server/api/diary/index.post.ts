@@ -113,24 +113,23 @@ export default defineEventHandler(async (event) => {
   }
 
   // Fetch links — workspace-scoped to match the new entry
-  const linksReadParams: Record<string, any> = { id: newEntry.id };
-  const linksReadTypes: Record<string, any> = { id: VARCHAR };
   let wsMatch = '';
   if (requestedWorkspaceId) {
     wsMatch = `AND (
       (l.target_type = 'task' AND t.workspace_id = $ws)
       OR (l.target_type = 'note' AND n.workspace_id = $ws)
     )`;
-    linksReadParams.ws = requestedWorkspaceId;
-    linksReadTypes.ws = VARCHAR;
   }
   const sourceFilter = requestedWorkspaceId
     ? 'l.source_id = $id'
     : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
-  if (!requestedWorkspaceId) {
-    linksReadParams.date = entryDate;
-    linksReadTypes.date = VARCHAR;
-  }
+  // Bind only the placeholder used by the selected source filter; DuckDB errors on unused names.
+  const linksReadParams: Record<string, any> = requestedWorkspaceId
+    ? { id: String(newEntry.id), ws: requestedWorkspaceId }
+    : { date: entryDate };
+  const linksReadTypes: Record<string, any> = requestedWorkspaceId
+    ? { id: VARCHAR, ws: VARCHAR }
+    : { date: VARCHAR };
   const links = await queryAll(`
     SELECT l.id as link_id, l.target_type, l.target_id,
       COALESCE(t.title, n.title) as target_title
