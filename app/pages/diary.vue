@@ -147,10 +147,11 @@
             :loading="copyPreviousLoading" aria-label="Copy notes from previous day" title="Copy notes from previous day"
             @click="copyPreviousDiary" />
         </div>
-        <div v-if="draftRecovered" class="daybook-draft-recovery" role="status">
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
-          <span class="min-w-0 flex-1">Recovered unsaved notes from before sign-in.</span>
-          <UButton color="neutral" variant="ghost" size="xs" @click="discardRecoveredDraft">Discard</UButton>
+        <div v-if="recoveryDraft" class="daybook-draft-recovery" role="status">
+          <UIcon name="i-lucide-file-warning" class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1">Unsaved writing is available for this day.</span>
+          <UButton color="primary" variant="soft" size="xs" class="touch-target" @click="restoreRecoveredDraft">Restore</UButton>
+          <UButton color="neutral" variant="ghost" size="xs" class="touch-target" @click="discardRecoveredDraft">Discard</UButton>
         </div>
 
         <!-- Edit mode -->
@@ -597,6 +598,16 @@ import { parseChecklist, hasChecklist, replaceChecklistWithMentions } from '~/co
 import { parseHashtags } from '~/composables/useHashtagParse';
 import { todayLocal, localDateOffset, parseUTC } from '~/composables/useDate';
 import { PRIORITY_OPTIONS } from '~/composables/usePriority';
+import {
+  canPersistDiaryDraft,
+  createDiaryDraft,
+  diaryDraftQuarantineKey,
+  diaryDraftStorageKey,
+  inspectDiaryDraft,
+  isLegacyDiaryDraftKey,
+  type DiaryDraft,
+  type DiaryDraftIdentity,
+} from '~/utils/diaryDraft';
 import type { Task } from '~/composables/useNotes';
 
 interface DiaryEntry {
@@ -604,6 +615,7 @@ interface DiaryEntry {
   workspace_id: string | null;
   entry_date: string;
   content: string;
+  updated_at: string;
   links?: any[];
   // Linked tasks, hydrated server-side by GET /api/diary/[date] and POST /api/diary in two queries.
   // Removes the per-task request the watcher below used to make. See .context/perf-plan.md item 1.
@@ -764,7 +776,6 @@ const editContent = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const editMode = ref(false);
-const draftRecovered = ref(false);
 const copyPreviousOpen = ref(false);
 const copyPreviousLoading = ref(false);
 const previousDiaryDate = ref('');
@@ -1410,8 +1421,9 @@ async function fetchEntry() {
   const requestId = ++entryRequestId;
   const requestedDate = selectedDate.value;
   const requestedWorkspaceId = activeId.value;
-  checkpointDiaryDraft(requestedDate, requestedWorkspaceId);
   loading.value = true;
+  recoveryDraft.value = null;
+  loadedEntryIdentity.value = null;
   entry.value = null;
   editContent.value = '';
   subtaskExpansionToken.value = 0;
@@ -1440,7 +1452,8 @@ async function fetchEntry() {
       mergeTaskCache(data.tasks || []);
       entry.value = data;
       editContent.value = data.content;
-      await restoreDiaryDraft(requestedDate, requestedWorkspaceId, data.content, requestId);
+      setLoadedEntryIdentity(data);
+      offerDiaryDraft(data, requestId);
       editMode.value = false;
       return;
     }
@@ -1454,7 +1467,8 @@ async function fetchEntry() {
     mergeTaskCache(created.tasks || []);
     entry.value = created;
     editContent.value = created.content;
-    await restoreDiaryDraft(requestedDate, requestedWorkspaceId, created.content, requestId);
+    setLoadedEntryIdentity(created);
+    offerDiaryDraft(created, requestId);
     carriedTasks.value = created.carried_tasks || [];
     editMode.value = false;
   } finally {
@@ -1462,8 +1476,9 @@ async function fetchEntry() {
   }
 }
 
-function selectWorkspace(workspaceId: string | null) {
+async function selectWorkspace(workspaceId: string | null) {
   if (activeId.value === workspaceId) return;
+  await flushSaveContent();
   setActive(workspaceId);
 }
 
@@ -1483,17 +1498,28 @@ async function fetchDateIndicators() {
 
 onMounted(async () => {
   refreshTodayDate();
+  quarantineLegacyDiaryDrafts();
   dayClock = setInterval(refreshTodayDate, 30_000);
   window.addEventListener('focus', refreshTodayDate);
+  window.addEventListener('beforeunload', handleBeforeUnload);
   await fetchEntry();
   fetchDateIndicators();
   fetchGoals();
 });
 onBeforeUnmount(() => {
+  checkpointCurrentDiaryDraft();
   if (dayClock) clearInterval(dayClock);
+  clearTimeout(saveTimer);
+  clearTimeout(editIdleTimer);
+  clearTimeout(mentionTimer);
+  clearTimeout(searchDebounce);
+  clearTimeout(goalsSaveTimer);
+  clearTimeout(reorderStateTimer);
   window.removeEventListener('focus', refreshTodayDate);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
 });
 watch(activeId, async () => {
+  await flushSaveContent();
   await fetchEntry();
   fetchDateIndicators();
   fetchGoals();
@@ -1501,10 +1527,15 @@ watch(activeId, async () => {
 watch(() => route.query.date, async (value) => {
   const date = routeDiaryDate(value);
   if (!date || date === selectedDate.value) return;
+  await flushSaveContent();
   selectedDate.value = date;
   dateWindowCenter.value = date;
   await fetchEntry();
   fetchDateIndicators();
+});
+
+onBeforeRouteLeave(async () => {
+  await flushSaveContent();
 });
 
 // Autosave
@@ -1512,77 +1543,134 @@ let saveTimer: ReturnType<typeof setTimeout>;
 let editIdleTimer: ReturnType<typeof setTimeout>;
 const editIdleDelay = 6000;
 
-interface DiaryDraft {
-  content: string;
-  savedAt: string;
+interface LoadedDiaryIdentity extends DiaryDraftIdentity {
+  updatedAt: string;
 }
 
-function diaryDraftKey(date: string, workspaceId: string | null) {
+const loadedEntryIdentity = ref<LoadedDiaryIdentity | null>(null);
+const recoveryDraft = ref<DiaryDraft | null>(null);
+const latestUpdatedAtByEntry = new Map<string, string>();
+let saveInFlight: Promise<void> | null = null;
+let activeSaveCount = 0;
+
+function setLoadedEntryIdentity(value: DiaryEntry) {
+  const identity: LoadedDiaryIdentity = {
+    userId: String(user.value?.id || ''),
+    entryId: value.id,
+    workspaceId: value.workspace_id,
+    date: String(value.entry_date).slice(0, 10),
+    updatedAt: value.updated_at,
+  };
+  loadedEntryIdentity.value = identity;
+  latestUpdatedAtByEntry.set(identity.entryId, identity.updatedAt);
+}
+
+function draftStorageKey(identity: DiaryDraftIdentity) {
+  return identity.userId ? diaryDraftStorageKey(identity) : null;
+}
+
+function quarantineLegacyDiaryDrafts() {
   const userId = user.value?.id;
-  return userId ? `daybook:diary-draft:${userId}:${workspaceId || 'all'}:${date}` : null;
-}
-
-function checkpointDiaryDraft(date: string, workspaceId: string | null) {
-  const key = diaryDraftKey(date, workspaceId);
-  if (!key || !entry.value) return;
+  if (!userId) return;
+  const legacyUserPrefix = `daybook:diary-draft:${userId}:`;
+  const quarantinedAt = new Date().toISOString();
   try {
-    localStorage.setItem(key, JSON.stringify({
-      content: editContent.value,
-      savedAt: new Date().toISOString(),
-    } satisfies DiaryDraft));
-  } catch {}
-}
-
-function readDiaryDraft(date: string, workspaceId: string | null): DiaryDraft | null {
-  const key = diaryDraftKey(date, workspaceId);
-  if (!key) return null;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (typeof parsed?.content !== 'string' || typeof parsed?.savedAt !== 'string') return null;
-    return parsed as DiaryDraft;
-  } catch {
-    return null;
-  }
-}
-
-function clearDiaryDraft(date: string, workspaceId: string | null, content?: string) {
-  const key = diaryDraftKey(date, workspaceId);
-  if (!key) return;
-  try {
-    if (content === undefined || readDiaryDraft(date, workspaceId)?.content === content) {
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith(legacyUserPrefix) || key.includes(':quarantine:') || !isLegacyDiaryDraftKey(key)) continue;
+      const value = localStorage.getItem(key);
+      if (value !== null) localStorage.setItem(diaryDraftQuarantineKey(key, quarantinedAt), value);
       localStorage.removeItem(key);
     }
   } catch {}
 }
 
-async function restoreDiaryDraft(date: string, workspaceId: string | null, serverContent: string, requestId: number) {
-  const draft = readDiaryDraft(date, workspaceId);
+function checkpointDiaryDraft(identity: LoadedDiaryIdentity, content: string) {
+  const key = draftStorageKey(identity);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(createDiaryDraft(
+      identity,
+      content,
+      latestUpdatedAtByEntry.get(identity.entryId) || identity.updatedAt,
+    )));
+  } catch {}
+}
+
+function checkpointCurrentDiaryDraft() {
+  const identity = loadedEntryIdentity.value;
+  if (!identity || !entry.value || recoveryDraft.value?.identity.entryId === identity.entryId) return;
+  if (editContent.value === entry.value.content) return;
+  checkpointDiaryDraft(identity, editContent.value);
+}
+
+function handleBeforeUnload() {
+  checkpointCurrentDiaryDraft();
+}
+
+function readDiaryDraft(identity: LoadedDiaryIdentity): DiaryDraft | null {
+  const key = draftStorageKey(identity);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const inspected = inspectDiaryDraft(raw, identity, identity.updatedAt);
+    if (inspected.status === 'accepted') return inspected.draft;
+    // A valid draft based on an older server revision is still offered, but only an explicit
+    // Restore can rebase and submit it against the entry currently on screen.
+    if (inspected.status === 'stale-base' && raw) return JSON.parse(raw) as DiaryDraft;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDiaryDraft(identity: DiaryDraftIdentity, content?: string) {
+  const key = draftStorageKey(identity);
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem(key);
+    const storedContent = raw ? JSON.parse(raw)?.content : undefined;
+    if (content === undefined || storedContent === content) {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+function offerDiaryDraft(serverEntry: DiaryEntry, requestId: number) {
+  const identity = loadedEntryIdentity.value;
+  if (!identity || identity.entryId !== serverEntry.id) return;
+  const draft = readDiaryDraft(identity);
   if (!draft || requestId !== entryRequestId) return;
-  if (draft.content === serverContent) {
-    clearDiaryDraft(date, workspaceId, draft.content);
+  if (draft.content === serverEntry.content) {
+    clearDiaryDraft(identity, draft.content);
     return;
   }
+  // A divergent draft is never written automatically. The person must choose Restore or Discard.
+  recoveryDraft.value = draft;
+}
 
+async function restoreRecoveredDraft() {
+  const draft = recoveryDraft.value;
+  const identity = loadedEntryIdentity.value;
+  if (!draft || !identity || draft.identity.entryId !== identity.entryId) return;
+  const rebasedDraft = createDiaryDraft(identity, draft.content, identity.updatedAt, draft.savedAt);
+  if (!canPersistDiaryDraft(rebasedDraft, identity, identity.updatedAt)) return;
   editContent.value = draft.content;
-  draftRecovered.value = true;
+  recoveryDraft.value = null;
   try {
-    await persistDiaryContent(date, draft.content, workspaceId);
-    clearDiaryDraft(date, workspaceId, draft.content);
-    if (requestId === entryRequestId) {
-      draftRecovered.value = false;
-      toast.add({ title: 'Recovered your unsaved notes', color: 'success' });
-    }
+    await persistDiaryContent(identity, draft.content);
+    toast.add({ title: 'Unsaved writing restored', color: 'success' });
   } catch {
-    // Keep the local copy and recovery banner if the session is still unavailable.
+    recoveryDraft.value = draft;
+    toast.add({ title: 'Writing could not be restored', description: 'Your local copy is still safe.', color: 'error' });
   }
 }
 
 function discardRecoveredDraft() {
-  clearDiaryDraft(selectedDate.value, activeId.value);
-  draftRecovered.value = false;
-  if (entry.value) editContent.value = entry.value.content;
+  const draft = recoveryDraft.value;
+  if (!draft) return;
+  clearDiaryDraft(draft.identity);
+  recoveryDraft.value = null;
 }
 
 const previousDiaryLabel = computed(() => {
@@ -1611,50 +1699,74 @@ function scheduleEditIdleView(delay = editIdleDelay) {
   }, delay);
 }
 
-async function persistDiaryContent(date: string, content: string, workspaceId: string | null) {
-  await $fetch(`/api/diary/${date}`, {
-    method: 'PUT',
-    body: { content, workspace_id: workspaceId },
-  });
-  clearDiaryDraft(date, workspaceId, content);
-  if (content.trim()) entryDates.value.add(date);
+async function persistDiaryContent(identity: LoadedDiaryIdentity, content: string) {
+  const previousSave = saveInFlight;
+  const operation = (async () => {
+    if (previousSave) await previousSave.catch(() => {});
+    const expectedUpdatedAt = latestUpdatedAtByEntry.get(identity.entryId) || identity.updatedAt;
+    const saved = await $fetch<DiaryEntry>(`/api/diary/${identity.date}`, {
+      method: 'PUT',
+      body: {
+        content,
+        workspace_id: identity.workspaceId,
+        entry_id: identity.entryId,
+        expected_updated_at: expectedUpdatedAt,
+      },
+    });
+    latestUpdatedAtByEntry.set(identity.entryId, saved.updated_at);
+    clearDiaryDraft(identity, content);
+    if (loadedEntryIdentity.value?.entryId === identity.entryId) {
+      loadedEntryIdentity.value = { ...identity, updatedAt: saved.updated_at };
+      if (entry.value?.id === identity.entryId) entry.value = { ...entry.value, content, updated_at: saved.updated_at };
+    }
+    if (content.trim()) entryDates.value.add(identity.date);
+  })();
+  saveInFlight = operation;
+  activeSaveCount += 1;
+  saving.value = true;
+  try {
+    await operation;
+  } finally {
+    activeSaveCount -= 1;
+    saving.value = activeSaveCount > 0;
+    if (saveInFlight === operation) saveInFlight = null;
+  }
 }
 
 function saveContent() {
-  checkpointDiaryDraft(selectedDate.value, activeId.value);
-  if (!entry.value) return;
+  const identity = loadedEntryIdentity.value;
+  if (!identity || !entry.value || editContent.value === entry.value.content) return;
+  checkpointDiaryDraft(identity, editContent.value);
   clearTimeout(saveTimer);
-  saving.value = true;
-  const dateToSave = selectedDate.value;
   const contentToSave = editContent.value;
-  const workspaceId = activeId.value;
   saveTimer = setTimeout(async () => {
     try {
-      await persistDiaryContent(dateToSave, contentToSave, workspaceId);
+      await persistDiaryContent(identity, contentToSave);
     } catch {
       toast.add({ title: 'Diary could not be saved', description: 'Your writing is still here; try again in a moment.', color: 'error' });
-    } finally {
-      saving.value = false;
     }
   }, 300);
 }
 
 async function flushSaveContent() {
   clearTimeout(saveTimer);
-  checkpointDiaryDraft(selectedDate.value, activeId.value);
-  if (!entry.value) return;
-  saving.value = true;
+  const identity = loadedEntryIdentity.value;
+  if (!identity || !entry.value || editContent.value === entry.value.content) return;
+  const content = editContent.value;
+  checkpointDiaryDraft(identity, content);
   try {
-    await persistDiaryContent(selectedDate.value, editContent.value, activeId.value);
+    await persistDiaryContent(identity, content);
   } catch {
     toast.add({ title: 'Diary could not be saved', description: 'Your writing is still here; try again in a moment.', color: 'error' });
-  } finally {
-    saving.value = false;
   }
 }
 
 function enterEditMode() {
   if (editMode.value) return;
+  if (recoveryDraft.value) {
+    toast.add({ title: 'Restore or discard the unsaved writing first', color: 'neutral' });
+    return;
+  }
   editMode.value = true;
   nextTick(() => {
     const el = contentRef.value;
