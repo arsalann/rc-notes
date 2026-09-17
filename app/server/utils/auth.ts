@@ -17,8 +17,12 @@ export function getSessionConfig() {
   }
   return {
     password: secret,
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 30, // 30 days; the client heartbeat rolls this forward while active
     name: 'rc-session',
+    // The local app is served over HTTP (including phone/LAN access). Keep Secure in production,
+    // where the app is expected to run behind HTTPS, but do not create a cookie the dev browser
+    // cannot send back over http://localhost or a local network address.
+    cookie: { secure: process.env.NODE_ENV === 'production' },
   };
 }
 

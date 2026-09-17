@@ -9,21 +9,32 @@ interface AuthUser {
 export function useAuth() {
   const appState = useState<AppState>('appState', () => 'loading');
   const user = useState<AuthUser | null>('authUser', () => null);
+  const authNotice = useState<string | null>('authNotice', () => null);
 
-  async function checkAuth() {
-    appState.value = 'loading';
+  async function checkAuth(options: { silent?: boolean } = {}): Promise<boolean> {
+    const wasReady = appState.value === 'ready' && !!user.value;
+    if (!options.silent) appState.value = 'loading';
     try {
       const res = await $fetch<{ configured: boolean; user: AuthUser | null }>('/api/auth/check');
       if (!res.configured) {
         appState.value = 'setup';
+        user.value = null;
+        authNotice.value = null;
       } else if (!res.user) {
+        user.value = null;
+        if (wasReady) authNotice.value = 'Your session expired. Sign in to keep working.';
         appState.value = 'login';
       } else {
         user.value = res.user;
         appState.value = 'ready';
+        authNotice.value = null;
       }
+      return !!res.user;
     } catch {
-      appState.value = 'setup';
+      // A transient network/database failure is not proof that the session expired.
+      // Keep the current app usable and let the next heartbeat retry.
+      if (!options.silent && !wasReady) appState.value = 'setup';
+      return wasReady;
     }
   }
 
@@ -35,6 +46,7 @@ export function useAuth() {
       });
       user.value = res.user;
       appState.value = 'ready';
+      authNotice.value = null;
       return { ok: true };
     } catch (err: any) {
       const message = err?.data?.statusMessage || err?.message || 'Login failed';
@@ -50,6 +62,7 @@ export function useAuth() {
     }
     user.value = null;
     appState.value = 'login';
+    authNotice.value = null;
   }
 
   async function setup(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
@@ -60,6 +73,7 @@ export function useAuth() {
       });
       user.value = res.user;
       appState.value = 'ready';
+      authNotice.value = null;
       return { ok: true };
     } catch (err: any) {
       const message = err?.data?.statusMessage || err?.message || 'Setup failed';
@@ -75,6 +89,7 @@ export function useAuth() {
       });
       user.value = res.user;
       appState.value = 'ready';
+      authNotice.value = null;
       return { ok: true };
     } catch (err: any) {
       const message = err?.data?.statusMessage || err?.message || 'Signup failed';
@@ -82,5 +97,5 @@ export function useAuth() {
     }
   }
 
-  return { appState, user, checkAuth, login, logout, setup, signup };
+  return { appState, user, authNotice, checkAuth, login, logout, setup, signup };
 }

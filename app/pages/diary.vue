@@ -61,9 +61,9 @@
     <!-- Day selector -->
     <div class="calm-day-rail after-hours-day-selector flex items-center gap-1.5 px-2 mt-2 py-2">
       <UButton icon="i-lucide-chevron-left" color="neutral" variant="soft" size="sm"
-        aria-label="Previous day" :square="true" class="touch-target shrink-0" @click="shiftDay(-1)" />
+        aria-label="Previous day" :square="true" :disabled="dayNavigationPending" class="touch-target shrink-0" @click="shiftDay(-1)" />
       <div class="flex-1 min-w-0 flex gap-1.5 no-scrollbar overflow-x-auto scroll-hint">
-        <button v-for="day in days" :key="day.date" :aria-current="selectedDate === day.date ? 'date' : undefined" @click="selectDay(day.date)"
+        <button v-for="day in days" :key="day.date" :aria-current="selectedDate === day.date ? 'date' : undefined" :disabled="dayNavigationPending" @click="selectDay(day.date)"
           class="flex flex-col items-center flex-1 min-w-[2.75rem] px-1.5 py-2 rounded-xl transition-all duration-200 active:scale-95"
           :class="selectedDate === day.date
             ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
@@ -78,7 +78,7 @@
         </button>
       </div>
       <UButton icon="i-lucide-chevron-right" color="neutral" variant="soft" size="sm"
-        aria-label="Next day" :square="true" class="touch-target shrink-0" @click="shiftDay(1)" />
+        aria-label="Next day" :square="true" :disabled="dayNavigationPending" class="touch-target shrink-0" @click="shiftDay(1)" />
     </div>
 
     <!-- Day label + edit toggle -->
@@ -146,6 +146,11 @@
           <UButton v-if="journalOpen" color="neutral" variant="ghost" size="xs" icon="i-lucide-copy" :square="true"
             :loading="copyPreviousLoading" aria-label="Copy notes from previous day" title="Copy notes from previous day"
             @click="copyPreviousDiary" />
+        </div>
+        <div v-if="draftRecovered" class="daybook-draft-recovery" role="status">
+          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1">Recovered unsaved notes from before sign-in.</span>
+          <UButton color="neutral" variant="ghost" size="xs" @click="discardRecoveredDraft">Discard</UButton>
         </div>
 
         <!-- Edit mode -->
@@ -607,6 +612,7 @@ interface DiaryEntry {
 
 const { activeId, workspaces, setActive } = useWorkspace();
 const { createTask, newTaskId, updateTask, updateTaskPositions } = useTasks();
+const { user } = useAuth();
 const route = useRoute();
 const router = useRouter();
 
@@ -749,6 +755,7 @@ function routeDiaryDate(value: unknown): string | null {
 const initialDate = routeDiaryDate(route.query.date) || todayLocal();
 const selectedDate = ref(initialDate);
 const dateWindowCenter = ref(initialDate);
+const dayNavigationPending = ref(false);
 const showAddTask = ref(false);
 const subtaskExpansionToken = ref(0);
 const subtasksExpanded = ref(true);
@@ -757,6 +764,7 @@ const editContent = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const editMode = ref(false);
+const draftRecovered = ref(false);
 const copyPreviousOpen = ref(false);
 const copyPreviousLoading = ref(false);
 const previousDiaryDate = ref('');
@@ -828,6 +836,11 @@ function toggleGroupCollapsed(key: string) {
 }
 
 const todayDate = ref(todayLocal());
+let dayClock: ReturnType<typeof setInterval> | undefined;
+
+function refreshTodayDate() {
+  todayDate.value = todayLocal();
+}
 
 // Week summary state
 interface CompletedTask {
@@ -1244,11 +1257,18 @@ function scrollToTaskSection() {
 }
 
 async function selectDay(date: string) {
-  selectedDate.value = date;
-  if (routeDiaryDate(route.query.date) !== date) {
-    void router.replace({ query: { ...route.query, date } });
+  if (date === selectedDate.value || dayNavigationPending.value) return;
+  dayNavigationPending.value = true;
+  try {
+    await flushSaveContent();
+    selectedDate.value = date;
+    if (routeDiaryDate(route.query.date) !== date) {
+      void router.replace({ query: { ...route.query, date } });
+    }
+    await fetchEntry();
+  } finally {
+    dayNavigationPending.value = false;
   }
-  await fetchEntry();
 }
 
 async function goToToday() {
@@ -1259,6 +1279,7 @@ async function goToToday() {
 }
 
 async function shiftDay(delta: number) {
+  if (dayNavigationPending.value) return;
   dateWindowCenter.value = addDays(dateWindowCenter.value, delta);
   await selectDay(addDays(selectedDate.value, delta));
   await fetchDateIndicators();
@@ -1389,6 +1410,7 @@ async function fetchEntry() {
   const requestId = ++entryRequestId;
   const requestedDate = selectedDate.value;
   const requestedWorkspaceId = activeId.value;
+  checkpointDiaryDraft(requestedDate, requestedWorkspaceId);
   loading.value = true;
   entry.value = null;
   editContent.value = '';
@@ -1418,6 +1440,7 @@ async function fetchEntry() {
       mergeTaskCache(data.tasks || []);
       entry.value = data;
       editContent.value = data.content;
+      await restoreDiaryDraft(requestedDate, requestedWorkspaceId, data.content, requestId);
       editMode.value = false;
       return;
     }
@@ -1431,6 +1454,7 @@ async function fetchEntry() {
     mergeTaskCache(created.tasks || []);
     entry.value = created;
     editContent.value = created.content;
+    await restoreDiaryDraft(requestedDate, requestedWorkspaceId, created.content, requestId);
     carriedTasks.value = created.carried_tasks || [];
     editMode.value = false;
   } finally {
@@ -1458,9 +1482,16 @@ async function fetchDateIndicators() {
 }
 
 onMounted(async () => {
+  refreshTodayDate();
+  dayClock = setInterval(refreshTodayDate, 30_000);
+  window.addEventListener('focus', refreshTodayDate);
   await fetchEntry();
   fetchDateIndicators();
   fetchGoals();
+});
+onBeforeUnmount(() => {
+  if (dayClock) clearInterval(dayClock);
+  window.removeEventListener('focus', refreshTodayDate);
 });
 watch(activeId, async () => {
   await fetchEntry();
@@ -1480,6 +1511,79 @@ watch(() => route.query.date, async (value) => {
 let saveTimer: ReturnType<typeof setTimeout>;
 let editIdleTimer: ReturnType<typeof setTimeout>;
 const editIdleDelay = 6000;
+
+interface DiaryDraft {
+  content: string;
+  savedAt: string;
+}
+
+function diaryDraftKey(date: string, workspaceId: string | null) {
+  const userId = user.value?.id;
+  return userId ? `daybook:diary-draft:${userId}:${workspaceId || 'all'}:${date}` : null;
+}
+
+function checkpointDiaryDraft(date: string, workspaceId: string | null) {
+  const key = diaryDraftKey(date, workspaceId);
+  if (!key || !entry.value) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      content: editContent.value,
+      savedAt: new Date().toISOString(),
+    } satisfies DiaryDraft));
+  } catch {}
+}
+
+function readDiaryDraft(date: string, workspaceId: string | null): DiaryDraft | null {
+  const key = diaryDraftKey(date, workspaceId);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.content !== 'string' || typeof parsed?.savedAt !== 'string') return null;
+    return parsed as DiaryDraft;
+  } catch {
+    return null;
+  }
+}
+
+function clearDiaryDraft(date: string, workspaceId: string | null, content?: string) {
+  const key = diaryDraftKey(date, workspaceId);
+  if (!key) return;
+  try {
+    if (content === undefined || readDiaryDraft(date, workspaceId)?.content === content) {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+async function restoreDiaryDraft(date: string, workspaceId: string | null, serverContent: string, requestId: number) {
+  const draft = readDiaryDraft(date, workspaceId);
+  if (!draft || requestId !== entryRequestId) return;
+  if (draft.content === serverContent) {
+    clearDiaryDraft(date, workspaceId, draft.content);
+    return;
+  }
+
+  editContent.value = draft.content;
+  draftRecovered.value = true;
+  try {
+    await persistDiaryContent(date, draft.content, workspaceId);
+    clearDiaryDraft(date, workspaceId, draft.content);
+    if (requestId === entryRequestId) {
+      draftRecovered.value = false;
+      toast.add({ title: 'Recovered your unsaved notes', color: 'success' });
+    }
+  } catch {
+    // Keep the local copy and recovery banner if the session is still unavailable.
+  }
+}
+
+function discardRecoveredDraft() {
+  clearDiaryDraft(selectedDate.value, activeId.value);
+  draftRecovered.value = false;
+  if (entry.value) editContent.value = entry.value.content;
+}
 
 const previousDiaryLabel = computed(() => {
   if (!previousDiaryDate.value) return 'Yesterday';
@@ -1512,10 +1616,12 @@ async function persistDiaryContent(date: string, content: string, workspaceId: s
     method: 'PUT',
     body: { content, workspace_id: workspaceId },
   });
+  clearDiaryDraft(date, workspaceId, content);
   if (content.trim()) entryDates.value.add(date);
 }
 
 function saveContent() {
+  checkpointDiaryDraft(selectedDate.value, activeId.value);
   if (!entry.value) return;
   clearTimeout(saveTimer);
   saving.value = true;
@@ -1535,6 +1641,7 @@ function saveContent() {
 
 async function flushSaveContent() {
   clearTimeout(saveTimer);
+  checkpointDiaryDraft(selectedDate.value, activeId.value);
   if (!entry.value) return;
   saving.value = true;
   try {

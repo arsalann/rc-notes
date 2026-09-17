@@ -35,6 +35,18 @@ import Login from '~/pages/login.vue';
 const { appState, checkAuth } = useAuth();
 const { fetchWorkspaces } = useWorkspace();
 const route = useRoute();
+let sessionHeartbeat: ReturnType<typeof setInterval> | undefined;
+let sessionCheckInFlight = false;
+
+async function checkSession() {
+  if (sessionCheckInFlight || appState.value !== 'ready') return;
+  sessionCheckInFlight = true;
+  try {
+    await checkAuth({ silent: true });
+  } finally {
+    sessionCheckInFlight = false;
+  }
+}
 
 // Keep the mobile status bar in step with the active theme (beige vs dark canvas).
 const colorMode = useColorMode();
@@ -51,6 +63,17 @@ onMounted(async () => {
   if (appState.value === 'ready') {
     await fetchWorkspaces();
   }
+
+  // Catch expiry while the tab is open, and immediately when the user returns to it.
+  sessionHeartbeat = setInterval(checkSession, 30_000);
+  window.addEventListener('focus', checkSession);
+  document.addEventListener('visibilitychange', checkSession);
+});
+
+onBeforeUnmount(() => {
+  if (sessionHeartbeat) clearInterval(sessionHeartbeat);
+  window.removeEventListener('focus', checkSession);
+  document.removeEventListener('visibilitychange', checkSession);
 });
 
 watch(appState, async (state) => {

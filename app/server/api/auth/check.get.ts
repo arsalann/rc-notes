@@ -15,6 +15,9 @@ export default defineEventHandler(async (event) => {
   try {
     const session = await useSession<{ user?: SessionUser }>(event, getSessionConfig());
     if (session.data.user) {
+      // Re-issue the cookie on an active heartbeat so an open app does not expire
+      // underneath someone who is still using it.
+      await session.update({ user: session.data.user });
       return { configured: true, user: session.data.user };
     }
   } catch {

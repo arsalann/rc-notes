@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
   const entryDate = body.entry_date;
   const content = body.content || '';
   const workspaceId = body.workspace_id || null;
+  const requestedWorkspaceId = workspaceId ? String(workspaceId) : null;
 
   if (!entryDate) throw createError({ statusCode: 400, statusMessage: 'entry_date is required' });
 
@@ -15,9 +16,9 @@ export default defineEventHandler(async (event) => {
   const params: Record<string, any> = { date: entryDate };
   const types: Record<string, any> = { date: VARCHAR };
 
-  if (workspaceId) {
+  if (requestedWorkspaceId) {
     where += " AND workspace_id = $ws";
-    params.ws = workspaceId;
+    params.ws = requestedWorkspaceId;
     types.ws = VARCHAR;
   }
 
@@ -55,9 +56,11 @@ export default defineEventHandler(async (event) => {
   const prevParams: Record<string, any> = { date: entryDate };
   const prevTypes: Record<string, any> = { date: VARCHAR };
 
-  if (workspaceId) {
+  // When viewing "All", new diary pages still belong to the default Work workspace. Carry from
+  // that same workspace, never from an arbitrary previous entry in another workspace.
+  if (wsId) {
     prevWhere += " AND workspace_id = $ws";
-    prevParams.ws = workspaceId;
+    prevParams.ws = String(wsId);
     prevTypes.ws = VARCHAR;
   }
 
@@ -72,12 +75,10 @@ export default defineEventHandler(async (event) => {
     const undoneParams: Record<string, any> = { pid: prevId };
     const undoneTypes: Record<string, any> = { pid: VARCHAR };
     let undoneWs = '';
-    if (wsId) {
+    if (requestedWorkspaceId) {
       undoneWs = ' AND t.workspace_id = $ws';
-      undoneParams.ws = wsId;
+      undoneParams.ws = requestedWorkspaceId;
       undoneTypes.ws = VARCHAR;
-    } else {
-      undoneWs = ' AND t.workspace_id IS NULL';
     }
     const undone = await queryAll(`
       SELECT l.target_id, t.title, t.id
@@ -115,18 +116,20 @@ export default defineEventHandler(async (event) => {
   const linksReadParams: Record<string, any> = { id: newEntry.id };
   const linksReadTypes: Record<string, any> = { id: VARCHAR };
   let wsMatch = '';
-  if (wsId) {
+  if (requestedWorkspaceId) {
     wsMatch = `AND (
       (l.target_type = 'task' AND t.workspace_id = $ws)
       OR (l.target_type = 'note' AND n.workspace_id = $ws)
     )`;
-    linksReadParams.ws = wsId;
+    linksReadParams.ws = requestedWorkspaceId;
     linksReadTypes.ws = VARCHAR;
-  } else {
-    wsMatch = `AND (
-      (l.target_type = 'task' AND t.workspace_id IS NULL)
-      OR (l.target_type = 'note' AND n.workspace_id IS NULL)
-    )`;
+  }
+  const sourceFilter = requestedWorkspaceId
+    ? 'l.source_id = $id'
+    : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
+  if (!requestedWorkspaceId) {
+    linksReadParams.date = entryDate;
+    linksReadTypes.date = VARCHAR;
   }
   const links = await queryAll(`
     SELECT l.id as link_id, l.target_type, l.target_id,
@@ -134,7 +137,7 @@ export default defineEventHandler(async (event) => {
     FROM links l
     LEFT JOIN tasks t ON l.target_type = 'task' AND t.id = l.target_id
     LEFT JOIN notes n ON l.target_type = 'note' AND n.id = l.target_id
-    WHERE l.source_type = 'diary' AND l.source_id = $id ${wsMatch}
+    WHERE l.source_type = 'diary' AND ${sourceFilter} ${wsMatch}
   `, linksReadParams, linksReadTypes);
 
   // Hydrate here too. This is the create-on-first-visit path, so without it the very first visit to
