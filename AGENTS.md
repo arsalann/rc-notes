@@ -113,6 +113,22 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Any change to date/workspace navigation, autosave, or session recovery requires regression tests
   proving distinct journal contents cannot cross dates or workspaces.
 
+## iOS app (`ios/`)
+- Read `ios/HANDOFF.md` first. Native SwiftUI client over the same API; `DaybookKit` (Swift package) holds
+  all non-UI logic and is unit-tested with `swift test`.
+- `xcode-select` on this Mac points at CommandLineTools: export
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for `swift test` / `xcodebuild`.
+- After adding or removing Swift files, run `xcodegen generate` in `ios/` (the `.xcodeproj` is generated
+  from `project.yml` and committed).
+- `ios/scripts/test.sh` runs everything against `ios/scripts/test-server.sh`: an isolated server with a
+  temp DuckDB file and no MotherDuck token. Never point iOS tests at the real server.
+- Journal safety rules above apply to iOS too; `JournalSessionTests` and `JournalE2ETests` are the
+  regression tests and must stay green.
+- SwiftUI gotcha: `.accessibilityIdentifier` on a container overrides its children's identifiers; add
+  `.accessibilityElement(children: .contain)` first when children need their own ids.
+- Any API response shape change must keep `ios/DaybookKit/Tests/DaybookKitTests/Fixtures` decoding (they
+  are real captured responses).
+
 ## User Preferences
 - Keep things simple — this is a personal tool
 - Document durable contributor conventions here and public product context in `README.md`; use source code, migrations, and pipeline assets as the schema/API authority

@@ -96,8 +96,10 @@ struct InlineTaskRow: View {
                                     .strikethrough(sub.completed)
                                     .foregroundStyle(sub.completed ? .secondary : .primary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             if showPriority { PriorityIcon(priority: sub.priority) }
                         }
                     }
@@ -134,8 +136,10 @@ struct InlineTaskRow: View {
         if task.isPending {
             label
         } else {
+            // Inside a List a NavigationLink draws its own chevron next to the expand control.
             NavigationLink(value: Route.task(task.id)) { label }
                 .buttonStyle(.plain)
+                .navigationLinkIndicatorVisibility(.hidden)
                 .accessibilityIdentifier("task.row.\(task.title)")
         }
     }
@@ -215,9 +219,14 @@ struct TaskRow: View {
                 StatusBadge(status: task.status)
                 DueBadge(dueAt: task.dueAt, completed: task.completed)
                 if task.subtaskCount > 0 {
-                    Label("\(task.subtaskDone)/\(task.subtaskCount)", systemImage: "list.bullet")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 2) {
+                        Image(systemName: "list.bullet")
+                        Text("\(task.subtaskDone)/\(task.subtaskCount)").monospacedDigit()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .accessibilityLabel("\(task.subtaskDone) of \(task.subtaskCount) subtasks done")
                 }
             }
         }

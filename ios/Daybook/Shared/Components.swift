@@ -228,10 +228,15 @@ struct DueBadge: View {
     var body: some View {
         if let dueAt, !dueAt.isEmpty {
             let overdue = !completed && model.days.isOverdue(dueAt)
-            Label(model.days.formatDue(dueAt), systemImage: overdue ? "exclamationmark.circle" : "calendar")
-                .font(.caption)
-                .foregroundStyle(overdue ? Color.red : .secondary)
-                .labelStyle(.titleAndIcon)
+            HStack(spacing: 3) {
+                Image(systemName: overdue ? "exclamationmark.circle" : "calendar")
+                Text(model.days.formatDue(dueAt))
+            }
+            .font(.caption)
+            .foregroundStyle(overdue ? Color.red : .secondary)
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Due \(model.days.formatDue(dueAt))")
         }
     }
 }

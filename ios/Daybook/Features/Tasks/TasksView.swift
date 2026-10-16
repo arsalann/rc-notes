@@ -22,6 +22,9 @@ final class TasksModel {
     var orderBy: Preferences.TaskOrderBy
     var groupBy: Preferences.TaskGroupBy
     var selection: Set<String> = []
+    /// Inline subtask expansion (web `TaskItem` loads subtasks lazily when expanded).
+    var expanded: Set<String> = []
+    private(set) var subtasks: [String: [TaskItem]] = [:]
 
     init(app: AppModel) {
         self.app = app
@@ -103,6 +106,27 @@ final class TasksModel {
                 }
             }
             return order.compactMap { byKey[$0] }.sorted { TaskTags.groupOrder(($0.id, $0.label), ($1.id, $1.label)) }
+        }
+    }
+
+    func toggleExpanded(_ task: TaskItem) async {
+        if expanded.contains(task.id) {
+            expanded.remove(task.id)
+            return
+        }
+        expanded.insert(task.id)
+        if let full = try? await api.task(id: task.id) { subtasks[task.id] = full.subtasks ?? [] }
+    }
+
+    func toggleSubtask(_ sub: TaskItem, parentId: String) async {
+        guard var list = subtasks[parentId], let index = list.firstIndex(where: { $0.id == sub.id }) else { return }
+        list[index].completed.toggle()
+        subtasks[parentId] = list
+        if let saved = await app.setCompleted(sub, list[index].completed) {
+            subtasks[parentId]?[index] = sub.merged(with: saved)
+        }
+        if let i = tasks.firstIndex(where: { $0.id == parentId }) {
+            tasks[i].subtaskDone = subtasks[parentId]?.filter(\.completed).count ?? tasks[i].subtaskDone
         }
     }
 
@@ -226,7 +250,13 @@ private struct TasksScreen: View {
             ForEach(model.groups) { group in
                 Section {
                     ForEach(group.tasks) { task in
-                        row(task).tag(task.id)
+                        rowActions(VStack(alignment: .leading, spacing: 4) {
+                            row(task)
+                            if model.expanded.contains(task.id) && !selecting {
+                                subtaskRows(task)
+                            }
+                        }, task)
+                        .tag(task.id)
                     }
                     .onMove(perform: model.groupBy == .none && !selecting ? { source, destination in
                         Task { await model.move(from: source, to: destination) }
@@ -330,6 +360,65 @@ private struct TasksScreen: View {
         .disabled(model.selection.isEmpty)
     }
 
+
+    private func rowActions<Content: View>(_ content: Content, _ task: TaskItem) -> some View {
+        content
+            .swipeActions(edge: .leading) {
+                Button { Task { await model.toggle(task) } } label: {
+                    Label(task.completed ? "Undo" : "Done", systemImage: task.completed ? "arrow.uturn.backward" : "checkmark")
+                }
+                .tint(.accentColor)
+            }
+            .swipeActions(edge: .trailing) {
+                Button(role: model.showArchived ? nil : .destructive) { Task { await model.archiveOrRestore(task) } } label: {
+                    Label(model.showArchived ? "Restore" : "Archive", systemImage: model.showArchived ? "tray.and.arrow.up" : "archivebox")
+                }
+                Button { Task { await model.togglePin(task) } } label: {
+                    Label(task.pinned ? "Unpin" : "Pin", systemImage: task.pinned ? "pin.slash" : "pin")
+                }
+                .tint(Color("Warm"))
+            }
+            .contextMenu {
+                Menu("Status") {
+                    ForEach(TaskStatus.allCases, id: \.self) { status in
+                        Button(status.label) {
+                            Task { if let saved = await app.updateTask(task.id, ["status": .string(status.rawValue)]) { model.replace(saved) } }
+                        }
+                    }
+                }
+                Menu("Priority") {
+                    ForEach(Priority.options) { p in
+                        Button(p.label, systemImage: p.symbol) {
+                            Task { if let saved = await app.updateTask(task.id, ["priority": .int(p.rawValue)]) { model.replace(saved) } }
+                        }
+                    }
+                    Button("None", systemImage: "minus") {
+                        Task { if let saved = await app.updateTask(task.id, ["priority": 0]) { model.replace(saved) } }
+                    }
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func subtaskRows(_ task: TaskItem) -> some View {
+        if let subs = model.subtasks[task.id] {
+            ForEach(subs) { sub in
+                HStack(spacing: 8) {
+                    CompletionButton(completed: sub.completed) { Task { await model.toggleSubtask(sub, parentId: task.id) } }
+                    Text(sub.title)
+                        .font(.subheadline)
+                        .strikethrough(sub.completed)
+                        .foregroundStyle(sub.completed ? .secondary : .primary)
+                    Spacer()
+                    PriorityIcon(priority: sub.priority)
+                }
+                .padding(.leading, 42)
+            }
+        } else {
+            ProgressView().padding(.leading, 42)
+        }
+    }
+
     private func row(_ task: TaskItem) -> some View {
         HStack(spacing: 10) {
             if !selecting {
@@ -339,42 +428,22 @@ private struct TasksScreen: View {
             NavigationLink(value: Route.task(task.id)) {
                 TaskRow(task: task)
             }
+            .navigationLinkIndicatorVisibility(task.subtaskCount > 0 ? .hidden : .automatic)
             .accessibilityIdentifier("task.row.\(task.title)")
             .disabled(selecting)
-        }
-        .swipeActions(edge: .leading) {
-            Button { Task { await model.toggle(task) } } label: {
-                Label(task.completed ? "Undo" : "Done", systemImage: task.completed ? "arrow.uturn.backward" : "checkmark")
-            }
-            .tint(.accentColor)
-        }
-        .swipeActions(edge: .trailing) {
-            Button(role: model.showArchived ? nil : .destructive) { Task { await model.archiveOrRestore(task) } } label: {
-                Label(model.showArchived ? "Restore" : "Archive", systemImage: model.showArchived ? "tray.and.arrow.up" : "archivebox")
-            }
-            Button { Task { await model.togglePin(task) } } label: {
-                Label(task.pinned ? "Unpin" : "Pin", systemImage: task.pinned ? "pin.slash" : "pin")
-            }
-            .tint(Color("Warm"))
-        }
-        .contextMenu {
-            Menu("Status") {
-                ForEach(TaskStatus.allCases, id: \.self) { status in
-                    Button(status.label) {
-                        Task { if let saved = await app.updateTask(task.id, ["status": .string(status.rawValue)]) { model.replace(saved) } }
-                    }
+            if task.subtaskCount > 0 && !selecting {
+                Button { Task { await model.toggleExpanded(task) } } label: {
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(model.expanded.contains(task.id) ? 90 : 0))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 44)
+                        .contentShape(Rectangle())
                 }
-            }
-            Menu("Priority") {
-                ForEach(Priority.options) { p in
-                    Button(p.label, systemImage: p.symbol) {
-                        Task { if let saved = await app.updateTask(task.id, ["priority": .int(p.rawValue)]) { model.replace(saved) } }
-                    }
-                }
-                Button("None", systemImage: "minus") {
-                    Task { if let saved = await app.updateTask(task.id, ["priority": 0]) { model.replace(saved) } }
-                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(model.expanded.contains(task.id) ? "Hide subtasks" : "Show subtasks")
             }
         }
+
     }
 }

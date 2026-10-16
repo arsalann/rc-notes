@@ -172,4 +172,30 @@ final class AppFlowE2ETests: DaybookUITestCase {
         waitFor(app.staticTexts["week.total"])
         snapshot("11-week-summary")
     }
+
+    func testInlineSubtasksAndSwipeArchiveOnTasksList() throws {
+        let title = "\(runTag) swipe me"
+        let parent = try server.request("POST", "/api/tasks", body: ["title": title, "status": "now"]) as! [String: Any]
+        let parentId = parent["id"] as! String
+        _ = try server.request("POST", "/api/tasks", body: ["title": "\(runTag) inner", "parent_id": parentId])
+        launchSignedIn()
+        tab("Tasks").tap()
+        let row = waitFor(element("task.row.\(title)"))
+
+        let expand = app.buttons.matching(NSPredicate(format: "label == 'Show subtasks'")).firstMatch
+        waitFor(expand).tap()
+        waitFor(app.staticTexts["\(runTag) inner"])
+        app.buttons.matching(NSPredicate(format: "label == 'Mark done'")).element(boundBy: 1).tap()
+        eventually("inline subtask completed") {
+            let full = try self.server.request("GET", "/api/tasks/\(parentId)") as! [String: Any]
+            return ((full["subtasks"] as? [[String: Any]])?.first?["completed"] as? Bool) == true
+        }
+
+        row.swipeLeft()
+        waitFor(app.buttons["Archive"]).tap()
+        eventually("archived on server") {
+            try self.server.tasks(archived: true).contains { $0["title"] as? String == title }
+        }
+        XCTAssertFalse(element("task.row.\(title)").waitForExistence(timeout: 2))
+    }
 }
