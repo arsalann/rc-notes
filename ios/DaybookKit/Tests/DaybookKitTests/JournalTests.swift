@@ -300,6 +300,25 @@ actor FakeDiaryServer: DiaryBackend {
     }
 }
 
+@Suite struct FileDraftStoreTests {
+    @Test func roundTripsKeysAndValues() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = FileDraftStore(directory: dir)
+        let key = "daybook:diary-draft:v2:u%201:e%2F1:%7Bnone%7D:2026-10-16"
+        store.set("draft ✍️", forKey: key)
+        store.set("legacy", forKey: "daybook:diary-draft:u1:x")
+        // A fresh instance (relaunch) sees what was written synchronously.
+        let reopened = FileDraftStore(directory: dir)
+        #expect(reopened.string(forKey: key) == "draft ✍️")
+        #expect(Set(reopened.allKeys()) == [key, "daybook:diary-draft:u1:x"])
+        reopened.remove(forKey: key)
+        #expect(reopened.string(forKey: key) == nil)
+        reopened.removeAll()
+        #expect(reopened.allKeys().isEmpty)
+    }
+}
+
 @Suite struct DiaryDraftTests {
     let identity = DiaryDraftIdentity(userId: "u 1", entryId: "e/1", date: "2026-10-16", workspaceId: nil)
 

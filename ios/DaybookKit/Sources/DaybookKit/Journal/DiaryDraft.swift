@@ -126,6 +126,63 @@ public final class UserDefaultsDraftStore: DraftKeyValueStore {
     public func allKeys() -> [String] { Array(defaults.dictionaryRepresentation().keys) }
 }
 
+/// One file per draft, written atomically and synchronously, so a draft survives the app being
+/// killed right after a keystroke (UserDefaults persists asynchronously and can lose it).
+public final class FileDraftStore: DraftKeyValueStore {
+    private let directory: URL
+    private let fm = FileManager.default
+
+    public init(directory: URL) {
+        self.directory = directory
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    /// `Application Support/JournalDrafts`, excluded from iCloud backup.
+    public static func standard() -> FileDraftStore {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        var dir = base.appendingPathComponent("JournalDrafts", isDirectory: true)
+        let store = FileDraftStore(directory: dir)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dir.setResourceValues(values)
+        return store
+    }
+
+    private func url(for key: String) -> URL {
+        let name = Data(key.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return directory.appendingPathComponent(name + ".draft")
+    }
+
+    private func key(forFile name: String) -> String? {
+        guard name.hasSuffix(".draft") else { return nil }
+        var b64 = String(name.dropLast(6)).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while b64.count % 4 != 0 { b64 += "=" }
+        return Data(base64Encoded: b64).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    public func string(forKey key: String) -> String? {
+        (try? Data(contentsOf: url(for: key))).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    public func set(_ value: String, forKey key: String) {
+        try? Data(value.utf8).write(to: url(for: key), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+
+    public func remove(forKey key: String) { try? fm.removeItem(at: url(for: key)) }
+
+    public func allKeys() -> [String] {
+        ((try? fm.contentsOfDirectory(atPath: directory.path)) ?? []).compactMap(key(forFile:))
+    }
+
+    /// Deletes every stored draft (used by the UI-test reset).
+    public func removeAll() {
+        allKeys().forEach(remove(forKey:))
+    }
+}
+
 public final class InMemoryDraftStore: DraftKeyValueStore {
     public private(set) var values: [String: String] = [:]
 
