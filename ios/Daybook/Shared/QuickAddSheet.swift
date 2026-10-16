@@ -61,33 +61,6 @@ struct QuickAddSheet: View {
                     Text("Tip: #critical #focus #snack · #now #next · #today #tomorrow #nextweek · any #tag")
                 }
 
-                Section {
-                    Picker("Priority", selection: $priority) {
-                        ForEach(Priority.options) { p in Label(p.label, systemImage: p.symbol).tag(p.rawValue) }
-                        Label("None", systemImage: "minus").tag(0)
-                    }
-                    Picker("Status", selection: $status) {
-                        ForEach(TaskStatus.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section("Due") {
-                    HStack {
-                        dueChip("Today", model.days.today())
-                        dueChip("Tomorrow", model.days.offsetFromToday(1))
-                        dueChip("Next week", model.days.offsetFromToday(7))
-                    }
-                    Toggle("Pick date & time", isOn: $useCustomDue)
-                    if useCustomDue {
-                        DatePicker("Due", selection: $customDue)
-                    }
-                }
-
-                Section("Tags") {
-                    TagPicker(tags: $tags)
-                }
-
                 Section("Subtasks") {
                     ForEach(subtasks.indices, id: \.self) { index in
                         Text(subtasks[index])
@@ -101,6 +74,33 @@ struct QuickAddSheet: View {
                             .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
+                Section("Due") {
+                    HStack {
+                        dueChip("Today", model.days.today())
+                        dueChip("Tomorrow", model.days.offsetFromToday(1))
+                        dueChip("Next week", model.days.offsetFromToday(7))
+                    }
+                    Toggle("Pick date & time", isOn: $useCustomDue)
+                    if useCustomDue {
+                        DatePicker("Due", selection: $customDue)
+                    }
+                }
+
+                Section {
+                    Picker("Priority", selection: $priority) {
+                        ForEach(Priority.options) { p in Label(p.label, systemImage: p.symbol).tag(p.rawValue) }
+                        Label("None", systemImage: "minus").tag(0)
+                    }
+                    Picker("Status", selection: $status) {
+                        ForEach(TaskStatus.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Tags") {
+                    TagPicker(tags: $tags)
+                }
+
             }
             .navigationTitle("New task")
             .navigationBarTitleDisplayMode(.inline)

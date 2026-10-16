@@ -339,6 +339,7 @@ private struct TasksScreen: View {
             NavigationLink(value: Route.task(task.id)) {
                 TaskRow(task: task)
             }
+            .accessibilityIdentifier("task.row.\(task.title)")
             .disabled(selecting)
         }
         .swipeActions(edge: .leading) {

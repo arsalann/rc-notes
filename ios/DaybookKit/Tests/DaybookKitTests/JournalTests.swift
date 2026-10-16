@@ -158,9 +158,12 @@ actor FakeDiaryServer: DiaryBackend {
         try await session.load(date: "2026-10-16", workspaceId: work)
         let identity = try #require(session.identity)
         await server.setDelay(.milliseconds(40))
-        async let first: Void = session.persist(identity, content: "one")
-        async let second: Void = session.persist(identity, content: "two")
-        _ = try await (first, second)
+        // Start "one", wait until it is in flight, then queue "two" behind it.
+        let first = Task { @MainActor in try await session.persist(identity, content: "one") }
+        while !session.isSaving { await Task.yield() }
+        let second = Task { @MainActor in try await session.persist(identity, content: "two") }
+        try await first.value
+        try await second.value
         // The second save must use the revision produced by the first (no false 409).
         #expect(await server.content(date: "2026-10-16", workspaceId: work) == "two")
     }

@@ -37,7 +37,6 @@ xcodebuild test \
   -destination "platform=iOS Simulator,name=$SIM" \
   -derivedDataPath "$IOS/build/DerivedData" \
   -resultBundlePath "$RESULT" \
-  CODE_SIGNING_ALLOWED=NO \
   "$@" >"$IOS/build/xcodebuild-test.log" 2>&1 && STATUS=0 || STATUS=$?
 grep -E "^(Test Case|\*\*)|error:|Executed" "$IOS/build/xcodebuild-test.log" || true
 echo "Screenshots: $SHOTS"

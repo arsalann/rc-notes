@@ -206,7 +206,7 @@ struct TaskRow: View {
             HStack(spacing: 8) {
                 if Priority(value: task.priority) != .none {
                     HStack(spacing: 3) {
-                        PriorityIcon(priority: task.priority)
+                        PriorityIcon(priority: task.priority).accessibilityHidden(true)
                         Text(Priority(value: task.priority).label).font(.caption)
                     }
                     .foregroundStyle(Priority(value: task.priority).color)
@@ -222,6 +222,5 @@ struct TaskRow: View {
             }
         }
         .padding(.vertical, 2)
-        .accessibilityIdentifier("task.row.\(task.title)")
     }
 }

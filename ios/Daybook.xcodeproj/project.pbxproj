@@ -18,6 +18,7 @@
 		457A8FE70087A00489C699A5 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2BDA5AFA02F6F39E4126DB /* Support.swift */; };
 		4D3D396A24A15BD75A0818F8 /* JournalE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F489DB34CC9DA1ADFD6CA8E /* JournalE2ETests.swift */; };
 		4F1B76FDA2CF130FFF6C2B25 /* CalendarAndSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAAF6A01755B2644ADDC6F4 /* CalendarAndSettings.swift */; };
+		5ADAC22F0F7568BFB8E137E9 /* SessionCookieVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5CCEE2DAE27D23FF1BF99F /* SessionCookieVault.swift */; };
 		6198C6752F921D587A867312 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2BB02A324C9C7639F7DA250 /* Components.swift */; };
 		728BBFF437B07C30E87207D4 /* DaybookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335602435D33DC840F756BE5 /* DaybookApp.swift */; };
 		7C42CC8ABA178B40E5AB013A /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645EB2E613C7049FBFA51B35 /* TasksView.swift */; };
@@ -55,6 +56,7 @@
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowE2ETests.swift; sourceTree = "<group>"; };
 		94CC93E29E0CB4DA71EAE001 /* DaybookUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaybookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F5CCEE2DAE27D23FF1BF99F /* SessionCookieVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCookieVault.swift; sourceTree = "<group>"; };
 		B110E72E5D3F5B5777326C07 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BBE7EA10D728802B2E620B58 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		C06C7658F8DEE72CBB38F8D0 /* NotesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesViews.swift; sourceTree = "<group>"; };
@@ -177,6 +179,7 @@
 			children = (
 				1D428DCE1079D33D01C34EB9 /* AppModel.swift */,
 				335602435D33DC840F756BE5 /* DaybookApp.swift */,
+				9F5CCEE2DAE27D23FF1BF99F /* SessionCookieVault.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -328,6 +331,7 @@
 				CD82651871EECB5D6E8512C0 /* MentionEditor.swift in Sources */,
 				37C72E664E66E57330F0AE6A /* NotesViews.swift in Sources */,
 				D9A18DFE4919EE24BFD3E368 /* QuickAddSheet.swift in Sources */,
+				5ADAC22F0F7568BFB8E137E9 /* SessionCookieVault.swift in Sources */,
 				D6DC745D654A8F5388CAE77F /* TaskDetailView.swift in Sources */,
 				26A7E8F74FCA22A2EFA662EC /* TaskRows.swift in Sources */,
 				7C42CC8ABA178B40E5AB013A /* TasksView.swift in Sources */,
@@ -402,6 +406,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
@@ -499,6 +504,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;

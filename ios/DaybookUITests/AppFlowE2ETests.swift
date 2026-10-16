@@ -20,7 +20,7 @@ final class AppFlowE2ETests: DaybookUITestCase {
         snapshot("02-today")
 
         tab("Settings").tap()
-        waitFor(app.staticTexts["master_tester"])
+        waitFor(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'master_tester' OR value CONTAINS 'master_tester'")).firstMatch)
         snapshot("08-settings")
         app.buttons["settings.signOut"].tap()
         app.buttons["Sign out"].firstMatch.tap()
@@ -151,7 +151,7 @@ final class AppFlowE2ETests: DaybookUITestCase {
         _ = try server.request("POST", "/api/tasks", body: ["title": title, "due_at": due])
         launchSignedIn()
 
-        app.navigationBars.buttons["Search"].tap()
+        app.buttons["Search"].firstMatch.tap()
         let field = waitFor(app.searchFields.firstMatch)
         field.tap()
         field.typeText(runTag)
@@ -167,7 +167,8 @@ final class AppFlowE2ETests: DaybookUITestCase {
         snapshot("10-calendar")
 
         tab("Today").tap()
-        app.buttons["today.week"].tap()
+        tab("Today").tap() // second tap pops the stack back to the page
+        waitFor(app.buttons["today.week"]).tap()
         waitFor(app.staticTexts["week.total"])
         snapshot("11-week-summary")
     }

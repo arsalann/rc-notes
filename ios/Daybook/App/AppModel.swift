@@ -108,6 +108,7 @@ final class AppModel {
         }
         HTTPCookieStorage.shared.cookies?.forEach(HTTPCookieStorage.shared.deleteCookie)
         FileDraftStore.standard().removeAll()
+        SessionCookieVault.clearAll()
     }
 
     var serverURLString: String { api?.baseURL.absoluteString ?? "" }
@@ -117,7 +118,8 @@ final class AppModel {
     func workspace(_ id: String?) -> Workspace? { workspaces.first { $0.id == id } }
 
     private func makeClient(_ url: URL) -> APIClient {
-        APIClient(baseURL: url) { [weak self] in
+        SessionCookieVault.restore(for: url)
+        return APIClient(baseURL: url) { [weak self] in
             Task { @MainActor in self?.handleUnauthorized() }
         }
     }
@@ -171,11 +173,13 @@ final class AppModel {
                 user = nil
                 authNotice = nil
             } else if let sessionUser = check.user {
+                SessionCookieVault.capture(for: api.baseURL)
                 user = sessionUser
                 authNotice = nil
                 phase = .ready
                 await fetchWorkspaces()
             } else {
+                SessionCookieVault.clear(for: api.baseURL)
                 user = nil
                 if wasReady { authNotice = "Your session expired. Sign in to keep working." }
                 phase = .login
@@ -199,6 +203,7 @@ final class AppModel {
     }
 
     private func signedIn(_ sessionUser: SessionUser) async {
+        if let api { SessionCookieVault.capture(for: api.baseURL) }
         user = sessionUser
         authNotice = nil
         phase = .ready
@@ -222,6 +227,7 @@ final class AppModel {
 
     func logout() async {
         try? await api?.logout()
+        if let api { SessionCookieVault.clear(for: api.baseURL) }
         user = nil
         authNotice = nil
         if api != nil { phase = .login }

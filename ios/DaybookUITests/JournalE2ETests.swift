@@ -39,7 +39,7 @@ final class JournalE2ETests: DaybookUITestCase {
         write(" \(a)")
         eventually("today saved") { try server.diaryContent(today, workspaceId: work).contains(a) }
 
-        app.buttons["day.previous"].tap()
+        tapDayButton("day.previous")
         XCTAssertTrue(app.navigationBars["Yesterday"].waitForExistence(timeout: 10))
         XCTAssertFalse(previewText().contains(a), "today's writing leaked into yesterday")
         write(" \(b)")
@@ -47,7 +47,7 @@ final class JournalE2ETests: DaybookUITestCase {
 
         // Navigate away while still typing (no Done): the pending text belongs to yesterday.
         write(" \(c)", done: false)
-        app.buttons["day.next"].tap()
+        tapDayButton("day.next")
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10))
         eventually("in-flight writing saved to the day it was typed on") {
             try server.diaryContent(yesterday, workspaceId: work).contains(c)

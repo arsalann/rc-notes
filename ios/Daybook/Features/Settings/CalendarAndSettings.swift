@@ -47,6 +47,7 @@ struct CalendarView: View {
                     HStack(spacing: 10) {
                         CompletionButton(completed: task.completed) { Task { await toggle(task) } }
                         NavigationLink(value: Route.task(task.id)) { TaskRow(task: task) }
+                            .accessibilityIdentifier("task.row.\(task.title)")
                     }
                 }
             }

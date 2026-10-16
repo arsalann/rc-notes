@@ -12,6 +12,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+    # Simulator builds are signed ad hoc ("Sign to Run Locally") so Keychain works without a team.
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
 packages:
   DaybookKit:
     path: DaybookKit

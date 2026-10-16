@@ -157,7 +157,10 @@ class DaybookUITestCase: XCTestCase {
             if (try? condition()) == true { return }
             RunLoop.current.run(until: Date().addingTimeInterval(0.4))
         }
-        XCTFail("timed out waiting for: \(description)", file: file, line: line)
+        let journal = app.buttons["journal.preview"]
+        let visible = journal.exists ? (journal.value as? String ?? "") : "(journal not visible)"
+        snapshot("timeout-\(description.replacingOccurrences(of: " ", with: "-"))")
+        XCTFail("timed out waiting for: \(description); journal shows: \(visible)", file: file, line: line)
     }
 
     func scrollTo(_ element: XCUIElement, in container: XCUIElement? = nil, maxSwipes: Int = 8) {
@@ -177,8 +180,30 @@ class DaybookUITestCase: XCTestCase {
         return app.buttons.matching(NSPredicate(format: "label == %@ AND identifier == %@", name, symbols[name] ?? name)).firstMatch
     }
 
+    /// Scrolls the page list back to the top until `element` can actually receive the tap.
+    func revealAtTop(_ element: XCUIElement) {
+        if app.keyboards.count > 0, app.buttons["journal.done"].exists == false {
+            app.collectionViews.firstMatch.swipeDown()
+        }
+        var swipes = 0
+        while !(element.exists && element.isHittable) && swipes < 6 {
+            app.collectionViews.firstMatch.swipeDown()
+            swipes += 1
+        }
+    }
+
     func selectWorkspaceChip(_ name: String) {
-        let chip = waitFor(app.buttons["workspace.chip.\(name)"])
+        let chip = app.buttons["workspace.chip.\(name)"]
+        waitFor(chip)
+        revealAtTop(chip)
         chip.tap()
+        let selected = expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: chip)
+        wait(for: [selected], timeout: 10)
+    }
+
+    func tapDayButton(_ id: String) {
+        let button = waitFor(app.buttons[id])
+        revealAtTop(button)
+        button.tap()
     }
 }
