@@ -79,6 +79,7 @@ function resolveEntity(path: string): { entity_type: string | null; entity_id: s
  * - 'playwright' : Playwright-driven browser tests
  * - 'curl'       : curl/wget command-line
  * - 'node_fetch' : node-fetch / undici / fetch from Node scripts
+ * - 'ios'        : native daybook iOS app (`daybook-ios/<version>` UA)
  * - 'browser'    : ordinary browser (Mozilla UA)
  * - 'unknown'    : everything else (or empty UA)
  */
@@ -89,6 +90,7 @@ export function classifyClient(userAgent: string | null | undefined): string {
   if (ua.includes('headlesschrome')) return 'playwright';  // playwright headless
   if (ua.includes('curl/')) return 'curl';
   if (ua.includes('node-fetch') || ua.includes('undici') || ua.startsWith('node')) return 'node_fetch';
+  if (ua.startsWith('daybook-ios/')) return 'ios';
   if (ua.includes('mozilla')) return 'browser';
   return 'unknown';
 }
@@ -101,6 +103,7 @@ export function deriveUpdatedBy(clientKind: string, isAuthed: boolean): string {
   if (clientKind === 'playwright') return 'test_playwright';
   if (clientKind === 'curl' || clientKind === 'node_fetch') return 'agent_query';
   if (clientKind === 'browser') return isAuthed ? 'user_in_app' : 'anonymous_browser';
+  if (clientKind === 'ios') return isAuthed ? 'user_in_ios_app' : 'anonymous_ios_app';
   return 'unknown';
 }
 

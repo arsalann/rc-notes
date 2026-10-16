@@ -1,0 +1,30 @@
+[
+  {
+    "id": "a5858fa4-9f06-485c-92b8-7d64ab104c94",
+    "display_id": "fixdo000",
+    "type": "task",
+    "title": "Fixture parent #focus",
+    "detail": "",
+    "completed": false,
+    "pinned": false,
+    "due_at": "2026-10-16 09:00:00",
+    "tags": [
+      "doc"
+    ],
+    "updated_at": "2026-10-16 17:38:54.987733",
+    "detected_tags": [],
+    "resolved_tags": [
+      {
+        "key": "content",
+        "label": "Content",
+        "emoji": "✍️",
+        "sources": [
+          "manual"
+        ],
+        "matched_terms": [
+          "doc"
+        ]
+      }
+    ]
+  }
+]

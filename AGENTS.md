@@ -158,6 +158,7 @@ Gotchas:
 ### Provenance: every write should set `updated_by`
 All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values:
 - `user_in_app` — real user via the Nuxt UI in a browser
+- `user_in_ios_app` — real user via the native iOS app (`ios/`, User-Agent `daybook-ios/<version>`)
 - `user_in_test` — real user behavior simulated via Playwright (rare; prefer `test_playwright`)
 - `test_playwright` — automated browser test
 - `agent_query` — agent or operator running raw SQL via MotherDuck

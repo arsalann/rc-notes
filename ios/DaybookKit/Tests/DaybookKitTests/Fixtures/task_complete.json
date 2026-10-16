@@ -1,0 +1,40 @@
+{
+  "id": "a5858fa4-9f06-485c-92b8-7d64ab104c94",
+  "display_id": "fixdo000",
+  "user_id": null,
+  "user_name": null,
+  "workspace_id": "f3a31a53-bbba-48b4-97be-47c29e0710e4",
+  "parent_id": null,
+  "title": "Fixture parent #focus",
+  "description": "",
+  "status": "done",
+  "priority": 2,
+  "completed": true,
+  "completed_at": "2026-10-16 17:38:54.977315",
+  "pinned": false,
+  "archived": false,
+  "deleted_at": null,
+  "due_at": "2026-10-16 09:00:00",
+  "reminder_at": null,
+  "tags": [
+    "doc"
+  ],
+  "position": 0,
+  "updated_by": null,
+  "created_at": "2026-10-16 17:30:30.24154",
+  "updated_at": "2026-10-16 17:38:54.977315",
+  "detected_tags": [],
+  "resolved_tags": [
+    {
+      "key": "content",
+      "label": "Content",
+      "emoji": "✍️",
+      "sources": [
+        "manual"
+      ],
+      "matched_terms": [
+        "doc"
+      ]
+    }
+  ]
+}

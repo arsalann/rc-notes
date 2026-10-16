@@ -1,0 +1,50 @@
+[
+  {
+    "date": "2026-10-14",
+    "tasks": []
+  },
+  {
+    "date": "2026-10-15",
+    "tasks": []
+  },
+  {
+    "date": "2026-10-16",
+    "tasks": [
+      {
+        "id": "a5858fa4-9f06-485c-92b8-7d64ab104c94",
+        "title": "Fixture parent #focus",
+        "completed": false,
+        "pinned": false,
+        "due_at": "2026-10-16 09:00:00",
+        "tags": [
+          "doc"
+        ],
+        "parent_id": null,
+        "parent_title": null,
+        "due_date": "2026-10-16",
+        "detected_tags": [],
+        "resolved_tags": [
+          {
+            "key": "content",
+            "label": "Content",
+            "emoji": "✍️",
+            "sources": [
+              "manual"
+            ],
+            "matched_terms": [
+              "doc"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-10-17",
+    "tasks": []
+  },
+  {
+    "date": "2026-10-18",
+    "tasks": []
+  }
+]
