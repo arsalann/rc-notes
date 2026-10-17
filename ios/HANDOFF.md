@@ -247,6 +247,11 @@ Nothing is blocked. The backend is live on Railway and built into the app.
 
 ## Next steps
 
+- **Conflict chooser for the journal** (future improvement): today a conflicting offline save shows
+  Restore / Discard on the page, with the server's version on screen. Next: a clear "Not uploaded:
+  conflicts with a newer version" banner that opens a side-by-side (or diff) view of both versions,
+  with Keep mine / Keep theirs / Keep both (append). Could extend to task and note fields where an
+  offline edit lost to a newer one (today those are dropped silently, by design).
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
 - TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.
 
