@@ -10,7 +10,7 @@ journal concurrency. The design is native iOS; the **functionality** is 1:1 with
 |---|---|---|
 | 0 | Toolchain (Xcode 27.1, iOS 27.1 sim, XcodeGen), test server script, this doc | ✅ done |
 | 1 | `DaybookKit`: models, API client, journal/draft/parsing ports, 49 unit tests | ✅ done |
-| 2 | App shell, auth (server URL, setup, login, signup, session expiry, Keychain-backed session) | ✅ done |
+| 2 | App shell, auth (server URL, setup, login, session expiry, Keychain-backed session) | ✅ done |
 | 3 | Today (journal, goals, tasks, week summary, search) | ✅ done |
 | 4 | Tasks list + task detail | ✅ done |
 | 5 | Notes list + note editor | ✅ done |
@@ -161,6 +161,8 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 - **Server change**: User-Agent `daybook-ios/*` → `client_kind=ios`, `updated_by=user_in_ios_app` in
   `event_log` (documented in AGENTS.md; unit-tested in `app/server/utils/eventLog.test.ts`). No schema
   change, so no Bruin refresh was needed.
+- **No self sign-up**: the sign-in screen has no Create account option (the server turns sign-up off in
+  production); admins add users in Settings → Users. First-run setup on an empty server still exists.
 - **Confirmation added** before deleting a user in Settings (the web deletes immediately).
 - **Backend moved to Postgres** (2026-10-17): Supabase in production, embedded PGlite for tests and
   offline dev. API responses stayed byte-identical (timestamps as the same naive text, same fixture
@@ -203,7 +205,7 @@ worth a manual pass.
 
 **Auth & app shell**
 - ✅ Built-in server (release) · ✅ Server address entry + validation (debug) · ✅ Sign in · ✅ Sign out · ✅ Session survives relaunch
-- ☑️ First-run setup (create admin) · ☑️ Create account · ☑️ Session-expired notice · ☑️ Change server
+- ☑️ First-run setup (create admin) · ☑️ Session-expired notice · ☑️ Change server
 
 **Today (daybook)**
 - ✅ Workspace chips filter the page · ✅ 7-day rail, prev/next, content dots · ☑️ Jump to today
