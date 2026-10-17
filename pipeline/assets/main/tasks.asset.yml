@@ -93,3 +93,27 @@ columns:
       Provenance for the last write. Standard values: `user_in_app`,
       `user_in_test`, `test_playwright`, `agent_query`,
       `agent_query_<purpose>_<date>`, `recovery_script`, `unknown`.
+  - name: created_device_kind
+    type: VARCHAR
+    description: Client kind that created the row (`ios`, `browser`, `curl`, …), from the User-Agent. NULL for rows created before offline sync or by raw SQL.
+  - name: created_device_id
+    type: VARCHAR
+    description: Device id of the creating client (`X-Daybook-Device` header — iOS identifierForVendor, or a random per-browser id). NULL when unknown.
+  - name: updated_device_kind
+    type: VARCHAR
+    description: Client kind of the last write. Set by the `daybook_sync_row` trigger; NULL for raw-SQL writes.
+  - name: updated_device_id
+    type: VARCHAR
+    description: Device id of the last write. Set by the `daybook_sync_row` trigger; NULL for raw-SQL writes.
+  - name: client_updated_at
+    type: TIMESTAMP
+    description: When the last edit was made on the device (UTC, device clock capped at the server's receive time). Equals the write time for online writes; earlier for changes queued offline on the iOS app.
+  - name: sync_op_id
+    type: VARCHAR
+    description: Id of the queued iOS change (`sync_ops.op_id`, `event_log.sync_op_id`) that last wrote the row; NULL for direct API writes.
+  - name: field_clock
+    type: JSON
+    description: Per-field edit times as JSON, one key per field holding the UTC time of the edit that wrote it, used for last-writer-wins per field. `status`, `completed` and `completed_at` share the `status` key. Maintained by the trigger; not returned by the sync pull.
+  - name: sync_seq
+    type: BIGINT
+    description: Global, increasing number (sequence `sync_seq`) stamped on every insert and update; clients pull rows with `sync_seq` above their cursor (`GET /api/sync/pull`).

@@ -38,9 +38,12 @@ migration from MotherDuck, and rollback.
 
 ## iOS app
 
-A native SwiftUI client lives in [`ios/`](ios/). It talks to the deployed API (the address is built in)
-and has the same features with a native iOS design: Today (journal,
-weekly goals, the page's tasks, week summary), Tasks, Notes, a 5-day calendar, search and Settings.
+A native SwiftUI client lives in [`ios/`](ios/). It has the same features with a native iOS design:
+Today (journal, weekly goals, the page's tasks, week summary), Tasks, Notes, a 5-day calendar, search
+and Settings. It is **offline first**: it keeps a local copy of your data, saves every change on the
+phone at once and syncs with the deployed API (address built in) in the background, within seconds
+when online. Edits made offline merge by field (the newest edit wins); journal pages changed on two
+devices are never overwritten, the phone's version is offered as a draft.
 Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 
 - **Requirements**: Xcode 27+, iOS 18+, `brew install xcodegen`.
@@ -48,8 +51,8 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
   trust the developer certificate under Settings → General → VPN & Device Management. Run installs the
   Release build (set in `ios/project.yml`): it talks to the production server over HTTPS only.
   Debug builds (used by the tests) can switch to a local dev server.
-- **Tests**: `ios/scripts/test.sh` runs 49 unit tests and 11 end-to-end UI flows. They use a throwaway
-  local server with an embedded database, never the real one.
+- **Tests**: `ios/scripts/test.sh` runs the DaybookKit unit tests and the end-to-end UI flows. They use
+  a throwaway local server with an embedded database, never the real one.
 
 ## Project Structure
 
@@ -83,3 +86,5 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 - **MotherDuck** `rc_notes` is the read-only archive from before the move to Postgres
 - **Bruin** keeps the versioned schema dictionary in `pipeline/`
 - Schema includes `user_id`/`user_name` columns on all tables for future multi-user support
+- Every content row records which device last wrote it and when (`updated_device_kind/id`,
+  `client_updated_at`), and a per-field clock for offline sync (see `AGENTS.md` "Offline sync")

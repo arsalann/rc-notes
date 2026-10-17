@@ -1,7 +1,10 @@
 import DaybookKit
 import Foundation
+import Network
 import Observation
 import SwiftUI
+import Synchronization
+import UIKit
 
 enum AppTab: Hashable { case today, tasks, notes, settings }
 
@@ -73,13 +76,21 @@ final class AppModel {
         static let serverURL = "serverURL"
         static let workspace = "workspace"
         static let preferences = "preferences"
+        /// The signed-in user, so the app opens offline with the local copy.
+        static let sessionUser = "sessionUser"
     }
 
     var phase: Phase = .loading
     private(set) var api: APIClient?
     private(set) var user: SessionUser?
     var authNotice: String?
-    private(set) var workspaces: [Workspace] = []
+    /// The local copy and its sync queue; screens read and write through `repo`.
+    private(set) var store: SyncStore?
+    private(set) var repo: Repository?
+    private(set) var isOnline = true
+    private var syncLoop: Task<Void, Never>?
+    private let pathMonitor = NWPathMonitor()
+    var workspaces: [Workspace] { repo?.workspaces() ?? [] }
     var activeWorkspaceId: String? {
         didSet {
             guard oldValue != activeWorkspaceId else { return }
@@ -120,6 +131,28 @@ final class AppModel {
             if !Self.allowsServerOverride { defaults.removeObject(forKey: Keys.serverURL) }
             api = makeClient(Self.builtInServer)
         }
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let online = path.status == .satisfied
+            Task { @MainActor in self?.connectivityChanged(online) }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "daybook.path"))
+    }
+
+    /// `Application Support/Sync/<server>/<user>`: one local copy per server and account.
+    static var syncRoot: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Sync", isDirectory: true)
+    }
+
+    /// `daybook-ios/0.1.0 (iPhone17,2; iOS 26.0)`: the server records the client kind from the prefix,
+    /// and the event log keeps the model and OS.
+    static var userAgent: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        var info = utsname()
+        uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) { raw in
+            String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        return "daybook-ios/\(version) (\(model); iOS \(UIDevice.current.systemVersion))"
     }
 
     /// Clears everything this app stores locally (UI tests start from a clean slate).
@@ -130,6 +163,7 @@ final class AppModel {
         HTTPCookieStorage.shared.cookies?.forEach(HTTPCookieStorage.shared.deleteCookie)
         FileDraftStore.standard().removeAll()
         SessionCookieVault.clearAll()
+        try? FileManager.default.removeItem(at: syncRoot)
     }
 
     var serverURLString: String { api?.baseURL.absoluteString ?? "" }
@@ -140,8 +174,109 @@ final class AppModel {
 
     private func makeClient(_ url: URL) -> APIClient {
         SessionCookieVault.restore(for: url)
-        return APIClient(baseURL: url) { [weak self] in
+        return APIClient(baseURL: url, userAgent: Self.userAgent, deviceId: UIDevice.current.identifierForVendor?.uuidString.lowercased()) { [weak self] in
             Task { @MainActor in self?.handleUnauthorized() }
+        }
+    }
+
+    // MARK: Local copy & sync
+
+    /// Opens (or keeps) the local copy for this server and user and starts syncing it.
+    private func startSync(for sessionUser: SessionUser) {
+        guard let api else { return }
+        let host = [api.baseURL.host ?? "server", api.baseURL.port.map(String.init)].compactMap { $0 }.joined(separator: "_")
+        let safeUser = sessionUser.id.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        let directory = Self.syncRoot.appendingPathComponent(host, isDirectory: true).appendingPathComponent(safeUser, isDirectory: true)
+        if store == nil || storeDirectory != directory {
+            #if DEBUG
+            let transport: any SyncTransport = SimulatedNetwork(base: api, switch: simulatedOffline)
+            #else
+            let transport: any SyncTransport = api
+            #endif
+            let store = SyncStore(transport: transport, directory: directory, drafts: draftStore, userId: sessionUser.id)
+            store.onEvent = { [weak self] event in self?.handle(event) }
+            self.store = store
+            repo = Repository(store: store, days: days)
+            storeDirectory = directory
+        }
+        startSyncLoop()
+        Task { await store?.sync() }
+    }
+
+    private var storeDirectory: URL?
+
+    #if DEBUG
+    /// Debug builds: Settings → Sync → Simulate offline makes every sync fail as if there were no
+    /// network (the offline UI test uses it too).
+    private let simulatedOffline = OfflineSwitch()
+    var simulateOffline: Bool {
+        get { simulatedOfflineValue }
+        set {
+            simulatedOfflineValue = newValue
+            simulatedOffline.set(newValue)
+            if !newValue { Task { await syncNow() } }
+        }
+    }
+    private var simulatedOfflineValue = false
+    #endif
+
+    /// Every 30 s while signed in and in the foreground; changes also sync ~2 s after they are made.
+    private func startSyncLoop() {
+        syncLoop?.cancel()
+        syncLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard let self, !Task.isCancelled else { return }
+                if self.phase == .ready, UIApplication.shared.applicationState == .active { await self.store?.sync() }
+            }
+        }
+    }
+
+    /// Sync now (pull to refresh, Settings → Sync now, coming back to the app).
+    func syncNow() async {
+        guard phase == .ready else { return }
+        await store?.sync()
+    }
+
+    /// Going to the background: send queued changes while iOS gives the app a few seconds.
+    func syncBeforeBackground() {
+        guard let store, !store.outbox.isEmpty else { return }
+        var taskId: UIBackgroundTaskIdentifier = .invalid
+        taskId = UIApplication.shared.beginBackgroundTask(withName: "daybook-sync") {
+            UIApplication.shared.endBackgroundTask(taskId)
+        }
+        Task {
+            await store.sync()
+            UIApplication.shared.endBackgroundTask(taskId)
+        }
+    }
+
+    private func connectivityChanged(_ online: Bool) {
+        let cameBack = online && !isOnline
+        isOnline = online
+        if cameBack { Task { await syncNow() } }
+    }
+
+    private func handle(_ event: SyncStore.Event) {
+        switch event {
+        case .journalConflict(let date):
+            showToast("Journal for \(days.relativeDayLabel(date)) changed elsewhere",
+                      detail: "Your writing is kept on that page as a draft: Restore or Discard it.", style: .error)
+        case .rejected(let summary, let message):
+            showToast("A change could not be saved", detail: message.isEmpty ? summary : "\(summary): \(message)", style: .error)
+        }
+    }
+
+    private var cachedUser: SessionUser? {
+        get {
+            defaults.data(forKey: Keys.sessionUser).flatMap { try? JSONDecoder().decode(SessionUser.self, from: $0) }
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Keys.sessionUser)
+            } else {
+                defaults.removeObject(forKey: Keys.sessionUser)
+            }
         }
     }
 
@@ -177,7 +312,9 @@ final class AppModel {
         await logout()
         api = nil
         user = nil
-        workspaces = []
+        store = nil
+        repo = nil
+        storeDirectory = nil
         defaults.removeObject(forKey: Keys.serverURL)
         phase = .server
     }
@@ -199,9 +336,10 @@ final class AppModel {
             } else if let sessionUser = check.user {
                 SessionCookieVault.capture(for: api.baseURL)
                 user = sessionUser
+                cachedUser = sessionUser
                 authNotice = nil
                 phase = .ready
-                await fetchWorkspaces()
+                startSync(for: sessionUser)
             } else {
                 SessionCookieVault.clear(for: api.baseURL)
                 user = nil
@@ -210,8 +348,16 @@ final class AppModel {
             }
             return check.user != nil
         } catch {
-            // A transient network failure is not proof the session expired.
+            // A transient network failure is not proof the session expired. Offline with a known
+            // user: open with the local copy; changes queue until the server is reachable.
             if !silent && !wasReady {
+                if let cached = cachedUser {
+                    user = cached
+                    authNotice = nil
+                    phase = .ready
+                    startSync(for: cached)
+                    return true
+                }
                 phase = .server
                 authNotice = "Could not reach \(api.baseURL.absoluteString). \(error.localizedDescription)"
             }
@@ -221,6 +367,7 @@ final class AppModel {
 
     private func handleUnauthorized() {
         guard phase == .ready else { return }
+        syncLoop?.cancel()
         user = nil
         authNotice = "Your session expired. Sign in to keep working."
         phase = .login
@@ -229,9 +376,10 @@ final class AppModel {
     private func signedIn(_ sessionUser: SessionUser) async {
         if let api { SessionCookieVault.capture(for: api.baseURL) }
         user = sessionUser
+        cachedUser = sessionUser
         authNotice = nil
         phase = .ready
-        await fetchWorkspaces()
+        startSync(for: sessionUser)
     }
 
     func login(username: String, password: String) async throws {
@@ -244,26 +392,31 @@ final class AppModel {
         await signedIn(try await api.setup(username: username, password: password))
     }
 
+    /// Sends queued changes first. The local copy stays on the device (per account), so signing back
+    /// in continues where it left off; anything still queued is sent then.
     func logout() async {
+        await store?.sync()
+        syncLoop?.cancel()
         try? await api?.logout()
         if let api { SessionCookieVault.clear(for: api.baseURL) }
         user = nil
+        cachedUser = nil
         authNotice = nil
         if api != nil { phase = .login }
     }
 
     // MARK: Workspaces
 
+    /// Workspaces come from the local copy; this syncs it and drops a filter whose workspace is gone.
     func fetchWorkspaces() async {
-        guard let api else { return }
-        if let list = try? await api.workspaces() {
-            workspaces = list.sorted { $0.position < $1.position }
-            if let active = activeWorkspaceId, !list.contains(where: { $0.id == active }) {
-                activeWorkspaceId = nil
-            }
+        await store?.sync()
+        let list = workspaces
+        if !list.isEmpty, let active = activeWorkspaceId, !list.contains(where: { $0.id == active }) {
+            activeWorkspaceId = nil
         }
     }
 
+    /// Online only (rare, and the server assigns the position).
     @discardableResult
     func createWorkspace(name: String, emoji: String) async throws -> Workspace {
         guard let api else { throw APIError.invalidURL }
@@ -283,3 +436,27 @@ final class AppModel {
         showToast(title, detail: error.localizedDescription, style: .error)
     }
 }
+
+#if DEBUG
+final class OfflineSwitch: Sendable {
+    private let state = Mutex(false)
+    func set(_ value: Bool) { state.withLock { $0 = value } }
+    var isOn: Bool { state.withLock { $0 } }
+}
+
+/// Sync transport that fails like a dropped connection while the switch is on.
+struct SimulatedNetwork: SyncTransport {
+    let base: APIClient
+    let `switch`: OfflineSwitch
+
+    func push(_ ops: [PushOp]) async throws -> PushResponse {
+        if `switch`.isOn { throw APIError.transport("Offline (simulated)") }
+        return try await base.push(ops)
+    }
+
+    func pull(since: Int64, limit: Int) async throws -> PullResponse {
+        if `switch`.isOn { throw APIError.transport("Offline (simulated)") }
+        return try await base.pull(since: since, limit: limit)
+    }
+}
+#endif

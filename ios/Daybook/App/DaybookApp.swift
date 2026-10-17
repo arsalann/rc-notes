@@ -14,10 +14,14 @@ struct DaybookApp: App {
                 .task { await model.bootstrap() }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Web parity: session heartbeat on focus / visibility change.
+            // Web parity: session heartbeat on focus / visibility change; then sync.
             if phase == .active, model.phase == .ready {
-                Task { await model.checkAuth(silent: true) }
+                Task {
+                    await model.checkAuth(silent: true)
+                    await model.syncNow()
+                }
             }
+            if phase == .background { model.syncBeforeBackground() }
         }
     }
 }
@@ -58,6 +62,7 @@ struct RootView: View {
                 LoginView()
             case .ready:
                 MainTabView()
+                    .overlay { FirstSyncOverlay() }
             }
         }
         .toastOverlay()

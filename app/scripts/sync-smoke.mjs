@@ -67,7 +67,7 @@ const first = await pullAll(0);
 check('pull returns every synced table',
   ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'goals_weekly'].every(t => Array.isArray(first.rows[t])));
 const ws = first.rows.workspaces[0];
-check('rows carry sync_seq and hide field_clock', ws && typeof ws.sync_seq === 'number' && !('field_clock' in ws));
+check('rows carry sync_seq and leave out bookkeeping', ws && typeof ws.sync_seq === 'number' && !('field_clock' in ws) && !('updated_device_id' in ws));
 const work = first.rows.workspaces.find(w => w.name === 'Work');
 
 // --- Push: create a task offline (client id + device time), then edit it.
@@ -80,8 +80,8 @@ const push1 = await call('POST', '/api/sync/push', { ops: [
 check('push applies a batch', push1.status === 200 && push1.data.results.every(r => r.status < 300), JSON.stringify(push1.data));
 
 const afterCreate = await pullAll(first.cursor);
-const task = afterCreate.rows.tasks.find(t => t.id === taskId);
-check('pull since cursor returns the new task', !!task);
+check('pull since cursor returns the new task', afterCreate.rows.tasks.some(t => t.id === taskId));
+const task = (await call('GET', `/api/tasks/${taskId}`)).data;
 check('device metadata is stamped',
   task?.created_device_kind === 'ios' && task?.created_device_id === DEVICE && task?.updated_device_id === DEVICE
     && task?.updated_by === 'user_in_ios_app' && task?.sync_op_id === push1.data.results[1].id,

@@ -63,8 +63,8 @@ struct MentionEditor: View {
                 return
             }
             try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled, let api = model.api else { return }
-            results = (try? await api.mention(query)) ?? []
+            guard !Task.isCancelled, let repo = model.repo else { return }
+            results = (try? await repo.mention(query)) ?? []
         }
         .onAppear { focused = true }
     }

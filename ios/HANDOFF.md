@@ -1,8 +1,11 @@
 # daybook iOS — Handoff
 
-Native SwiftUI client for daybook (rc-notes). It talks to the existing Nuxt/Nitro API in `app/`;
-the server stays the source of truth for data, carry-forward, display IDs, tag detection and
-journal concurrency. The design is native iOS; the **functionality** is 1:1 with the phone web app.
+Native SwiftUI client for daybook (rc-notes) over the Nuxt/Nitro API in `app/`. Since phase 12 it is
+**local first**: every screen reads a local copy of the data and every change is saved on the phone,
+queued, and synced in the background, so the app is instant and works offline. The server stays the
+source of truth: queued changes replay through the same endpoints (display IDs, carry-forward, tag
+detection, journal compare-and-swap all still happen there). The design is native iOS; the
+**functionality** is 1:1 with the phone web app.
 
 ## Status
 
@@ -19,10 +22,12 @@ journal concurrency. The design is native iOS; the **functionality** is 1:1 with
 | 8 | Install on a real iPhone | ✅ done via Xcode with a personal team (xtool not needed) |
 | 9 | Used against the real (MotherDuck) server from the phone | ✅ confirmed working 2026-10-17 |
 | 10 | Backend deployed: Railway + Supabase Postgres (see `DEPLOY.md`) | ✅ live 2026-10-17 at `https://rc-notes-production-a50f.up.railway.app` |
-| 11 | v0 release on Arsalan's iPhone (developer mode), pointed at Railway | ⏳ next |
+| 11 | v0 release on Arsalan's iPhone (developer mode), pointed at Railway | ✅ done 2026-10-17 (Release build) |
+| 12 | Offline-first: local copy, change queue, background sync, device metadata on every row | ✅ built 2026-10-17 (see "Offline sync") |
 
-Last full run (`ios/scripts/test.sh`, 2026-10-17, server on Postgres/PGlite): **49/49 unit tests,
-11/11 UI tests passed**; server `npm test` 23/23; `app/scripts/api-smoke.mjs` all routes passing.
+Last full run (`ios/scripts/test.sh`, 2026-10-17, offline-first build): **71/71 unit tests,
+12/12 UI tests passed** (incl. `OfflineE2ETests`); server `npm test` 33/33; `app/scripts/api-smoke.mjs`
+and `app/scripts/sync-smoke.mjs` passing (also against a production build over the Postgres protocol).
 
 The "Parity checklist" at the bottom is the contract; it separates what a UI test exercises end to end
 from what is built but still worth a manual pass.
@@ -70,6 +75,9 @@ ios/
   DaybookKit/            Swift package: all non-UI logic (swift test on macOS)
     API/                 APIClient (URLSession + cookie session), JSONValue bodies, errors
     Models/              Codable models matching the JSON the server really returns
+    Sync/                Rows (raw table rows), LocalData (+ LocalEffects: write rules, LocalQueries:
+                         read endpoints), Mutation/PendingOp (the queue), SyncStore (push/pull,
+                         conflicts, files), Repository (what screens call), SyncTransport
     Journal/             DiaryDraft (v2 keys, inspect, quarantine), JournalSession (save engine)
     Parsing/             Hashtags, checklist→tasks, mentions, tag catalog, markdown blocks
     Util/                ServerDate (naive timestamps), day/week math, due labels
@@ -77,7 +85,7 @@ ios/
   DaybookUITests/        XCUITest E2E (drives the simulator against the test server)
   scripts/               test-server.sh (isolated API), test.sh (full pipeline)
 
-Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
+Key app files: `Daybook/App/AppModel.swift` (server, auth, local copy + sync triggers, prefs),
 `Daybook/Features/Today/TodayModel.swift` (port of `pages/diary.vue`),
 `DaybookKit/.../Journal/JournalSession.swift` (journal save engine).
 ```
@@ -102,6 +110,39 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 - `POST /api/tasks` accepts a client UUID `id` (idempotent). Order writes go through
   `PATCH /api/tasks/positions`.
 
+## Offline sync
+
+- **Local copy**: `SyncStore` keeps the rows of workspaces, tasks, notes, links, diary_entries and
+  goals_weekly (`Application Support/Sync/<server>/<user id>/snapshot.json`) and the queue of changes
+  (`outbox.json`, rewritten synchronously on every change). Screens read `store.data` = server rows with
+  every queued change applied on top, through `Repository`, which has the same method names as
+  `APIClient`. Each screen reloads when `store.revision` changes.
+- **Changes**: a `Mutation` per write (`createTask`, `updateTask`, `saveDiary`, …). It is applied locally
+  at once (`LocalEffects.swift` ports the endpoint's rules: default workspace, priority inheritance, status
+  from due date, positions, diary links, carry-forward) and queued with its device time. Rapid edits of
+  the same thing coalesce (journal and goals saves, adjacent note/task edits, reorders).
+- **Sync**: ~2 s after a change, when the app comes to the foreground, when the network comes back,
+  every 30 s while open, and when going to the background. `POST /api/sync/push` replays the queue in
+  order (25 per batch, exactly once per op id), then `GET /api/sync/pull?since=<cursor>` brings rows
+  written elsewhere; a full pull runs daily. A 4xx drops that change with a toast; a 5xx or no network
+  keeps the queue for the next try.
+- **Conflicts**: the server keeps the newest edit per field (device time vs. each field's clock), so an
+  older offline edit never overwrites a newer one from the browser. The journal never merges: a save
+  whose page changed elsewhere (409) becomes a recovery draft (Restore / Discard on that page) and a
+  toast. Locally the journal's compare-and-swap is content based, so the server re-stamping the revision
+  of our own save does not block the next one.
+- **Offline pages**: a new day page gets an id derived from date + workspace (`DiaryIds.entryId`, same
+  as the server's `diaryIdSql`), so a page made offline and the same page made in the browser are one
+  row. Journal writing on a page that only exists locally is sent after the page is created; if the
+  server's page already has writing, ours becomes a recovery draft.
+- **What stays online**: sign-in, password change, users (admin), creating a workspace. With a known
+  account and no network the app opens straight to the local copy.
+- **Device metadata**: requests carry `X-Daybook-Device` (identifierForVendor) and a User-Agent with
+  model and iOS version; rows record `created/updated_device_kind/id`, `client_updated_at` and
+  `sync_op_id` (see AGENTS.md "Offline sync").
+- **Status**: Settings → Sync (waiting changes, last sync, Sync now); an `icloud.slash` button on Today
+  when changes are waiting and the server can't be reached.
+
 ## Journal safety invariants (from AGENTS.md "Daybook Journal Write Safety")
 
 1. Every draft and save is bound to the immutable loaded identity (user, entry ID, actual workspace ID,
@@ -111,7 +152,9 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
    is blocked until the user chooses.
 3. Draft keys are versioned (`daybook:diary-draft:v2:{user}:{entry}:{ws|{none}}:{date}`); legacy keys are
    quarantined, not replayed.
-4. Saves are serialized per app and use optimistic concurrency.
+4. Saves are serialized per app and use optimistic concurrency, locally (content based) and on the
+   server (exact `updated_at`) when the queued save is replayed. A server-side conflict becomes a
+   recovery draft, never an overwrite.
 5. Tests: `JournalSessionTests` (unit, fake CAS server) and `JournalE2ETests` (XCUITest) prove contents
    cannot cross dates or workspaces.
 
@@ -169,6 +212,15 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
   shapes), so the app needed no change. The iOS test server refuses to run unless it is on PGlite.
 - **Monorepo kept**: the app, API and iOS client share one contract and the iOS E2E suite runs against
   this server; splitting repos would only add sync work.
+- **Offline first, iOS only** (2026-10-17): local copy + queue + background sync instead of calling the
+  API from each screen. Built in-house (an outbox replayed through the existing endpoints, a pull by
+  sequence number) rather than a sync service such as PowerSync, which would add another service, auth
+  system and bill for one person's data (~600 tasks, ~3k links). The web app stays online-only.
+- **Last writer wins per field, by device time**: a trigger keeps a clock per field; device times are
+  capped at the server's receive time so a phone with a fast clock can't win forever. Journal content
+  keeps compare-and-swap on top (a conflict becomes a draft), per AGENTS.md journal rules.
+- **Deterministic diary page ids** for new pages (md5 of date + workspace), so offline and online page
+  creation converge without remapping. Existing pages keep their random ids.
 
 ## Blocked / needs Arsalan
 
@@ -187,13 +239,14 @@ Nothing is blocked. The backend is live on Railway and built into the app.
   → login screen with "Your session expired…"), but not covered by an E2E test (sealed cookies cannot be
   revoked server-side without restarting the server with a new secret).
 - iPad layouts are the phone layout scaled up (no priority board).
-- No offline mode beyond journal drafts (same as the web app). Reminders (`reminder_at`) are unused on
-  the web too, so no notifications were added.
+- The web app is online only (it gets no local copy). Reminders (`reminder_at`) are unused on the web
+  too, so no notifications were added.
+- Offline the phone shows a day page's tasks from its links plus tasks due that day; the server's rarer
+  page repairs (re-carrying into an empty page) and display IDs (`#xyz001`) appear after the next sync.
+- Signing out keeps the local copy on the device (per account) so queued changes are not lost.
 
 ## Next steps
 
-- **v0 on the phone**: final touches, then a Release build installed from Xcode, server set to the
-  Railway address.
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
 - TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.
 

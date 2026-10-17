@@ -12,6 +12,11 @@ import { BIGINT, INTEGER } from '~/server/utils/sqlTypes';
  */
 const DEFAULT_LIMIT = 2000;
 const MAX_LIMIT = 5000;
+/** Bookkeeping the app does not read; left out to keep a full pull small (~4k rows). */
+const OMIT = [
+  'field_clock', 'created_device_kind', 'created_device_id', 'updated_device_kind', 'updated_device_id',
+  'client_updated_at', 'sync_op_id', 'user_id', 'user_name', 'updated_by',
+];
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -29,7 +34,7 @@ export default defineEventHandler(async (event) => {
       `SELECT * FROM ${table} WHERE sync_seq > $since ORDER BY sync_seq LIMIT $limit`,
       { since, limit }, { since: BIGINT, limit: INTEGER },
     );
-    for (const row of found) delete row.field_clock;
+    for (const row of found) for (const key of OMIT) delete row[key];
     const last = found.length ? Number(found[found.length - 1]!.sync_seq) : since;
     highest = Math.max(highest, last);
     if (found.length === limit) cap = Math.min(cap, last);

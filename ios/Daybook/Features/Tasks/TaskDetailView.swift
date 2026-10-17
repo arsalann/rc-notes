@@ -26,7 +26,7 @@ struct TaskDetailView: View {
 
     private enum Field { case title, description, subtask, tag }
 
-    private var api: APIClient { app.api! }
+    private var repo: Repository { app.repo! }
     private var subtasks: [TaskItem] { task?.subtasks ?? [] }
     private var linkedNote: LinkItem? { links.first { $0.targetType == "note" } }
 
@@ -43,6 +43,7 @@ struct TaskDetailView: View {
         .navigationTitle(task?.displayId ?? "Task")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .onChange(of: app.store?.revision) { Task { await refresh() } }
         .navigationDestination(item: $openNoteId) { NoteDetailView(noteId: $0) }
     }
 
@@ -257,8 +258,8 @@ struct TaskDetailView: View {
 
     private func load() async {
         do {
-            async let detail = api.task(id: taskId)
-            async let fetchedLinks = try? api.taskLinks(id: taskId)
+            async let detail = repo.task(id: taskId)
+            async let fetchedLinks = try? repo.taskLinks(id: taskId)
             let loaded = try await detail
             task = loaded
             title = loaded.title
@@ -271,9 +272,19 @@ struct TaskDetailView: View {
         }
     }
 
+    /// After a sync: take the stored task and links, keeping text that is being typed.
+    private func refresh() async {
+        guard let fresh = try? await repo.task(id: taskId) else { return }
+        task = fresh
+        if focus != .title { title = fresh.title }
+        if focus != .description { descriptionText = fresh.description }
+        if focus != .tag { tags = fresh.tags }
+        links = (try? await repo.taskLinks(id: taskId)) ?? links
+    }
+
     private func loadNotePreview() async {
         guard let note = linkedNote else { return }
-        linkedNoteContent = (try? await api.note(id: note.targetId))?.content
+        linkedNoteContent = (try? await repo.note(id: note.targetId))?.content
     }
 
     private func apply(_ updated: TaskItem?) {
@@ -325,7 +336,7 @@ struct TaskDetailView: View {
     private func togglePin() async {
         guard let current = task else { return }
         do {
-            apply(try await api.setTaskPinned(id: taskId, !current.pinned))
+            apply(try await repo.setTaskPinned(id: taskId, !current.pinned))
         } catch {
             app.showError("Could not update that task", error)
         }
@@ -333,7 +344,7 @@ struct TaskDetailView: View {
 
     private func archive() async {
         do {
-            _ = try await api.archiveTask(id: taskId)
+            _ = try await repo.archiveTask(id: taskId)
             app.showToast("Task archived", style: .success)
             dismiss()
         } catch {
@@ -348,7 +359,7 @@ struct TaskDetailView: View {
 
     private func archiveSubtask(_ sub: TaskItem) async {
         do {
-            _ = try await api.archiveTask(id: sub.id)
+            _ = try await repo.archiveTask(id: sub.id)
             task?.subtasks = subtasks.filter { $0.id != sub.id }
         } catch {
             app.showError("Could not archive that subtask", error)
@@ -376,21 +387,21 @@ struct TaskDetailView: View {
         guard !query.isEmpty, !query.contains(" ") else { subtaskCandidates = []; return }
         try? await Task.sleep(for: .milliseconds(200))
         guard !Task.isCancelled else { return }
-        subtaskCandidates = ((try? await api.mention(query)) ?? []).filter { $0.type == "task" && $0.id != taskId }
+        subtaskCandidates = ((try? await repo.mention(query)) ?? []).filter { $0.type == "task" && $0.id != taskId }
     }
 
     private func attachSubtask(_ candidate: MentionResult) async {
         newSubtask = ""
         subtaskCandidates = []
         _ = await app.updateTask(candidate.id, ["parent_id": .string(taskId)])
-        if let fresh = try? await api.task(id: taskId) { task?.subtasks = fresh.subtasks }
+        if let fresh = try? await repo.task(id: taskId) { task?.subtasks = fresh.subtasks }
     }
 
     private func addNote() async {
         guard let current = task else { return }
         do {
-            let note = try await api.createNote(title: current.title, workspaceId: current.workspaceId)
-            try await api.createLink(sourceType: "task", sourceId: taskId, targetType: "note", targetId: note.id)
+            let note = try await repo.createNote(title: current.title, workspaceId: current.workspaceId)
+            try await repo.createLink(sourceType: "task", sourceId: taskId, targetType: "note", targetId: note.id)
             links.append(LinkItem(targetType: "note", targetId: note.id, targetTitle: note.title))
             openNoteId = note.id
         } catch {

@@ -83,7 +83,10 @@ private struct TodayScreen: View {
                 doneSection
             }
             .listStyle(.insetGrouped)
-            .refreshable { await model.reload() }
+            .refreshable {
+                await app.syncNow()
+                await model.reload()
+            }
             .animation(.snappy, value: model.selectedDate)
         }
         .navigationTitle(model.selectedDayLabel)
@@ -111,6 +114,7 @@ private struct TodayScreen: View {
         .onChange(of: app.activeWorkspaceId) {
             Task { await model.reload() }
         }
+        .onChange(of: app.store?.revision) { model.storeChanged() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background, .inactive:
@@ -132,6 +136,7 @@ private struct TodayScreen: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
+            SyncBadge()
             if model.selectedDate != model.todayDate {
                 Button("Today") { Task { await model.goToToday() } }
                     .accessibilityIdentifier("today.jump")

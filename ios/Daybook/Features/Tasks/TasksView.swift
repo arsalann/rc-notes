@@ -33,13 +33,21 @@ final class TasksModel {
         groupBy = app.prefs.taskGroupBy
     }
 
-    private var api: APIClient { app.api! }
+    private var repo: Repository { app.repo! }
+
+    /// After a sync or a change elsewhere: the list and any expanded subtasks, without a spinner.
+    func reload() async {
+        tasks = (try? await repo.tasks(workspaceId: app.activeWorkspaceId, archived: showArchived)) ?? tasks
+        for id in expanded {
+            if let full = try? await repo.task(id: id) { subtasks[id] = full.subtasks ?? [] }
+        }
+    }
 
     func load() async {
         loading = true
         defer { loading = false }
         do {
-            tasks = try await api.tasks(workspaceId: app.activeWorkspaceId, archived: showArchived)
+            tasks = try await repo.tasks(workspaceId: app.activeWorkspaceId, archived: showArchived)
             loadError = nil
         } catch is CancellationError {
         } catch {
@@ -115,7 +123,7 @@ final class TasksModel {
             return
         }
         expanded.insert(task.id)
-        if let full = try? await api.task(id: task.id) { subtasks[task.id] = full.subtasks ?? [] }
+        if let full = try? await repo.task(id: task.id) { subtasks[task.id] = full.subtasks ?? [] }
     }
 
     func toggleSubtask(_ sub: TaskItem, parentId: String) async {
@@ -136,11 +144,11 @@ final class TasksModel {
 
     func add(_ result: QuickAddResult) async {
         do {
-            let task = try await api.createTask(NewTask(title: result.title, workspaceId: app.activeWorkspaceId,
+            let task = try await repo.createTask(NewTask(title: result.title, workspaceId: app.activeWorkspaceId,
                                                         tags: result.tags.isEmpty ? nil : result.tags, dueAt: result.dueAt,
                                                         priority: result.priority, status: result.status))
             for title in result.subtasks {
-                _ = try? await api.createTask(NewTask(title: title, parentId: task.id, workspaceId: app.activeWorkspaceId))
+                _ = try? await repo.createTask(NewTask(title: title, parentId: task.id, workspaceId: app.activeWorkspaceId))
             }
             await load()
         } catch {
@@ -157,7 +165,7 @@ final class TasksModel {
     }
 
     func togglePin(_ task: TaskItem) async {
-        guard let saved = try? await api.setTaskPinned(id: task.id, !task.pinned) else {
+        guard let saved = try? await repo.setTaskPinned(id: task.id, !task.pinned) else {
             app.showToast("Could not update that task", style: .error)
             return
         }
@@ -166,7 +174,7 @@ final class TasksModel {
 
     func archiveOrRestore(_ task: TaskItem) async {
         do {
-            _ = showArchived ? try await api.toggleTaskArchived(id: task.id) : try await api.archiveTask(id: task.id)
+            _ = showArchived ? try await repo.toggleTaskArchived(id: task.id) : try await repo.archiveTask(id: task.id)
             tasks.removeAll { $0.id == task.id }
         } catch {
             app.showError(showArchived ? "Could not restore that task" : "Could not archive that task", error)
@@ -185,7 +193,7 @@ final class TasksModel {
         tasks = list + tasks.filter { t in !list.contains(where: { $0.id == t.id }) }
         guard !items.isEmpty else { return }
         do {
-            try await api.updateTaskPositions(items)
+            try await repo.updateTaskPositions(items)
         } catch {
             app.showToast("Order could not be saved", detail: "No changes were written; try moving it again.", style: .error)
             await load()
@@ -209,7 +217,7 @@ final class TasksModel {
         guard !ids.isEmpty else { return }
         let restoring = showArchived
         await withTaskGroup(of: Void.self) { group in
-            for id in ids { group.addTask { _ = try? await self.api.toggleTaskArchived(id: id) } }
+            for id in ids { group.addTask { _ = try? await self.repo.toggleTaskArchived(id: id) } }
         }
         tasks.removeAll { ids.contains($0.id) }
         selection = []
@@ -279,8 +287,12 @@ private struct TasksScreen: View {
         }
         .environment(\.editMode, $editMode)
         .navigationTitle(model.showArchived ? "Archived" : "Tasks")
-        .refreshable { await model.load() }
+        .refreshable {
+            await app.syncNow()
+            await model.load()
+        }
         .task { await model.load() }
+        .onChange(of: app.store?.revision) { Task { await model.reload() } }
         .onChange(of: app.activeWorkspaceId) { Task { await model.load() } }
         .onChange(of: model.showArchived) { Task { await model.load() } }
         .toolbar {
