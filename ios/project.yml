@@ -61,8 +61,11 @@ schemes:
       targets:
         Daybook: all
         DaybookUITests: [test]
+    # Run from Xcode installs the Release build (built-in server, HTTPS only) — what goes on the
+    # phone. UI tests use the Debug config (local test server). Switch Run to Debug in the scheme
+    # editor only for debugging; the next `xcodegen generate` resets it.
     run:
-      config: Debug
+      config: Release
     test:
       config: Debug
       targets:
