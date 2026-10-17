@@ -22,7 +22,8 @@ The app runs at `http://localhost:3000` and is reachable on your LAN for phone a
 configuration it uses a local embedded Postgres in `data/pglite`. To work against the real database,
 put `DATABASE_URL` (and `DATABASE_CA_CERT`) in `app/.env`; see [`DEPLOY.md`](DEPLOY.md).
 
-The deployed app runs on Railway against Supabase. [`DEPLOY.md`](DEPLOY.md) covers setup, the data
+The deployed app runs on Railway against Supabase (EU) at
+`https://rc-notes-production-a50f.up.railway.app`; the iPhone app and the phone browser both use it. [`DEPLOY.md`](DEPLOY.md) covers setup, the data
 migration from MotherDuck, and rollback.
 
 ## Features
