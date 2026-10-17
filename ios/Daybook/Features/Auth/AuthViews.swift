@@ -149,21 +149,14 @@ private struct CredentialsForm: View {
 
 /// Sign in or create an account (web `/login`).
 struct LoginView: View {
-    enum Mode { case login, signup }
-
     @Environment(AppModel.self) private var model
-    @State private var mode: Mode = .login
     @State private var username = ""
     @State private var password = ""
     @State private var confirm = ""
     @State private var submitting = false
     @State private var error: String?
 
-    private var canSubmit: Bool {
-        guard !username.isEmpty, !password.isEmpty else { return false }
-        if mode == .signup { return username.count >= 2 && password.count >= 8 && password == confirm }
-        return true
-    }
+    private var canSubmit: Bool { !username.isEmpty && !password.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -173,20 +166,16 @@ struct LoginView: View {
                     Section { Label(notice, systemImage: "clock.badge.exclamationmark").foregroundStyle(Color("Warm")) }
                         .accessibilityIdentifier("auth.notice")
                 }
-                Picker("Mode", selection: $mode) {
-                    Text("Sign in").tag(Mode.login)
-                    Text("Create account").tag(Mode.signup)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                CredentialsForm(username: $username, password: $password, confirm: $confirm, needsConfirm: mode == .signup)
+                CredentialsForm(username: $username, password: $password, confirm: $confirm, needsConfirm: false)
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }.accessibilityIdentifier("auth.error")
                 }
                 Section {
-                    Button(mode == .login ? "Sign in" : "Create account", action: submit)
+                    Button("Sign in", action: submit)
                         .disabled(!canSubmit || submitting)
                         .accessibilityIdentifier("auth.submit")
+                } footer: {
+                    Text("Need an account? Ask an admin to add you in Settings.")
                 }
                 if AppModel.allowsServerOverride {
                     Section {
@@ -195,26 +184,17 @@ struct LoginView: View {
                     }
                 }
             }
-            .onChange(of: mode) { error = nil; confirm = "" }
         }
     }
 
     private func submit() {
         guard canSubmit else { return }
-        if mode == .signup && password != confirm {
-            error = "Passwords do not match"
-            return
-        }
         submitting = true
         error = nil
         Task {
             defer { submitting = false }
             do {
-                if mode == .login {
-                    try await model.login(username: username, password: password)
-                } else {
-                    try await model.signup(username: username, password: password)
-                }
+                try await model.login(username: username, password: password)
             } catch {
                 self.error = error.localizedDescription
             }

@@ -239,11 +239,6 @@ final class AppModel {
         await signedIn(try await api.login(username: username, password: password))
     }
 
-    func signup(username: String, password: String) async throws {
-        guard let api else { throw APIError.invalidURL }
-        await signedIn(try await api.signup(username: username, password: password))
-    }
-
     func setup(username: String, password: String) async throws {
         guard let api else { throw APIError.invalidURL }
         await signedIn(try await api.setup(username: username, password: password))
