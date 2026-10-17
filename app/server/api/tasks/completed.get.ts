@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 // Returns tasks whose completed_at falls within [from, to] (UTC dates, inclusive,
 // expanded by one day on each side so callers can re-bucket by local date safely).
@@ -28,8 +28,8 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN tasks p ON p.id = t.parent_id
     WHERE t.completed = true
       AND t.completed_at IS NOT NULL
-      AND t.completed_at >= ($from::DATE - INTERVAL 1 DAY)
-      AND t.completed_at < ($to::DATE + INTERVAL 2 DAY)
+      AND t.completed_at >= ($from::DATE - INTERVAL '1 day')
+      AND t.completed_at < ($to::DATE + INTERVAL '2 days')
       ${wsFilter}
     ORDER BY t.completed_at DESC
   `, params, types);

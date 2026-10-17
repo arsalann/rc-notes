@@ -14,17 +14,19 @@
 ## Project Context
 - This is a mobile-first **todo/reminder + notes app** called **rc-notes**
 - Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar
-- Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + MotherDuck (cloud DuckDB) + Bruin CLI
-- Runs on localhost; it includes setup and login flows, but data endpoints are not yet consistently scoped by `user_id`
+- Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + Postgres (Supabase) + Bruin CLI, plus a native iOS app in `ios/`
+- Deployed on Railway (see `DEPLOY.md`); it includes setup and login flows, but data endpoints are not yet consistently scoped by `user_id`
 - Primary use: phone browser
 
 ## Key File Locations
 - `README.md` — public project overview, setup, and pointers to implementation sources of truth
-- `.bruin.yml` — Bruin pipeline config (root, gitignored — contains MotherDuck connection)
-- `app/.env` — `MOTHERDUCK_NOTEBOOK_RC` token (gitignored)
+- `DEPLOY.md` — Supabase + Railway setup, data migration runbook, rollback
+- `.bruin.yml` — Bruin pipeline config (root, gitignored — contains the database connection)
+- `app/.env` — `DATABASE_URL`, `DATABASE_CA_CERT`, `SESSION_SECRET` (gitignored)
 - `pipeline/` — Bruin SQL assets
 - `app/` — Nuxt 4 application
-- `app/server/utils/db.ts` — MotherDuck/DuckDB singleton + schema init + migrations (critical file)
+- `app/server/utils/db.ts` — Postgres/PGlite connection, `queryAll()` / `execute()` (critical file)
+- `app/server/utils/schema.ts` — table DDL, boot-time schema check, `DATA_REPAIRS` ledger (critical file)
 - `app/server/api/tasks/` — Task CRUD endpoints
 - `app/server/api/notes/` — Notes CRUD endpoints
 - `app/composables/useNotes.ts` — exports `useTasks()`, `useNotesCrud()`, `Task`, `Note` types
@@ -50,20 +52,31 @@ The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app
 - Preserve strong contrast and 44px touch targets. Do not use light-mode utility classes or a `dark:` variant.
 
 ## Database Connection
-- **MotherDuck** (cloud): set `MOTHERDUCK_NOTEBOOK_RC` env var → `db.ts` does `INSTALL motherduck; LOAD motherduck; ATTACH 'md:'; CREATE DATABASE IF NOT EXISTS rc_notes; USE rc_notes`
-- **Local fallback**: without the env var, uses local file at `data/notes.db`
-- All 29 API endpoints use `queryAll()` / `execute()` from `db.ts` — they don't know about MotherDuck vs local
-- Migrations use `ALTER TABLE ... ADD COLUMN` wrapped in try/catch (idempotent)
-- MotherDuck adds ~50-200ms latency per query vs <5ms local — acceptable for this app's dataset size
+- **Postgres** (Supabase in production): set `DATABASE_URL` (Supabase *session pooler* string) and
+  `DATABASE_CA_CERT` (PEM, enables full TLS verification). Every connection runs `SET TIME ZONE 'UTC'`.
+- **Embedded fallback**: without `DATABASE_URL`, the server runs PGlite (Postgres compiled to WASM) in
+  `data/pglite` (or `PGLITE_PATH`). Same SQL dialect, no server needed. Production refuses to start
+  without `DATABASE_URL`.
+- All API endpoints use `queryAll()` / `execute()` from `db.ts` — they don't know which backend runs.
+- Schema lives in `schema.ts`: missing tables/columns/indexes are added on boot after reading the real
+  catalog; RLS is enabled on every table (no policies; the server is the owner and bypasses it).
+- MotherDuck (`md:rc_notes`) was the database until the Postgres move. It is now a read-only archive;
+  `app/scripts/migrate-motherduck-to-postgres.ts` did the one-time copy.
 
-## DuckDB Node API
-- Always provide **explicit types** for all params: `VARCHAR`, `BOOLEAN`, `INTEGER`, `LIST(VARCHAR)`
-- Import types from `@duckdb/node-api`
-- Use `$name` syntax for named params
-- Array params need `listValue(arr)` wrapper + `LIST(VARCHAR)` type
-- Always `String(getRouterParam())` — may return non-string
-- `runAndReadAll()` returns reader → `.getRowObjectsJson()`
-- DuckDB `UNNEST()` must be in a subquery for GROUP BY
+## SQL conventions
+- Use `$name` placeholders; `queryAll()` rewrites them to positional `$1…` (`server/utils/sql.ts`).
+- Pass type hints (`VARCHAR`, `BOOLEAN`, `INTEGER`, `LIST(VARCHAR)` from `~/server/utils/sqlTypes`);
+  each hinted placeholder gets an explicit cast. Array params: `listValue(arr)` + `LIST(VARCHAR)`, used
+  as `col = ANY($ids)` or `unnest($ids)`.
+- A text value bound for a DATE/TIMESTAMP column needs an explicit cast in SQL (`$date::DATE`). Client
+  timestamps with a zone go through `($due_at::timestamptz AT TIME ZONE 'UTC')`.
+- DATE/TIMESTAMP results come back as text (`2026-10-16`, `2026-10-16 17:30:30.24154`), never JS
+  Dates — the journal compares `updated_at` byte for byte. BIGINT/NUMERIC come back as numbers.
+- IDs: `gen_random_uuid()::text`. Intervals: `INTERVAL '1 day'`. `DESC` sorts NULLs first in Postgres
+  (DuckDB sorted them last) — add `NULLS LAST` when sorting a nullable column descending.
+- Always `String(getRouterParam())` — may return non-string.
+- `app/scripts/api-smoke.mjs` exercises every route against the local test server and checks the iOS
+  fixture shapes; run it after any SQL change.
 
 ## Nitro Routing
 - Nested routes: `server/api/tasks/[id]/complete.patch.ts` → PATCH /api/tasks/:id/complete
@@ -71,34 +84,27 @@ The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app
 - DO NOT use `[id].foo.patch.ts` — creates wrong route
 
 ## Nuxt
-- SSR disabled (`ssr: false`) — DuckDB native module crashes Vite SSR worker
-- `@duckdb/node-api` in `nitro.rollupConfig.external`
+- SSR disabled (`ssr: false`)
+- `@electric-sql/pglite` in `nitro.rollupConfig.external` (it loads WASM files from its package dir)
 - `"type": "module"` in package.json
 - All `<script setup>` blocks with TypeScript must have `lang="ts"`
 - All `<template>` blocks must have closing `</template>` tag
 
 ## Bruin
 - Run from project root, not from `app/`
-- `.bruin.yml` at project root references `md:rc_notes` (MotherDuck) via `MOTHERDUCK_NOTEBOOK_RC` env var
+- `.bruin.yml` at project root holds a `postgres` connection named `supabase-default` (see `DEPLOY.md`)
 - `bruin validate pipeline/` then `bruin run pipeline/`
 
 ### Keep pipeline assets in sync with the database — REQUIRED
-Whenever a change is made to the database schema (new table, dropped table, added/removed/renamed column, type change, new backup snapshot), you MUST refresh the Bruin asset definitions so `pipeline/` stays an accurate mirror of MotherDuck:
+Whenever a change is made to the database schema (new table, dropped table, added/removed/renamed column, type change), you MUST refresh the Bruin asset definitions so `pipeline/` stays an accurate mirror of the database:
 
-1. Run `bruin import database --connection motherduck-default pipeline` from the project root.
-2. Delete any junk the importer pulls in from MotherDuck's shared catalogs — keep ONLY `pipeline/assets/main/*.asset.yml` (the seven real `rc_notes.main` tables: tasks, notes, workspaces, diary_entries, links, event_log, users). Remove anything under `backup/` (snapshot tables are operational, not pipeline assets), `hn/`, `kaggle/`, `nyc/`, `stackoverflow_survey/`, `who/`, and any `main/*.sql` files for MotherDuck system views (`database_snapshots`, `databases`, `owned_shares`, `query_history`, `recent_queries`, `shared_with_me`, `storage_info*`).
+1. Run `bruin import database --connection supabase-default pipeline` from the project root.
+2. Keep ONLY the asset files for the real app tables (tasks, notes, workspaces, diary_entries, goals_weekly, links, event_log, users). Delete anything for the `backup` schema (snapshot tables are operational, not pipeline assets) and any Supabase system schemas (`auth`, `storage`, `realtime`, `extensions`, …).
 3. Re-add per-column `description:` text on any columns the importer touched — `bruin import` strips descriptions, and the asset YAMLs are the canonical column dictionary.
 4. Run `bruin validate pipeline/` and confirm "No issues found" before committing.
-5. Commit the asset changes alongside the schema/migration change in `app/server/utils/db.ts` so the two never drift.
+5. Commit the asset changes alongside the schema change in `app/server/utils/schema.ts` so the two never drift.
 
 Also use the Bruin MCP tools when available for richer schema inspection — the CLI import is the source of truth for the on-disk asset files.
-
-## Home Page (Tasks) UI
-- Two independent toolbar controls: **order-by** (newest / due date) and **group-by** (none / workspace / tag)
-- Default view: group by workspace + order newest
-- Workspace groups use drag-and-drop (via `vuedraggable` with `@change` event, NOT `@end`) to move tasks between workspaces
-- Flat list uses drag handles for reordering
-- Empty workspace groups are hidden
 
 ## Daybook Journal Write Safety
 - Bind every journal draft and save to the immutable loaded entry identity: user, entry ID,
@@ -121,7 +127,8 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - After adding or removing Swift files, run `xcodegen generate` in `ios/` (the `.xcodeproj` is generated
   from `project.yml` and committed).
 - `ios/scripts/test.sh` runs everything against `ios/scripts/test-server.sh`: an isolated server with a
-  temp DuckDB file and no MotherDuck token. Never point iOS tests at the real server.
+  throwaway PGlite database; it unsets `DATABASE_URL`, skips `app/.env`, and aborts unless the log shows
+  PGlite. Never point iOS tests at the real server.
 - Journal safety rules above apply to iOS too; `JournalSessionTests` and `JournalE2ETests` are the
   regression tests and must stay green.
 - SwiftUI gotcha: `.accessibilityIdentifier` on a container overrides its children's identifiers; add
@@ -131,14 +138,14 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Device installs: open `ios/Daybook.xcodeproj` in Xcode, pick the iPhone, Run. Signing uses the personal
   team in `project.yml` (`DEVELOPMENT_TEAM`); free-team builds expire after 7 days, so re-run from Xcode then.
   The phone must trust the developer certificate (Settings → General → VPN & Device Management).
-- Running the server for the phone over the LAN (until the backend is deployed):
+- The phone normally uses the Railway HTTPS address. To point it at a local dev server instead:
   - Use `npx nuxt dev --host 0.0.0.0 --port 3000` and enter `http://<mac LAN IP>:3000` in the app. The
     Mac's IP changes between networks (`ipconfig getifaddr en0`); phone and Mac must be on the same Wi-Fi.
   - A local production build (`node .output/server/index.mjs`) can't log in over plain http: the session
     cookie is `Secure` in production. Use the dev server, or put HTTPS in front.
   - If the checkout is in iCloud Drive (`~/Documents`), iCloud file events make the Nuxt dev watcher
-    restart repeatedly. Each restart opens a new MotherDuck connection and crashes the native addon
-    (`Napi::Error`). Run the server from a checkout outside iCloud.
+    restart repeatedly, and iCloud must never sync a live PGlite directory (`data/pglite`). Run local
+    servers from a checkout outside iCloud.
 
 ## User Preferences
 - Keep things simple — this is a personal tool
@@ -151,7 +158,7 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 ## Safety Rules — READ BEFORE TOUCHING DATA
 
 ### Tests must use `master_tester` only
-- The dev server hits **MotherDuck cloud**, which holds the user's real data.
+- The deployed server and any dev server with `DATABASE_URL` set hit **Supabase**, which holds the user's real data. Automated suites (`ios/scripts/test.sh`, `app/scripts/api-smoke.mjs`) only run against the throwaway PGlite test server.
 - `/api/tasks` and other endpoints **do not filter by `user_id`** (known cross-user leak). A test that signs up a fresh user and then runs `selectAll()` will grab the user's real tasks too.
 - **Going forward, tests run as user `master_tester` (password `password123`).** Never sign up new test users; never operate against other users' data.
 - Never run "select all" + bulk-modify in browser tests. Select tasks individually by id/title prefix that you created in the same test.
@@ -159,28 +166,27 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - If a test would touch the user's data on failure, do not run it.
 
 ### Always back up before risky operations
-- **Before any agent/script writes that could affect existing rows** (UPDATE, DELETE, ALTER on populated tables, mass re-keying, etc.), snapshot the affected tables to the `rc_notes.backup` schema.
-- **Backup naming:** `rc_notes.backup.<table_name>_<YYYYMMDD>_<N>` where `N` is a 1-based suffix that increments per backup taken on the same day. Check existing backups for that date before picking N.
-- Use `CREATE OR REPLACE TABLE rc_notes.backup.<name>_<date>_<n> AS SELECT * FROM rc_notes.main.<name>` (fully qualified — DuckDB has a built-in "backup" catalog that conflicts with bare `backup.foo`).
-- Backups are cheap (MotherDuck dedupes storage) and have already saved a 43-task corruption incident — take them aggressively.
+- **Before any agent/script writes that could affect existing rows** (UPDATE, DELETE, ALTER on populated tables, mass re-keying, etc.), snapshot the affected tables to the `backup` schema in the same database (`CREATE SCHEMA IF NOT EXISTS backup`).
+- **Backup naming:** `backup.<table_name>_<YYYYMMDD>_<N>` where `N` is a 1-based suffix that increments per backup taken on the same day. Check existing backups for that date before picking N.
+- Use `CREATE TABLE backup.<name>_<date>_<n> AS TABLE public.<name>` (Postgres has no `CREATE OR REPLACE TABLE`; pick a new N instead). Enable RLS on the copy too (`ALTER TABLE backup.<…> ENABLE ROW LEVEL SECURITY`).
+- Supabase's daily backups are a second line, not a replacement. Snapshots have already saved a 43-task corruption incident — take them aggressively.
 
 ### Retroactive data fixes — use the `DATA_REPAIRS` ledger
-When existing rows are wrong because of a bug (not just a schema gap), the correct mechanism is a gated one-time repair in `DATA_REPAIRS` in `app/server/utils/db.ts`, recorded in the `applied_migrations` ledger so it runs **exactly once** per database. Do NOT hand-run a one-off UPDATE and walk away — a repair that can re-run on boot will re-clobber values the user later edited by hand (see the `v6_status_now` note in `db.ts`).
+When existing rows are wrong because of a bug (not just a schema gap), the correct mechanism is a gated one-time repair in `DATA_REPAIRS` in `app/server/utils/schema.ts`, recorded in the `applied_migrations` ledger so it runs **exactly once** per database. Do NOT hand-run a one-off UPDATE and walk away — a repair that can re-run on boot will re-clobber values the user later edited by hand (the DuckDB-era `v6_status_now` repair did exactly that; see git history of `app/server/utils/db.ts`).
 
 Procedure that was validated on `v12_subtask_priority_inherit` (2026-08-25, fixed 243 subtasks whose priority defaulted to 2/Focus instead of inheriting the parent's lane):
 1. **Make the repair idempotent.** Scope the `WHERE` so a second run matches nothing (e.g. only touch rows still at the buggy default *and* whose target differs), and so user-edited rows and orphans are excluded. Set `updated_at` and `updated_by = 'migration_<name>'` in the same statement.
-2. **Backup #1** — snapshot *all* tables to `rc_notes.backup.<table>_<YYYYMMDD>_1` before doing anything.
-3. **Test on an isolated fixture** — build a throwaway schema (`rc_notes.fixtest`) mirroring the table, populate every case (buggy default, already-correct, user-edited, orphan), run the exact fix SQL, assert expected priorities, drop it. Never test by mutating `main.*`.
+2. **Backup #1** — snapshot *all* tables to `backup.<table>_<YYYYMMDD>_1` before doing anything.
+3. **Test on an isolated fixture** — build a throwaway schema (`fixtest`), or better a local PGlite database, mirroring the table, populate every case (buggy default, already-correct, user-edited, orphan), run the exact fix SQL, assert expected priorities, drop it. Never test by mutating `public.*`.
 4. **Backup #2** — snapshot all tables again to `..._2` immediately before the write, so revert restores the exact pre-fix state.
-5. **Apply** to `main.*`, then `INSERT` the repair name into `applied_migrations` so boot skips it. Add the same entry to `DATA_REPAIRS` so fresh restores self-heal (prod ledger already marks it done → no re-run).
+5. **Apply** to `public.*`, then `INSERT` the repair name into `applied_migrations` so boot skips it. Add the same entry to `DATA_REPAIRS` so fresh restores self-heal (prod ledger already marks it done → no re-run).
 6. **Backfill provenance** on exactly the rows changed, identified by diffing against backup #2 (`WHERE m.priority <> b.priority`) — an out-of-band apply that forgot `updated_by` can be repaired precisely this way.
-7. **Verify** the affected-count is 0 and row totals are unchanged. Revert = restore `main.tasks` from a backup + delete the ledger row.
+7. **Verify** the affected-count is 0 and row totals are unchanged. Revert = restore `public.tasks` from a backup + delete the ledger row.
 
 Gotchas:
-- Ad-hoc maintenance scripts must live **under `app/`** (ESM resolves `@duckdb/node-api` from the script's own directory, not cwd) and should connect directly (`INSTALL/LOAD motherduck; SET token; ATTACH 'md:'; USE rc_notes`) *without* calling `ensureSchema()`, so no migration/backfill side effects fire mid-procedure.
-- Fully qualify the backup/test schemas as `rc_notes.backup` / `rc_notes.fixtest` — `ATTACH 'md:'` exposes a built-in `backup` catalog and bare `backup.foo` is ambiguous.
-- The `@duckdb/node-api` native addon can crash a process (`libc++abi: terminating due to uncaught exception of type Napi::Error`) when a second connection hits MotherDuck concurrently — expect the dev server to die while a script runs against the same DB; just restart it, the data is unaffected.
-- Only backup snapshots + no `main` schema change means **no Bruin asset refresh is needed** (backup tables are excluded from `pipeline/` anyway).
+- Ad-hoc maintenance scripts live **under `app/scripts/`** (so `pg` resolves from `app/node_modules`), run with `npx tsx`, and connect with `openDatabase()` from `server/utils/db.ts` *without* calling `ensureSchema()`, so no migration/backfill side effects fire mid-procedure.
+- Postgres runs statements in a transaction when you ask it to: wrap multi-statement repairs in `BEGIN … COMMIT` on a single client so a failure leaves nothing half-applied.
+- Only backup snapshots + no `public` schema change means **no Bruin asset refresh is needed** (backup tables are excluded from `pipeline/` anyway).
 
 ### Provenance: every write should set `updated_by`
 All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values:
@@ -188,7 +194,7 @@ All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `u
 - `user_in_ios_app` — real user via the native iOS app (`ios/`, User-Agent `daybook-ios/<version>`)
 - `user_in_test` — real user behavior simulated via Playwright (rare; prefer `test_playwright`)
 - `test_playwright` — automated browser test
-- `agent_query` — agent or operator running raw SQL via MotherDuck
+- `agent_query` — agent or operator running raw SQL against the database
 - `agent_query_<purpose>_<date>` — agent running a one-off purposeful job (e.g. `agent_query_recovery_2026-04-27`)
 - `migration_<name>` — a gated one-time `DATA_REPAIRS` migration (e.g. `migration_v12_subtask_priority`); use the same value in the SQL and when backfilling provenance on rows an out-of-band apply already changed
 - `recovery_script` — generic recovery SQL

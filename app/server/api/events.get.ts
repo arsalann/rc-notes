@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR, INTEGER } from '@duckdb/node-api';
+import { VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);

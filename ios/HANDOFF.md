@@ -102,8 +102,10 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 
 ## Test-data safety
 
-- Tests only ever run against `ios/scripts/test-server.sh`: `MOTHERDUCK_NOTEBOOK_RC` is unset for the
-  server process and the DB is a temp DuckDB file. The only user is `master_tester` / `password123`.
+- Tests only ever run against `ios/scripts/test-server.sh`: `DATABASE_URL` and `MOTHERDUCK_NOTEBOOK_RC`
+  are unset for the server process, `app/.env` is not loaded, and the DB is a throwaway PGlite
+  (embedded Postgres) directory. The script aborts unless the server log confirms PGlite. The only user
+  is `master_tester` / `password123`.
 - Nothing in `ios/` reads `app/.env` or `.bruin.yml`.
 
 ## Decisions log
@@ -165,8 +167,10 @@ Nothing is blocked. The app is installed on Arsalan's iPhone and works against t
 
 ## Next steps
 
-- **Deploy the backend** (in progress): Supabase Postgres plus a Railway web service. When it is live,
-  enter its `https://` address in the app; nothing in the app changes. Once every server is HTTPS,
+- **Deploy the backend** (in progress, see `DEPLOY.md`): Supabase Postgres plus a Railway web service.
+  The server moved from DuckDB to Postgres with byte-identical API responses (same timestamp text,
+  same fixture shapes; `app/scripts/api-smoke.mjs` checks this). When it is live, enter its
+  `https://` address in the app; nothing in the app changes. Once every server is HTTPS,
   tighten ATS (drop `NSAllowsArbitraryLoads`).
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
 - TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.

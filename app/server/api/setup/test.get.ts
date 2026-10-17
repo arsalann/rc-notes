@@ -1,9 +1,8 @@
+import { queryAll } from '~/server/utils/db';
+
 export default defineEventHandler(async () => {
   try {
-    const { useDB } = await import('~/server/utils/db');
-    const db = await useDB();
-    const result = await db.runAndReadAll('SELECT 1 as ok');
-    const rows = result.getRowObjectsJson();
+    const rows = await queryAll('SELECT 1 as ok');
     return { ok: rows.length > 0, message: 'Connection successful' };
   } catch (err: any) {
     throw createError({ statusCode: 500, statusMessage: `Connection failed: ${err.message}` });

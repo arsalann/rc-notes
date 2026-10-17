@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   // Skip auth and setup routes (they handle their own auth)
   if (path.startsWith('/api/auth/')) return;
   if (path.startsWith('/api/setup')) return;
+  if (path === '/api/health') return;
 
   // CSRF: verify Origin header on mutating requests
   const method = event.method.toUpperCase();

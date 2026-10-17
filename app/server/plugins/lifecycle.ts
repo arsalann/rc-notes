@@ -4,7 +4,7 @@ import { flushEvents } from '~/server/utils/eventLog';
 /**
  * Boot and shutdown work that used to be paid inside the first user request.
  *
- * - Pre-warm the DuckDB/MotherDuck connection so the ATTACH + schema check happens at boot instead
+ * - Pre-warm the database connection so the connect + schema check happens at boot instead
  *   of inside whichever request arrives first. Safe to fire-and-forget: `useDB()` memoizes, and it
  *   now clears the memo on rejection, so a transient failure here does not brick the process the way
  *   a cached rejected promise used to. See .context/perf-plan.md item 6.

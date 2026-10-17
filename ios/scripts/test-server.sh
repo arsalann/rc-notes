@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Start an isolated daybook API server for iOS tests.
 #
-# Safety: this NEVER talks to MotherDuck. MOTHERDUCK_NOTEBOOK_RC is unset for the child process and
-# the database is a throwaway DuckDB file under $TMPDIR. A first admin user `master_tester`
-# (password `password123`) is created through /api/setup.
+# Safety: this NEVER talks to a real database. DATABASE_URL and MOTHERDUCK_NOTEBOOK_RC are unset for
+# the child process, `app/.env` is NOT loaded (an empty --dotenv file is used instead), and the
+# database is a throwaway embedded Postgres (PGlite) directory under $TMPDIR. The script aborts unless
+# the server log confirms PGlite. A first admin user `master_tester` (password `password123`) is
+# created through /api/setup.
 #
 # Usage: ios/scripts/test-server.sh [start|stop|status]   (env: DAYBOOK_TEST_PORT, default 3457)
 set -euo pipefail
@@ -37,11 +39,12 @@ start() {
   fi
   (
     cd "$ROOT/app"
-    env -u MOTHERDUCK_NOTEBOOK_RC \
-      DUCKDB_PATH="$STATE_DIR/test.db" \
+    : >"$STATE_DIR/empty.env"
+    env -u MOTHERDUCK_NOTEBOOK_RC -u DATABASE_URL \
+      PGLITE_PATH="$STATE_DIR/pglite" \
       SESSION_SECRET="daybook-ios-test-secret-$(date +%s)-0123456789abcdef" \
       NUXT_TELEMETRY_DISABLED=1 \
-      nohup npx nuxt dev --host 127.0.0.1 --port "$PORT" >"$LOG_FILE" 2>&1 &
+      nohup npx nuxt dev --dotenv "$STATE_DIR/empty.env" --host 127.0.0.1 --port "$PORT" >"$LOG_FILE" 2>&1 &
     echo $! >"$PID_FILE"
   )
   for _ in $(seq 1 120); do
@@ -53,9 +56,14 @@ start() {
     tail -40 "$LOG_FILE" >&2
     exit 1
   fi
+  if ! grep -q "\[db\] embedded PGlite at $STATE_DIR/pglite" "$LOG_FILE"; then
+    echo "refusing to continue: server is not using the throwaway PGlite database; log: $LOG_FILE" >&2
+    stop
+    exit 1
+  fi
   curl -fsS -X POST "$BASE/api/setup" -H 'Content-Type: application/json' \
     -d '{"username":"master_tester","password":"password123"}' >/dev/null
-  echo "daybook test server ready at $BASE (db: $STATE_DIR/test.db)"
+  echo "daybook test server ready at $BASE (db: $STATE_DIR/pglite)"
 }
 
 case "${1:-start}" in

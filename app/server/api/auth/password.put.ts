@@ -1,6 +1,6 @@
 import { requireAuth, verifyPassword, hashPassword } from '~/server/utils/auth';
 import { queryAll, execute } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event);

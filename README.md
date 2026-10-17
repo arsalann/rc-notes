@@ -8,23 +8,22 @@ Daybook, the diary, is the default landing surface. It combines a dated journal 
 
 - **Frontend**: Nuxt 4 (SPA), Vue 3, Nuxt UI, Tailwind CSS
 - **API**: Nitro server routes
-- **Database**: MotherDuck (cloud DuckDB) via `@duckdb/node-api`, with local DuckDB fallback
+- **Database**: Postgres on Supabase via `pg`, with an embedded Postgres (PGlite) fallback for local dev and tests
+- **Hosting**: Railway (Dockerfile, one service). See [`DEPLOY.md`](DEPLOY.md)
 - **Pipelines**: Bruin CLI (SQL assets for schema + analytics)
 
 ## Quick Start
 
 ```bash
-# Set the MotherDuck token (required for cloud mode)
-export MOTHERDUCK_NOTEBOOK_RC="your_motherduck_token"
-
-# Start the app
 cd app && npm install && npm run dev -- --host
-
-# Run Bruin pipelines (from project root)
-bruin run pipeline/
 ```
 
-The app runs at `http://localhost:3000` and is accessible on your LAN for phone access. Without `MOTHERDUCK_NOTEBOOK_RC`, the app falls back to a local DuckDB file at `data/notes.db`.
+The app runs at `http://localhost:3000` and is reachable on your LAN for phone access. With no
+configuration it uses a local embedded Postgres in `data/pglite`. To work against the real database,
+put `DATABASE_URL` (and `DATABASE_CA_CERT`) in `app/.env`; see [`DEPLOY.md`](DEPLOY.md).
+
+The deployed app runs on Railway against Supabase. [`DEPLOY.md`](DEPLOY.md) covers setup, the data
+migration from MotherDuck, and rollback.
 
 ## Features
 
@@ -48,18 +47,20 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
   trust the developer certificate under Settings → General → VPN & Device Management. On first launch,
   enter the server address, e.g. `http://192.168.1.20:3000` on the LAN.
 - **Tests**: `ios/scripts/test.sh` runs 49 unit tests and 11 end-to-end UI flows. They use a throwaway
-  local DuckDB server, never MotherDuck.
+  local server with an embedded database, never the real one.
 
 ## Project Structure
 
 ```
 ├── AGENTS.md            # Agent instructions and learnings
-├── .bruin.yml           # Bruin config (MotherDuck connection, gitignored)
+├── DEPLOY.md            # Supabase + Railway deployment and data migration
+├── .bruin.yml           # Bruin config (database connection, gitignored)
 ├── ios/                 # Native SwiftUI app (see ios/HANDOFF.md)
 ├── pipeline/            # Bruin SQL assets
 │   └── assets/          # Schema init, analytics
 └── app/                 # Nuxt 4 application
-    ├── .env             # MOTHERDUCK_NOTEBOOK_RC token (gitignored)
+    ├── .env             # DATABASE_URL, SESSION_SECRET (gitignored)
+    ├── scripts/         # API smoke test, MotherDuck → Postgres migration
     ├── server/          # API endpoints (Nitro)
     ├── pages/           # Vue pages
     ├── components/      # Vue components
@@ -69,13 +70,14 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 ## Implementation references
 
 - API routes: [`app/server/api/`](app/server/api/)
-- Live schema and idempotent migrations: [`app/server/utils/db.ts`](app/server/utils/db.ts)
+- Live schema and idempotent migrations: [`app/server/utils/schema.ts`](app/server/utils/schema.ts)
 - Versioned schema dictionary: [`pipeline/assets/main/`](pipeline/assets/main/)
 - Contributor conventions and data-safety rules: [`AGENTS.md`](AGENTS.md)
 
 ## Data
 
-- **MotherDuck** cloud database `rc_notes` (primary, via `MOTHERDUCK_NOTEBOOK_RC` env var)
-- **DuckDB** local fallback at `data/notes.db` when no token is set
-- **Bruin** manages schema and analytics pipelines
+- **Postgres** on Supabase (production, via `DATABASE_URL`); row level security is on for every table
+- **PGlite** embedded Postgres in `data/pglite` when `DATABASE_URL` is unset (local dev, tests)
+- **MotherDuck** `rc_notes` is the read-only archive from before the move to Postgres
+- **Bruin** keeps the versioned schema dictionary in `pipeline/`
 - Schema includes `user_id`/`user_name` columns on all tables for future multi-user support

@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { classifyClient, deriveUpdatedBy } from '~/server/utils/eventLog';
-import { listValue, LIST, VARCHAR, INTEGER } from '@duckdb/node-api';
+import { listValue, LIST, VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 
 /**
  * `PATCH /api/tasks/positions` — body `{ items: [{ id, position, priority? }] }`

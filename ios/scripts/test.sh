@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Full iOS pipeline: DaybookKit unit tests → project generation → app build → XCUITest E2E
-# against an isolated local server (never MotherDuck; see test-server.sh).
+# against an isolated local server (throwaway embedded Postgres, never a real database; see test-server.sh).
 #
 # Usage: ios/scripts/test.sh [-only-testing:DaybookUITests/JournalE2ETests ...]
 # Env:   DAYBOOK_SIMULATOR (default "iPhone Duo"), DAYBOOK_TEST_PORT (default 3457)

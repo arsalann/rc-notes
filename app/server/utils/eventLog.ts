@@ -1,5 +1,5 @@
 import { queryAll } from './db';
-import { VARCHAR, INTEGER } from '@duckdb/node-api';
+import { VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 
 /**
  * Maps HTTP method + path pattern to a human-readable event type.
@@ -121,7 +121,7 @@ export interface EventLogInput {
   duration_ms?: number | null;
   /**
    * When the event was observed, not when it is written. Matters for buffered rows.
-   * Must be a naive server-local timestamp string — see `localTimestamp`.
+   * Must be a naive UTC timestamp string — see `utcTimestamp`.
    */
   occurred_at?: string;
 }
@@ -143,15 +143,14 @@ const FIELD_TYPES: Record<string, any> = {
 };
 
 /**
- * `event_log.created_at` is a naive TIMESTAMP, and every existing row was written by
- * `current_timestamp`, i.e. server-local wall time. Formatting as a UTC ISO string instead would
- * silently offset new rows by the server's UTC offset and scramble the log's ordering against
- * historical rows — so match what the database itself would have written.
+ * `event_log.created_at` is a naive TIMESTAMP holding UTC wall time, the same as `current_timestamp`
+ * on the database connection (which is pinned to UTC). Rows written by the DuckDB-era server before
+ * the Postgres move hold that machine's local time instead.
  */
-function localTimestamp(d = new Date()): string {
+function utcTimestamp(d = new Date()): string {
   const p = (n: number, w = 2) => String(n).padStart(w, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ` +
+    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${p(d.getUTCMilliseconds(), 3)}`;
 }
 
 function buildRow(opts: EventLogInput): Record<string, any> {
@@ -174,7 +173,7 @@ function buildRow(opts: EventLogInput): Record<string, any> {
     client_kind: clientKind,
     request_ip: opts.request_ip || '',
     duration_ms: opts.duration_ms ?? null,
-    created_at: opts.occurred_at || localTimestamp(),
+    created_at: opts.occurred_at || utcTimestamp(),
   };
 }
 
@@ -189,7 +188,7 @@ async function insertRows(rows: Record<string, any>[]) {
       types[key] = FIELD_TYPES[f];
       return f === 'created_at' ? `$${key}::TIMESTAMP` : `$${key}`;
     });
-    return `(uuid()::VARCHAR, ${placeholders.join(', ')})`;
+    return `(gen_random_uuid()::text, ${placeholders.join(', ')})`;
   });
 
   await queryAll(
@@ -225,8 +224,8 @@ let buffer: Record<string, any>[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Buffer a read event. GETs are ~78% of event_log rows and each INSERT occupied the single shared
- * DuckDB connection, delaying the *next* request — which is why a one-SELECT endpoint measured
+ * Buffer a read event. GETs are ~78% of event_log rows and, on the old single-connection DuckDB
+ * driver, each INSERT delayed the *next* request — which is why a one-SELECT endpoint measured
  * 150-250ms against a ~55ms network floor.
  *
  * `created_at` is captured here, at observation time, not at insert time, so ordering and durations

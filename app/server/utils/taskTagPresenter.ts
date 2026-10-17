@@ -1,4 +1,4 @@
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 import { resolveTaskTags, type ResolvedTaskTag } from '~/utils/taskTags';
 import { queryAll } from './db';
 

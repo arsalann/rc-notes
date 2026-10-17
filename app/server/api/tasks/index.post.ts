@@ -2,7 +2,7 @@ import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { isWithinNextDays } from '~/server/utils/dates';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
+import { listValue, VARCHAR, LIST, INTEGER } from '~/server/utils/sqlTypes';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
   const clientId = typeof body.id === 'string' && UUID_RE.test(body.id.trim()) ? body.id.trim() : null;
 
   const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status', 'priority'];
-  const vals = [clientId ? '$id' : 'uuid()::VARCHAR', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
+  const vals = [clientId ? '$id' : 'gen_random_uuid()::text', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
   const params: Record<string, any> = { title, description, tags: listValue(tags), position, display_id: displayId, status, priority };
   const types: Record<string, any> = { title: VARCHAR, description: VARCHAR, tags: LIST(VARCHAR), position: INTEGER, display_id: VARCHAR, status: VARCHAR, priority: INTEGER };
   if (clientId) {
@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
   }
   if (dueAt) {
     cols.push('due_at');
-    vals.push('$due_at::TIMESTAMP');
+    vals.push("($due_at::timestamptz AT TIME ZONE 'UTC')");
     params.due_at = dueAt;
     types.due_at = VARCHAR;
   }

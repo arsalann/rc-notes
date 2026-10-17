@@ -1,3 +1,4 @@
-export function getMotherDuckToken(): string | null {
-  return process.env.MOTHERDUCK_NOTEBOOK_RC || null;
+/** Postgres connection string (Supabase in production). Unset → embedded PGlite (see db.ts). */
+export function getDatabaseUrl(): string | null {
+  return process.env.DATABASE_URL || null;
 }

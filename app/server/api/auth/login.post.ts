@@ -1,7 +1,8 @@
 import { useSession } from 'h3';
 import { getSessionConfig, verifyPassword, type SessionUser } from '~/server/utils/auth';
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
+import { clientIp } from '~/server/utils/requestPolicy';
 
 // Simple in-memory rate limiter
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -24,7 +25,7 @@ function clearRateLimit(ip: string) {
 }
 
 export default defineEventHandler(async (event) => {
-  const ip = getRequestHeader(event, 'x-forwarded-for') || 'unknown';
+  const ip = clientIp(event);
 
   if (!checkRateLimit(ip)) {
     throw createError({ statusCode: 429, statusMessage: 'Too many login attempts. Try again later.' });

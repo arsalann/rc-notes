@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR, INTEGER } from '@duckdb/node-api';
+import { VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const position = posRows[0]?.p ?? 0;
 
   const rows = await queryAll(
-    'INSERT INTO workspaces (id, name, emoji, position) VALUES (uuid()::VARCHAR, $name, $emoji, $position) RETURNING *',
+    'INSERT INTO workspaces (id, name, emoji, position) VALUES (gen_random_uuid()::text, $name, $emoji, $position) RETURNING *',
     { name, emoji, position },
     { name: VARCHAR, emoji: VARCHAR, position: INTEGER }
   );

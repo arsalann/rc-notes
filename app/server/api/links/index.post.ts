@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (existing.length) return existing[0];
 
   const rows = await queryAll(
-    'INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES (uuid()::VARCHAR, $st, $si, $tt, $ti) RETURNING *',
+    'INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES (gen_random_uuid()::text, $st, $si, $tt, $ti) RETURNING *',
     { st: source_type, si: source_id, tt: target_type, ti: target_id },
     { st: VARCHAR, si: VARCHAR, tt: VARCHAR, ti: VARCHAR }
   );

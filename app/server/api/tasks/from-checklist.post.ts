@@ -1,7 +1,7 @@
 import { queryAll, getDefaultWorkspaceId } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { listValue, VARCHAR, LIST, INTEGER } from '@duckdb/node-api';
+import { listValue, VARCHAR, LIST, INTEGER, BOOLEAN } from '~/server/utils/sqlTypes';
 
 interface ChecklistItem {
   title: string;
@@ -42,10 +42,10 @@ export default defineEventHandler(async (event) => {
     const itemPriority = [0, 1, 2, 3].includes(Number(item.priority)) ? Number(item.priority) : 2;
     const itemTags = Array.isArray(item.tags) ? item.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
     const cols = ['id', 'title', 'completed', 'status', 'priority', 'tags', 'position', 'display_id'];
-    const vals = ['uuid()::VARCHAR', '$title', '$completed', '$status', '$priority', '$tags', '$position', '$display_id'];
+    const vals = ['gen_random_uuid()::text', '$title', '$completed', '$status', '$priority', '$tags', '$position', '$display_id'];
     const params: Record<string, any> = {
       title: item.title,
-      completed: String(item.checked),
+      completed: !!item.checked,
       status: itemStatus,
       priority: itemPriority,
       tags: listValue(itemTags),
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
     };
     const types: Record<string, any> = {
       title: VARCHAR,
-      completed: VARCHAR, // DuckDB casts
+      completed: BOOLEAN,
       status: VARCHAR,
       priority: INTEGER,
       tags: LIST(VARCHAR),
@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
     const itemDue = item.due_at || (dueDate ? `${dueDate}T12:00:00` : null);
     if (itemDue) {
       cols.push('due_at');
-      vals.push('$due_date::TIMESTAMP');
+      vals.push("($due_date::timestamptz AT TIME ZONE 'UTC')");
       params.due_date = itemDue;
       types.due_date = VARCHAR;
     }
@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
     // Create link from source to this task
     await queryAll(
       `INSERT INTO links (id, source_type, source_id, target_type, target_id)
-       SELECT uuid()::VARCHAR, $st, $si, 'task', $ti
+       SELECT gen_random_uuid()::text, $st, $si, 'task', $ti
        WHERE NOT EXISTS (
          SELECT 1 FROM links WHERE source_type = $st AND source_id = $si AND target_type = 'task' AND target_id = $ti
        )`,
@@ -111,10 +111,10 @@ export default defineEventHandler(async (event) => {
       const subPriority = [0, 1, 2, 3].includes(Number(child.priority)) ? Number(child.priority) : 2;
       const subTags = Array.isArray(child.tags) ? child.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
       const subCols = ['id', 'title', 'completed', 'status', 'priority', 'parent_id', 'tags', 'position', 'display_id'];
-      const subVals = ['uuid()::VARCHAR', '$title', '$completed', '$subStatus', '$subPriority', '$parent_id', '$tags', '$position', '$display_id'];
+      const subVals = ['gen_random_uuid()::text', '$title', '$completed', '$subStatus', '$subPriority', '$parent_id', '$tags', '$position', '$display_id'];
       const subParams: Record<string, any> = {
         title: child.title,
-        completed: String(child.checked),
+        completed: !!child.checked,
         subStatus,
         subPriority,
         parent_id: parentTask.id,
@@ -124,7 +124,7 @@ export default defineEventHandler(async (event) => {
       };
       const subTypes: Record<string, any> = {
         title: VARCHAR,
-        completed: VARCHAR,
+        completed: BOOLEAN,
         subStatus: VARCHAR,
         subPriority: INTEGER,
         parent_id: VARCHAR,

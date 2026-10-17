@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 // Weekly goals are shared across every day of the same week. The route param is the week's
 // Sunday (YYYY-MM-DD). Get-or-create: unlike diary this has no side effects on other tables,
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const cols = ['id', 'week_start'];
-  const vals = ['uuid()::VARCHAR', '$week::DATE'];
+  const vals = ['gen_random_uuid()::text', '$week::DATE'];
   const insertParams: Record<string, any> = { week };
   const insertTypes: Record<string, any> = { week: VARCHAR };
   if (wsId) {

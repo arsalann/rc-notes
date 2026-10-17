@@ -6,22 +6,21 @@ RUN npm ci
 COPY app/ .
 RUN npm run build
 
-# Stage 2: Runtime
+# Stage 2: Runtime. Nitro bundles/traces everything it needs (including `pg`) into .output.
 FROM node:20-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy Nuxt build output
 COPY --from=builder /app/.output .output
-
-# Copy DuckDB native bindings (not bundled by Nitro)
-COPY --from=builder /app/node_modules/@duckdb node_modules/@duckdb
-
-EXPOSE 3000
 
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV NODE_ENV=production
+# Timestamps are stored as UTC wall time; keep the process clock in UTC too.
+ENV TZ=UTC
+
+EXPOSE 3000
+USER node
 
 CMD ["node", ".output/server/index.mjs"]

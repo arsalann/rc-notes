@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { hydrateTasksByIds } from '~/server/utils/taskHydration';
-import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
+import { listValue, LIST, VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const date = String(getRouterParam(event, 'date'));
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   }
   await queryAll(
     `INSERT INTO links (id, source_type, source_id, target_type, target_id)
-     SELECT uuid()::VARCHAR, 'diary', $did, 'task', t.id
+     SELECT gen_random_uuid()::text, 'diary', $did, 'task', t.id
      FROM tasks t
      WHERE t.due_at IS NOT NULL AND t.due_at::DATE = $date::DATE
        AND t.completed = false AND t.deleted_at IS NULL${linkWs}
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
   if (carryWorkspaceId) {
     await queryAll(
       `INSERT INTO links (id, user_id, source_type, source_id, target_type, target_id, updated_by)
-       SELECT uuid()::VARCHAR, $user_id, 'diary', $target_id, 'task', previous_links.target_id, 'user_in_app'
+       SELECT gen_random_uuid()::text, $user_id, 'diary', $target_id, 'task', previous_links.target_id, 'user_in_app'
        FROM links previous_links
        JOIN tasks previous_tasks ON previous_tasks.id = previous_links.target_id
        WHERE previous_links.source_type = 'diary'
@@ -114,8 +114,8 @@ export default defineEventHandler(async (event) => {
   const sourceFilter = requestedWorkspaceId
     ? 'l.source_id = $id'
     : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
-  // DuckDB rejects a bound name that does not occur in the query. In the All-workspaces case the
-  // source filter uses $date rather than $id, so bind exactly the placeholder the query contains.
+  // Bind exactly the placeholder the query contains: in the All-workspaces case the source filter
+  // uses $date rather than $id.
   const linksReadParams: Record<string, any> = requestedWorkspaceId
     ? { id: String(entry.id) }
     : { date };
@@ -146,7 +146,7 @@ export default defineEventHandler(async (event) => {
   if (taskLinkIds.length) {
     await queryAll(
       `UPDATE tasks SET due_at = $due_at::TIMESTAMP, updated_at = now()
-       WHERE list_contains($ids, id) AND due_at IS NULL`,
+       WHERE id = ANY($ids) AND due_at IS NULL`,
       { due_at: `${date}T12:00:00`, ids: listValue(taskLinkIds) },
       { due_at: VARCHAR, ids: LIST(VARCHAR) }
     ).catch(() => {});
