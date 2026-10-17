@@ -2,6 +2,15 @@ import { queryAll } from './db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A client-supplied row id, if it is a UUID. Clients that create rows offline (the iOS app) pick the
+ * id themselves, so a replayed create is the same row, not a second one.
+ */
+export function clientId(value: unknown): string | null {
+  return typeof value === 'string' && UUID_RE.test(value.trim()) ? value.trim().toLowerCase() : null;
+}
 
 function randLetters(n: number): string {
   let s = '';

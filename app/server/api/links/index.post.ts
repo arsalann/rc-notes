@@ -1,5 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
+import { clientId } from '~/server/utils/ids';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -20,11 +21,17 @@ export default defineEventHandler(async (event) => {
   );
   if (existing.length) return existing[0];
 
+  const id = clientId(body.id);
   const rows = await queryAll(
-    'INSERT INTO links (id, source_type, source_id, target_type, target_id) VALUES (gen_random_uuid()::text, $st, $si, $tt, $ti) RETURNING *',
-    { st: source_type, si: source_id, tt: target_type, ti: target_id },
-    { st: VARCHAR, si: VARCHAR, tt: VARCHAR, ti: VARCHAR }
+    `INSERT INTO links (id, source_type, source_id, target_type, target_id)
+     VALUES (${id ? '$id' : 'gen_random_uuid()::text'}, $st, $si, $tt, $ti)
+     ON CONFLICT (id) DO NOTHING RETURNING *`,
+    { st: source_type, si: source_id, tt: target_type, ti: target_id, ...(id ? { id } : {}) },
+    { st: VARCHAR, si: VARCHAR, tt: VARCHAR, ti: VARCHAR, id: VARCHAR }
   );
+  if (!rows.length && id) {
+    return (await queryAll('SELECT * FROM links WHERE id = $id', { id }, { id: VARCHAR }))[0];
+  }
   setResponseStatus(event, 201);
   return rows[0];
 });

@@ -104,6 +104,11 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // `useEvent()` anywhere in a request: the database layer reads the device metadata of the
+    // request it is writing for (server/plugins/sync-context.ts).
+    experimental: {
+      asyncContext: true,
+    },
     esbuild: {
       options: {
         target: 'esnext',

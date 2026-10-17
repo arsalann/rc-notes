@@ -10,6 +10,7 @@ export type SqlType = { sql: string };
 export const VARCHAR: SqlType = { sql: 'varchar' };
 export const BOOLEAN: SqlType = { sql: 'boolean' };
 export const INTEGER: SqlType = { sql: 'integer' };
+export const BIGINT: SqlType = { sql: 'bigint' };
 
 export function LIST(element: SqlType): SqlType {
   return { sql: `${element.sql}[]` };

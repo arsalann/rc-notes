@@ -24,6 +24,44 @@ export interface Database {
 }
 
 /**
+ * Who is writing and when, handed to the sync triggers (see `SYNC_ROW_FUNCTION` in `schema.ts`)
+ * through per-connection settings. `opTime` is naive UTC (`2026-10-17 09:30:00.123`).
+ */
+export interface WriteContext {
+  deviceKind: string | null;
+  deviceId: string | null;
+  opId: string | null;
+  opTime: string | null;
+  updatedBy: string | null;
+}
+
+let writeContextProvider: () => WriteContext | null = () => null;
+
+/** Set by the Nitro plugin `plugins/sync-context.ts`; scripts never set it and write without one. */
+export function setWriteContextProvider(provider: () => WriteContext | null) {
+  writeContextProvider = provider;
+}
+
+function currentWriteContext(): WriteContext | null {
+  try {
+    return writeContextProvider();
+  } catch {
+    return null;
+  }
+}
+
+const READ_ONLY = /^\s*(SELECT|SHOW|SET|BEGIN|COMMIT|ROLLBACK)\b/i;
+
+function contextValues(ctx: WriteContext | null): string[] {
+  return ctx ? [ctx.deviceKind, ctx.deviceId, ctx.opId, ctx.opTime, ctx.updatedBy].map(v => v ?? '') : ['', '', '', '', ''];
+}
+
+function contextSql(local: boolean): string {
+  const names = ['device_kind', 'device_id', 'op_id', 'op_time', 'updated_by'];
+  return `SELECT ${names.map((n, i) => `set_config('daybook.${n}', $${i + 1}, ${local})`).join(', ')}`;
+}
+
+/**
  * TLS for the Postgres connection. With `DATABASE_CA_CERT` (the PEM from Supabase → Database →
  * SSL Configuration; Railway) or `DATABASE_CA_CERT_FILE` (a path to it, relative to `app/`; local
  * `.env`) the server certificate is fully verified. Without either, the connection string's own
@@ -64,6 +102,10 @@ async function connectPostgres(url: string): Promise<Database> {
   // Pin each pooled connection to UTC before its first query, so `now()` / `current_timestamp`
   // always write UTC whatever the database's default time zone is.
   const utc = new WeakSet<object>();
+  // The write context last set on each pooled connection. A write whose context differs updates it
+  // first (one extra round trip); reads ignore it.
+  const contextKey = new WeakMap<object, string>();
+  const setContext = contextSql(false);
   return {
     run: async (sql, values = []) => {
       const client = await pool.connect();
@@ -71,6 +113,14 @@ async function connectPostgres(url: string): Promise<Database> {
         if (!utc.has(client)) {
           await client.query("SET TIME ZONE 'UTC'");
           utc.add(client);
+        }
+        if (!READ_ONLY.test(sql)) {
+          const ctxValues = contextValues(currentWriteContext());
+          const key = ctxValues.join('\u0000');
+          if ((contextKey.get(client) ?? '\u0000\u0000\u0000\u0000') !== key) {
+            await client.query(setContext, ctxValues);
+            contextKey.set(client, key);
+          }
         }
         return (await client.query(sql, values)).rows;
       } finally {
@@ -91,8 +141,18 @@ async function connectPglite(dir: string): Promise<Database> {
     },
   });
   await db.exec("SET TIME ZONE 'UTC'");
+  // One connection shared by every request: a write with a context runs in a transaction that sets
+  // it locally, so it can never leak into another request's statement.
+  const setContext = contextSql(true);
   return {
-    run: async (sql, values = []) => (await db.query<Record<string, any>>(sql, values)).rows,
+    run: async (sql, values = []) => {
+      const ctx = READ_ONLY.test(sql) ? null : currentWriteContext();
+      if (!ctx) return (await db.query<Record<string, any>>(sql, values)).rows;
+      return db.transaction(async (tx) => {
+        await tx.query(setContext, contextValues(ctx));
+        return (await tx.query<Record<string, any>>(sql, values)).rows;
+      });
+    },
     close: () => db.close(),
   };
 }
@@ -149,6 +209,15 @@ export async function execute(sql: string, params: Record<string, any> = {}, typ
   await queryAll(sql, params, types);
 }
 
+/**
+ * SQL for the id of a NEW diary entry: derived from its date and workspace, so the iOS app (which
+ * computes the same value, `DiaryIds.entryId`) and the server agree on it even when the page is
+ * created offline. Entries created before this existed keep their random ids.
+ */
+export function diaryIdSql(dateParam: string, workspaceParam: string): string {
+  return `md5('daybook-diary:' || ${dateParam} || ':' || COALESCE(${workspaceParam}, ''))::uuid::text`;
+}
+
 export async function getDefaultWorkspaceId(): Promise<string | null> {
   const rows = await queryAll(
     "SELECT id FROM workspaces WHERE name = 'Work' ORDER BY position LIMIT 1"
@@ -183,19 +252,23 @@ export async function linkTaskToDiary(taskId: string, dueAt: string, workspaceId
   if (!diaryRows.length) {
     const wsId = workspaceId || await getDefaultWorkspaceId();
     const cols = ['id', 'entry_date', 'content'];
-    const vals = ['gen_random_uuid()::text', '$date::DATE', "''"];
-    const p: Record<string, any> = { date: dateStr };
-    const t: Record<string, any> = { date: VARCHAR };
+    const vals = [diaryIdSql('$date', '$ws'), '$date::DATE', "''"];
+    const p: Record<string, any> = { date: dateStr, ws: wsId };
+    const t: Record<string, any> = { date: VARCHAR, ws: VARCHAR };
     if (wsId) {
       cols.push('workspace_id');
       vals.push('$ws');
-      p.ws = wsId;
-      t.ws = VARCHAR;
     }
     diaryRows = await queryAll(
-      `INSERT INTO diary_entries (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING id`,
+      `INSERT INTO diary_entries (${cols.join(', ')}) VALUES (${vals.join(', ')})
+       ON CONFLICT (id) DO NOTHING RETURNING id`,
       p, t
     );
+    if (!diaryRows.length) {
+      diaryRows = await queryAll(
+        `SELECT id FROM diary_entries WHERE id = ${diaryIdSql('$date', '$ws')}`, p, t
+      );
+    }
   }
 
   if (!diaryRows.length) return;

@@ -1,9 +1,11 @@
 import { queryAll, getDefaultWorkspaceId } from '~/server/utils/db';
-import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
+import { generateTaskDisplayId, generateSubtaskDisplayId, clientId } from '~/server/utils/ids';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, INTEGER, BOOLEAN } from '~/server/utils/sqlTypes';
 
 interface ChecklistItem {
+  /** Optional client-chosen UUID (offline clients), so a replayed request creates nothing new. */
+  id?: string;
   title: string;
   checked: boolean;
   children: ChecklistItem[];
@@ -27,6 +29,15 @@ export default defineEventHandler(async (event) => {
   const createdTasks: any[] = [];
 
   for (const item of items) {
+    const itemId = clientId(item.id);
+    if (itemId) {
+      const existing = await queryAll('SELECT * FROM tasks WHERE id = $id', { id: itemId }, { id: VARCHAR });
+      if (existing.length) {
+        // Already created by an earlier delivery of this same request.
+        createdTasks.push(withDerivedTaskTags(existing[0], null));
+        continue;
+      }
+    }
     // Create parent task
     const displayId = await generateTaskDisplayId(item.title, []);
 
@@ -42,8 +53,9 @@ export default defineEventHandler(async (event) => {
     const itemPriority = [0, 1, 2, 3].includes(Number(item.priority)) ? Number(item.priority) : 2;
     const itemTags = Array.isArray(item.tags) ? item.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
     const cols = ['id', 'title', 'completed', 'status', 'priority', 'tags', 'position', 'display_id'];
-    const vals = ['gen_random_uuid()::text', '$title', '$completed', '$status', '$priority', '$tags', '$position', '$display_id'];
+    const vals = [itemId ? '$id' : 'gen_random_uuid()::text', '$title', '$completed', '$status', '$priority', '$tags', '$position', '$display_id'];
     const params: Record<string, any> = {
+      id: itemId,
       title: item.title,
       completed: !!item.checked,
       status: itemStatus,
@@ -53,6 +65,7 @@ export default defineEventHandler(async (event) => {
       display_id: displayId,
     };
     const types: Record<string, any> = {
+      id: VARCHAR,
       title: VARCHAR,
       completed: BOOLEAN,
       status: VARCHAR,
@@ -111,8 +124,10 @@ export default defineEventHandler(async (event) => {
       const subPriority = [0, 1, 2, 3].includes(Number(child.priority)) ? Number(child.priority) : 2;
       const subTags = Array.isArray(child.tags) ? child.tags.filter((t: any) => typeof t === 'string' && t.trim()) : [];
       const subCols = ['id', 'title', 'completed', 'status', 'priority', 'parent_id', 'tags', 'position', 'display_id'];
-      const subVals = ['gen_random_uuid()::text', '$title', '$completed', '$subStatus', '$subPriority', '$parent_id', '$tags', '$position', '$display_id'];
+      const childId = clientId(child.id);
+      const subVals = [childId ? '$id' : 'gen_random_uuid()::text', '$title', '$completed', '$subStatus', '$subPriority', '$parent_id', '$tags', '$position', '$display_id'];
       const subParams: Record<string, any> = {
+        id: childId,
         title: child.title,
         completed: !!child.checked,
         subStatus,
@@ -123,6 +138,7 @@ export default defineEventHandler(async (event) => {
         display_id: subDisplayId,
       };
       const subTypes: Record<string, any> = {
+        id: VARCHAR,
         title: VARCHAR,
         completed: BOOLEAN,
         subStatus: VARCHAR,
@@ -146,7 +162,7 @@ export default defineEventHandler(async (event) => {
       }
 
       await queryAll(
-        `INSERT INTO tasks (${subCols.join(', ')}) VALUES (${subVals.join(', ')}) RETURNING *`,
+        `INSERT INTO tasks (${subCols.join(', ')}) VALUES (${subVals.join(', ')}) ON CONFLICT (id) DO NOTHING RETURNING *`,
         subParams, subTypes
       );
     }

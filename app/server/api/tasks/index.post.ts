@@ -1,10 +1,8 @@
 import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils/db';
-import { generateTaskDisplayId, generateSubtaskDisplayId } from '~/server/utils/ids';
+import { generateTaskDisplayId, generateSubtaskDisplayId, clientId as parseClientId } from '~/server/utils/ids';
 import { isWithinNextDays } from '~/server/utils/dates';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
 import { listValue, VARCHAR, LIST, INTEGER } from '~/server/utils/sqlTypes';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -69,7 +67,7 @@ export default defineEventHandler(async (event) => {
   // Without this, an optimistic client whose request times out has no safe move: dropping the local
   // row invites the user to retry and create a duplicate, keeping it risks a phantom.
   // `id` is the primary key, so ON CONFLICT below makes the create idempotent.
-  const clientId = typeof body.id === 'string' && UUID_RE.test(body.id.trim()) ? body.id.trim() : null;
+  const clientId = parseClientId(body.id);
 
   const cols = ['id', 'title', 'description', 'tags', 'position', 'display_id', 'status', 'priority'];
   const vals = [clientId ? '$id' : 'gen_random_uuid()::text', '$title', '$description', '$tags', '$position', '$display_id', '$status', '$priority'];
