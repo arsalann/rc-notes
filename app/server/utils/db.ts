@@ -1,5 +1,5 @@
 import { resolve } from 'path';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync } from 'fs';
 import { getDatabaseUrl } from './config';
 import { ensureSchema, type Run } from './schema';
 import { toPositional } from './sql';
@@ -25,11 +25,19 @@ export interface Database {
 
 /**
  * TLS for the Postgres connection. With `DATABASE_CA_CERT` (the PEM from Supabase → Database →
- * SSL Configuration) the server certificate is fully verified. Without it, the connection string's
- * own `sslmode` applies (local Postgres needs none).
+ * SSL Configuration; Railway) or `DATABASE_CA_CERT_FILE` (a path to it, relative to `app/`; local
+ * `.env`) the server certificate is fully verified. Without either, the connection string's own
+ * `sslmode` applies (local Postgres needs none).
  */
+function caCert(): string | undefined {
+  const inline = process.env.DATABASE_CA_CERT?.replace(/\\n/g, '\n').trim();
+  if (inline) return inline;
+  const file = process.env.DATABASE_CA_CERT_FILE;
+  return file ? readFileSync(resolve(process.cwd(), file), 'utf8').trim() : undefined;
+}
+
 function sslConfig(url: string): { connectionString: string; ssl?: { ca: string; rejectUnauthorized: true } } {
-  const ca = process.env.DATABASE_CA_CERT?.replace(/\\n/g, '\n').trim();
+  const ca = caCert();
   if (!ca) return { connectionString: url };
   // A `sslmode` in the URL would override the `ssl` object below, so drop it.
   const parsed = new URL(url);

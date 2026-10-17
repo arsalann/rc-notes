@@ -22,7 +22,8 @@
 - `README.md` — public project overview, setup, and pointers to implementation sources of truth
 - `DEPLOY.md` — Supabase + Railway setup, data migration runbook, rollback
 - `.bruin.yml` — Bruin pipeline config (root, gitignored — contains the database connection)
-- `app/.env` — `DATABASE_URL`, `DATABASE_CA_CERT`, `SESSION_SECRET` (gitignored)
+- `app/.env` — `DATABASE_URL`, `DATABASE_CA_CERT_FILE`, `SESSION_SECRET` (gitignored)
+- `prod-ca-2021.crt` — Supabase SSL root certificate (repo root, gitignored)
 - `pipeline/` — Bruin SQL assets
 - `app/` — Nuxt 4 application
 - `app/server/utils/db.ts` — Postgres/PGlite connection, `queryAll()` / `execute()` (critical file)
@@ -52,8 +53,9 @@ The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app
 - Preserve strong contrast and 44px touch targets. Do not use light-mode utility classes or a `dark:` variant.
 
 ## Database Connection
-- **Postgres** (Supabase in production): set `DATABASE_URL` (Supabase *session pooler* string) and
-  `DATABASE_CA_CERT` (PEM, enables full TLS verification). Every connection runs `SET TIME ZONE 'UTC'`.
+- **Postgres** (Supabase `eu-west-1` in production): set `DATABASE_URL` (Supabase *session pooler*
+  string) and the CA for full TLS verification: `DATABASE_CA_CERT` (PEM contents; Railway) or
+  `DATABASE_CA_CERT_FILE` (path relative to `app/`, e.g. `../prod-ca-2021.crt`; local `.env`). Every connection runs `SET TIME ZONE 'UTC'`.
 - **Embedded fallback**: without `DATABASE_URL`, the server runs PGlite (Postgres compiled to WASM) in
   `data/pglite` (or `PGLITE_PATH`). Same SQL dialect, no server needed. Production refuses to start
   without `DATABASE_URL`.
