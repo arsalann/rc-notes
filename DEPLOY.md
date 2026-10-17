@@ -26,9 +26,12 @@ browser ────┘
 | `DATABASE_URL` | Supabase **Session pooler** connection string, port 5432 (works over IPv4; the direct host is IPv6-only) |
 | `DATABASE_CA_CERT` | Contents of Supabase's SSL certificate (PEM), so the database certificate is verified |
 | `SESSION_SECRET` | 64 random characters (`openssl rand -hex 32`). Changing it signs everyone out |
+| `PORT` | `3000`. Railway otherwise injects its own port (8080), and the generated domain targets 3000 |
 | `ALLOW_SIGNUP` | Leave unset. Sign-up is off in production; admins add users in Settings |
 
-`NODE_ENV=production`, `TZ=UTC`, `HOST` and `PORT` come from the Dockerfile.
+`NODE_ENV=production`, `TZ=UTC` and `HOST` come from the Dockerfile.
+
+Production: Railway project `fearless-embrace`, service `rc-notes`, `https://rc-notes-production-a50f.up.railway.app`.
 
 ## Runbook
 
