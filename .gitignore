@@ -11,3 +11,7 @@ __pycache__/
 *.py[cod]
 logs/queries
 .scratch/
+
+# Supabase SSL root certificate (kept locally, see DEPLOY.md)
+*.crt
+*.pem

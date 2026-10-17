@@ -32,11 +32,13 @@ browser ────┘
 
 ## Runbook
 
-1. **Supabase**: create the project, then copy the session-pooler URL and download the SSL certificate.
+1. **Supabase**: create the project in an EU region (production is `eu-west-1`), copy the session-pooler
+   URL, and save the SSL certificate as `prod-ca-2021.crt` in the repo root (gitignored, the same
+   root CA for every Supabase project).
 2. **Migrate the data** (from a Mac, with the local dev server stopped):
    ```bash
    cd app
-   TARGET_DATABASE_URL='<session pooler URL>' DATABASE_CA_CERT="$(cat ~/Downloads/prod-ca-2021.crt)" \
+   TARGET_DATABASE_URL='<session pooler URL>' DATABASE_CA_CERT="$(cat ../prod-ca-2021.crt)" \
      npx tsx scripts/migrate-motherduck-to-postgres.ts
    ```
    - The script reads MotherDuck with `MOTHERDUCK_NOTEBOOK_RC` from `app/.env` and creates the schema
@@ -50,8 +52,9 @@ browser ────┘
 4. **Switch clients**:
    - **iPhone app**: Settings → Server → `https://<domain>`, then sign in with your usual password.
    - **Browser**: open the same address. The home-screen web app needs to be re-added from it.
-5. **Point local dev at Supabase** (optional): put the same `DATABASE_URL` and `DATABASE_CA_CERT` in
-   `app/.env`. Without `DATABASE_URL`, local dev uses a throwaway embedded Postgres in `data/pglite`.
+5. **Point local dev at Supabase** (optional): put the same `DATABASE_URL` in `app/.env`, plus
+   `DATABASE_CA_CERT_FILE=../prod-ca-2021.crt`. Without `DATABASE_URL`, local dev uses a throwaway
+   embedded Postgres in `data/pglite`.
 6. **Bruin**: add a `postgres` connection named `supabase-default` to `.bruin.yml`. Then refresh the
    asset files (`bruin import database --connection supabase-default pipeline`) and point
    `pipeline/pipeline.yml` at it.
