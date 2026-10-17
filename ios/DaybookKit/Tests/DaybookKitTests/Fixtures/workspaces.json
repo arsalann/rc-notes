@@ -1,0 +1,30 @@
+[
+  {
+    "id": "f7822495-de99-4226-a264-dfe638c42e2b",
+    "user_id": null,
+    "user_name": null,
+    "name": "Personal",
+    "description": "",
+    "emoji": "🏠",
+    "color": null,
+    "position": 0,
+    "archived": false,
+    "updated_by": null,
+    "created_at": "2026-10-16 17:30:24.275019",
+    "updated_at": "2026-10-16 17:30:24.275019"
+  },
+  {
+    "id": "f3a31a53-bbba-48b4-97be-47c29e0710e4",
+    "user_id": null,
+    "user_name": null,
+    "name": "Work",
+    "description": "",
+    "emoji": "💼",
+    "color": null,
+    "position": 1,
+    "archived": false,
+    "updated_by": null,
+    "created_at": "2026-10-16 17:30:24.275683",
+    "updated_at": "2026-10-16 17:30:24.275683"
+  }
+]

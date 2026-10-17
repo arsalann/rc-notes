@@ -113,6 +113,33 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Any change to date/workspace navigation, autosave, or session recovery requires regression tests
   proving distinct journal contents cannot cross dates or workspaces.
 
+## iOS app (`ios/`)
+- Read `ios/HANDOFF.md` first. Native SwiftUI client over the same API; `DaybookKit` (Swift package) holds
+  all non-UI logic and is unit-tested with `swift test`.
+- `xcode-select` on this Mac points at CommandLineTools: export
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for `swift test` / `xcodebuild`.
+- After adding or removing Swift files, run `xcodegen generate` in `ios/` (the `.xcodeproj` is generated
+  from `project.yml` and committed).
+- `ios/scripts/test.sh` runs everything against `ios/scripts/test-server.sh`: an isolated server with a
+  temp DuckDB file and no MotherDuck token. Never point iOS tests at the real server.
+- Journal safety rules above apply to iOS too; `JournalSessionTests` and `JournalE2ETests` are the
+  regression tests and must stay green.
+- SwiftUI gotcha: `.accessibilityIdentifier` on a container overrides its children's identifiers; add
+  `.accessibilityElement(children: .contain)` first when children need their own ids.
+- Any API response shape change must keep `ios/DaybookKit/Tests/DaybookKitTests/Fixtures` decoding (they
+  are real captured responses).
+- Device installs: open `ios/Daybook.xcodeproj` in Xcode, pick the iPhone, Run. Signing uses the personal
+  team in `project.yml` (`DEVELOPMENT_TEAM`); free-team builds expire after 7 days, so re-run from Xcode then.
+  The phone must trust the developer certificate (Settings → General → VPN & Device Management).
+- Running the server for the phone over the LAN (until the backend is deployed):
+  - Use `npx nuxt dev --host 0.0.0.0 --port 3000` and enter `http://<mac LAN IP>:3000` in the app. The
+    Mac's IP changes between networks (`ipconfig getifaddr en0`); phone and Mac must be on the same Wi-Fi.
+  - A local production build (`node .output/server/index.mjs`) can't log in over plain http: the session
+    cookie is `Secure` in production. Use the dev server, or put HTTPS in front.
+  - If the checkout is in iCloud Drive (`~/Documents`), iCloud file events make the Nuxt dev watcher
+    restart repeatedly. Each restart opens a new MotherDuck connection and crashes the native addon
+    (`Napi::Error`). Run the server from a checkout outside iCloud.
+
 ## User Preferences
 - Keep things simple — this is a personal tool
 - Document durable contributor conventions here and public product context in `README.md`; use source code, migrations, and pipeline assets as the schema/API authority
@@ -158,6 +185,7 @@ Gotchas:
 ### Provenance: every write should set `updated_by`
 All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values:
 - `user_in_app` — real user via the Nuxt UI in a browser
+- `user_in_ios_app` — real user via the native iOS app (`ios/`, User-Agent `daybook-ios/<version>`)
 - `user_in_test` — real user behavior simulated via Playwright (rare; prefer `test_playwright`)
 - `test_playwright` — automated browser test
 - `agent_query` — agent or operator running raw SQL via MotherDuck

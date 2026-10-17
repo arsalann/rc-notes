@@ -1,0 +1,81 @@
+name: Daybook
+options:
+  bundleIdPrefix: com.arsalann.daybook
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    # Simulator builds are signed ad hoc ("Sign to Run Locally") so Keychain works without a team.
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+packages:
+  DaybookKit:
+    path: DaybookKit
+targets:
+  Daybook:
+    type: application
+    platform: iOS
+    sources:
+      - path: Daybook
+    dependencies:
+      - package: DaybookKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arsalann.daybook
+        PRODUCT_NAME: daybook
+        # Personal team used for device installs from Xcode (team IDs are public, not secrets).
+        DEVELOPMENT_TEAM: 2PRKX5Z4Q8
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Daybook/Info.plist
+        ENABLE_PREVIEWS: YES
+    info:
+      path: Daybook/Info.plist
+      properties:
+        CFBundleDisplayName: daybook
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        ITSAppUsesNonExemptEncryption: false
+        NSLocalNetworkUsageDescription: daybook connects to your daybook server on your local network.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+  DaybookUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: DaybookUITests
+    dependencies:
+      - target: Daybook
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arsalann.daybook.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Daybook
+schemes:
+  Daybook:
+    build:
+      targets:
+        Daybook: all
+        DaybookUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - DaybookUITests

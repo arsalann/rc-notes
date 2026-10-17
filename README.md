@@ -36,11 +36,26 @@ The app runs at `http://localhost:3000` and is accessible on your LAN for phone 
 - **Workspaces**: Filter-based labels (Personal, Work, etc.) — seeded by default. Tasks can be grouped by workspace or tag and sorted by newest or due date.
 - **Theme**: A single dim, warm-neutral Daybook theme with a muted sage accent; there is no light/dark toggle.
 
+## iOS app
+
+A native SwiftUI client lives in [`ios/`](ios/). It talks to this server's API (enter the same address
+you open in the phone browser) and has the same features with a native iOS design: Today (journal,
+weekly goals, the page's tasks, week summary), Tasks, Notes, a 5-day calendar, search and Settings.
+Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
+
+- **Requirements**: Xcode 27+, iOS 18+, `brew install xcodegen`.
+- **Install on an iPhone**: open `ios/Daybook.xcodeproj`, select your iPhone, press Run. On the phone,
+  trust the developer certificate under Settings → General → VPN & Device Management. On first launch,
+  enter the server address, e.g. `http://192.168.1.20:3000` on the LAN.
+- **Tests**: `ios/scripts/test.sh` runs 49 unit tests and 11 end-to-end UI flows. They use a throwaway
+  local DuckDB server, never MotherDuck.
+
 ## Project Structure
 
 ```
 ├── AGENTS.md            # Agent instructions and learnings
 ├── .bruin.yml           # Bruin config (MotherDuck connection, gitignored)
+├── ios/                 # Native SwiftUI app (see ios/HANDOFF.md)
 ├── pipeline/            # Bruin SQL assets
 │   └── assets/          # Schema init, analytics
 └── app/                 # Nuxt 4 application
