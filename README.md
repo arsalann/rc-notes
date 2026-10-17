@@ -45,9 +45,9 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 
 - **Requirements**: Xcode 27+, iOS 18+, `brew install xcodegen`.
 - **Install on an iPhone**: open `ios/Daybook.xcodeproj`, select your iPhone, press Run. On the phone,
-  trust the developer certificate under Settings → General → VPN & Device Management. Use the Release
-  configuration for the phone (Product → Scheme → Edit Scheme → Run → Build Configuration). It talks
-  to the production server over HTTPS only. Debug builds can switch to a local dev server.
+  trust the developer certificate under Settings → General → VPN & Device Management. Run installs the
+  Release build (set in `ios/project.yml`): it talks to the production server over HTTPS only.
+  Debug builds (used by the tests) can switch to a local dev server.
 - **Tests**: `ios/scripts/test.sh` runs 49 unit tests and 11 end-to-end UI flows. They use a throwaway
   local server with an embedded database, never the real one.
 
