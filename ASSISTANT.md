@@ -40,6 +40,9 @@ picture of what matters. You act on his behalf — proactively, but conservative
   authoritative — trust them over any other doc when they disagree.
 
 #### Querying with Bruin (preferred)
+- **Bruin isn't switched to Supabase yet** (`DEPLOY.md` runbook step 6). Until it is, a
+  `motherduck-default` query reads the frozen pre-2026-10-17 archive, not live data, and must never
+  be used for writes.
 - **Prefer the Bruin CLI / Bruin MCP over raw `psql` for all reads and
   writes.** It uses the connection in `.bruin.yml` (`supabase-default`) so the
   agent doesn't handle the password directly.

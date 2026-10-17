@@ -1,9 +1,9 @@
 # rc-notes Bruin pipeline
 
-> **Moving to Postgres.** The app database is moving from MotherDuck to Supabase Postgres (see
-> [`DEPLOY.md`](../DEPLOY.md)). Once the data is migrated, these assets are refreshed from the
-> `supabase-default` connection and this page is updated. Until then they describe the MotherDuck
-> tables, which have the same columns.
+> **Moved to Postgres.** Since 2026-10-17 the app database is Supabase Postgres (see
+> [`DEPLOY.md`](../DEPLOY.md)); MotherDuck is a frozen archive. These assets still describe the
+> MotherDuck tables (same columns) until they are refreshed from the
+> `supabase-default` connection (DEPLOY.md runbook step 6).
 
 This pipeline mirrors the rc-notes app database (MotherDuck, `rc_notes.main`
 schema). It is **not** a generated dataset — the live database is owned by

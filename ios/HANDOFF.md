@@ -18,9 +18,11 @@ journal concurrency. The design is native iOS; the **functionality** is 1:1 with
 | 7 | XCUITest E2E suite (11 flows) + screenshots | ✅ done — all green |
 | 8 | Install on a real iPhone | ✅ done via Xcode with a personal team (xtool not needed) |
 | 9 | Used against the real (MotherDuck) server from the phone | ✅ confirmed working 2026-10-17 |
+| 10 | Backend deployed: Railway + Supabase Postgres (see `DEPLOY.md`) | ✅ live 2026-10-17 at `https://rc-notes-production-a50f.up.railway.app` |
+| 11 | v0 release on Arsalan's iPhone (developer mode), pointed at Railway | ⏳ next |
 
-Last full run (`ios/scripts/test.sh`, 2026-10-16): **49/49 unit tests, 11/11 UI tests passed**;
-server `npm test` 18/18.
+Last full run (`ios/scripts/test.sh`, 2026-10-17, server on Postgres/PGlite): **49/49 unit tests,
+11/11 UI tests passed**; server `npm test` 23/23; `app/scripts/api-smoke.mjs` all routes passing.
 
 The "Parity checklist" at the bottom is the contract; it separates what a UI test exercises end to end
 from what is built but still worth a manual pass.
@@ -45,7 +47,7 @@ ios/scripts/test.sh -only-testing:DaybookUITests/JournalE2ETests   # one suite
 ```
 
 Run the app by hand: open `ios/Daybook.xcodeproj`, pick an iPhone simulator, Run. On first launch
-enter the server address you use in the phone browser (e.g. `http://192.168.1.20:3000`). For a
+enter the server address: production is `https://rc-notes-production-a50f.up.railway.app`. For a
 throwaway server: `ios/scripts/test-server.sh start` → `http://127.0.0.1:3457`, user
 `master_tester` / `password123`.
 
@@ -79,6 +81,8 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 - Timestamps are naive strings like `2026-10-16 17:30:30.24154`. Matching the web app
   (`parseUTC` in `app/composables/useDate.ts`), they are interpreted as UTC. Due dates are sent as
   UTC ISO strings (`2026-10-16T06:00:00.000Z` for "09:00 local").
+  Since the Postgres move the server writes `created_at`/`updated_at` in UTC too; rows from before
+  2026-10-17 hold the old server Mac's local time (unchanged, same as the web app sees them).
 - Journal save: `PUT /api/diary/:date` with `{entry_id, content, workspace_id (always present, may be
   null), expected_updated_at}`. `expected_updated_at` is the **exact** `updated_at` string from the
   last response — never re-formatted. 409 = changed elsewhere, 404 = identity mismatch.
@@ -146,15 +150,22 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
   `event_log` (documented in AGENTS.md; unit-tested in `app/server/utils/eventLog.test.ts`). No schema
   change, so no Bruin refresh was needed.
 - **Confirmation added** before deleting a user in Settings (the web deletes immediately).
+- **Backend moved to Postgres** (2026-10-17): Supabase in production, embedded PGlite for tests and
+  offline dev. API responses stayed byte-identical (timestamps as the same naive text, same fixture
+  shapes), so the app needed no change. The iOS test server refuses to run unless it is on PGlite.
+- **Monorepo kept**: the app, API and iOS client share one contract and the iOS E2E suite runs against
+  this server; splitting repos would only add sync work.
 
 ## Blocked / needs Arsalan
 
-Nothing is blocked. The app is installed on Arsalan's iPhone and works against the real server.
+Nothing is blocked. The backend is live on Railway; the phone app switches to it in Settings → Server.
 
 - Free personal-team builds expire after 7 days. To renew, re-run from Xcode with the phone plugged in.
-- Until the backend is deployed, the phone reaches the dev server on the Mac's LAN IP. That IP
-  changes between networks; change it in Settings → Server. See AGENTS.md "iOS app" for the
-  dev-server pitfalls (iCloud restarts, the Secure cookie in production builds).
+- **Legacy Railway project `exemplary-vitality`** (`https://rc-notes-production.up.railway.app`) still
+  serves the old DuckDB-era app against MotherDuck. Don't point the app at it: writes there never reach
+  Supabase. Kept for now at Arsalan's request; to be stopped/deleted later (`DEPLOY.md` "Status").
+- Bruin still points at MotherDuck; switching it to Supabase is `DEPLOY.md` runbook step 6.
+- A local dev server (LAN IP) still works for testing; see AGENTS.md "iOS app" for the pitfalls.
 
 ## Known gaps / not verified
 
@@ -167,11 +178,10 @@ Nothing is blocked. The app is installed on Arsalan's iPhone and works against t
 
 ## Next steps
 
-- **Deploy the backend** (in progress, see `DEPLOY.md`): Supabase Postgres plus a Railway web service.
-  The server moved from DuckDB to Postgres with byte-identical API responses (same timestamp text,
-  same fixture shapes; `app/scripts/api-smoke.mjs` checks this). When it is live, enter its
-  `https://` address in the app; nothing in the app changes. Once every server is HTTPS,
-  tighten ATS (drop `NSAllowsArbitraryLoads`).
+- **v0 on the phone**: final touches, then a Release build installed from Xcode, server set to the
+  Railway address.
+- Tighten ATS now that production is HTTPS: drop `NSAllowsArbitraryLoads` but keep
+  `NSAllowsLocalNetworking` for LAN dev servers.
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
 - TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.
 

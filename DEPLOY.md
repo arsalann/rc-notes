@@ -19,6 +19,30 @@ browser ────┘
 - **MotherDuck** stays untouched as the pre-migration archive and the rollback. The migration
   script only reads from it.
 
+## Status (2026-10-17)
+
+| Piece | State |
+|---|---|
+| Supabase | Project in `eu-west-1` (Ireland), session pooler, SSL enforced, RLS on every table |
+| Data | Copied from MotherDuck on 2026-10-17 and verified value by value: 2 users, 2 workspaces, 607 tasks, 12 notes, 2,972 links, 144 diary entries, 7 weekly goals, 53,084 event-log rows, 9 ledger rows |
+| Railway | Project `fearless-embrace`, service `rc-notes`, region EU West (Amsterdam), `https://rc-notes-production-a50f.up.railway.app`, deploys on push to `main` |
+| Clients | iPhone app and phone browser switch to the Railway address |
+| Bruin | **Pending**: `.bruin.yml` still has only the MotherDuck connection; step 6 below not done yet |
+| MotherDuck | Frozen archive as of the 2026-10-17 copy. Nothing writes to it except the legacy service below |
+
+**Legacy Railway project, still to handle.** `exemplary-vitality` (service `rc-notes`,
+`https://rc-notes-production.up.railway.app`) is an older deployment from before this work. Its last
+successful deploy still runs the DuckDB-era code against MotherDuck with its own
+`MOTHERDUCK_NOTEBOOK_RC` and `MASTER_PASSWORD_HASH`. Its newer deploys fail because `main` now
+needs `DATABASE_URL`. Anything written through it lands in MotherDuck, not Supabase. Kept for now at
+Arsalan's request. Plan: stop using it, then delete the project, or at least remove its domain and
+MotherDuck token.
+
+**Operating Railway from a terminal**: `brew install railway`, `railway login`, then in any
+directory `railway link -p fearless-embrace -e production -s rc-notes`. Useful commands:
+`railway logs`, `railway deployment list`, `railway variables --set KEY=value` (redeploys). Don't
+run `railway variables` without filtering: it prints secrets.
+
 ## Environment variables (Railway service)
 
 | Variable | Value |
@@ -44,29 +68,32 @@ Production: Railway project `fearless-embrace`, service `rc-notes`, `https://rc-
    TARGET_DATABASE_URL='<session pooler URL>' DATABASE_CA_CERT="$(cat ../prod-ca-2021.crt)" \
      npx tsx scripts/migrate-motherduck-to-postgres.ts
    ```
+   - Passwords with `#`, `@`, `/` or `%` must be percent-encoded in the URL (`#` → `%23`).
    - The script reads MotherDuck with `MOTHERDUCK_NOTEBOOK_RC` from `app/.env` and creates the schema
      in Supabase.
    - It copies every table as-is, then verifies the copy: row counts everywhere, plus every value
      except in `event_log`.
    - It refuses to run if Supabase already has data, and it never writes to MotherDuck.
-3. **Railway**: create a project from the GitHub repo and set the variables above. Generate a
-   domain under Settings → Networking. After the first deploy, `https://<domain>/api/health` should
-   return `{"ok":true}`.
+3. **Railway**: create a project from the GitHub repo, set the variables above (Raw Editor accepts
+   `KEY=value` lines; the PEM can be one line with `\n` escapes), pick the region next to Supabase
+   (EU West), and generate a domain on port 3000 under Settings → Networking. The first deploy
+   fails its health check until the variables exist; that's expected. After that,
+   `https://<domain>/api/health` should return `{"ok":true}`.
 4. **Switch clients**:
    - **iPhone app**: Settings → Server → `https://<domain>`, then sign in with your usual password.
    - **Browser**: open the same address. The home-screen web app needs to be re-added from it.
 5. **Point local dev at Supabase** (optional): put the same `DATABASE_URL` in `app/.env`, plus
    `DATABASE_CA_CERT_FILE=../prod-ca-2021.crt`. Without `DATABASE_URL`, local dev uses a throwaway
    embedded Postgres in `data/pglite`.
-6. **Bruin**: add a `postgres` connection named `supabase-default` to `.bruin.yml`. Then refresh the
+6. **Bruin** (pending): add a `postgres` connection named `supabase-default` to `.bruin.yml`. Then refresh the
    asset files (`bruin import database --connection supabase-default pipeline`) and point
    `pipeline/pipeline.yml` at it.
 
 ## Rollback
 
-MotherDuck still holds the data exactly as it was before the migration. To go back, run the
-previous commit's server locally against MotherDuck. Anything written to Supabase after the switch
-would have to be copied back by hand, so decide within the first day.
+MotherDuck still holds the data exactly as it was at the 2026-10-17 copy. To go back, run the
+server from before PR #44 (commit `2ecb3d5`) against MotherDuck. Anything written to Supabase after
+the switch would have to be copied back by hand, so decide within the first day.
 
 ## Backups
 
