@@ -111,7 +111,9 @@ struct SettingsView: View {
 
                 Section("Server") {
                     LabeledContent("Address", value: app.serverURLString)
-                    Button("Change server…") { confirmChangeServer = true }
+                    if AppModel.allowsServerOverride {
+                        Button("Change server…") { confirmChangeServer = true }
+                    }
                 }
 
                 Section("Change password") {

@@ -80,7 +80,8 @@ Production: Railway project `fearless-embrace`, service `rc-notes`, `https://rc-
    fails its health check until the variables exist; that's expected. After that,
    `https://<domain>/api/health` should return `{"ok":true}`.
 4. **Switch clients**:
-   - **iPhone app**: Settings → Server → `https://<domain>`, then sign in with your usual password.
+   - **iPhone app**: the address is built in (`AppModel.builtInServer` in `ios/`). A new domain means
+     updating that constant and reinstalling.
    - **Browser**: open the same address. The home-screen web app needs to be re-added from it.
 5. **Point local dev at Supabase** (optional): put the same `DATABASE_URL` in `app/.env`, plus
    `DATABASE_CA_CERT_FILE=../prod-ca-2021.crt`. Without `DATABASE_URL`, local dev uses a throwaway
