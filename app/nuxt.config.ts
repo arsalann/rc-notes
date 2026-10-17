@@ -113,7 +113,9 @@ export default defineNuxtConfig({
       inline: [],
     },
     rollupConfig: {
-      external: ['@duckdb/node-api'],
+      // PGlite loads its WASM + data files from its own package directory at runtime, so it must
+      // stay a real node_modules import. Production uses `pg` (DATABASE_URL) and never loads it.
+      external: ['@electric-sql/pglite', 'pg-native'],
     },
   },
 

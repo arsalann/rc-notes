@@ -1,6 +1,6 @@
 import { requireAdmin, hashPassword } from '~/server/utils/auth';
 import { queryAll, execute } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const hash = await hashPassword(password);
-  const idRows = await queryAll("SELECT uuid()::VARCHAR as id");
+  const idRows = await queryAll("SELECT gen_random_uuid()::text as id");
   const userId = idRows[0].id as string;
 
   await execute(

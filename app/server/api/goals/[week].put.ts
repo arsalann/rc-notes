@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 // Upsert the week's goals content. Keyed on the week's Sunday (YYYY-MM-DD). No uniqueness
 // constraint exists on (week_start, workspace_id), so update-then-insert rather than ON CONFLICT.
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const cols = ['id', 'week_start', 'content'];
-  const vals = ['uuid()::VARCHAR', '$week::DATE', '$content'];
+  const vals = ['gen_random_uuid()::text', '$week::DATE', '$content'];
   const insertParams: Record<string, any> = { week, content };
   const insertTypes: Record<string, any> = { week: VARCHAR, content: VARCHAR };
   if (wsId) {

@@ -1,5 +1,10 @@
 # rc-notes Bruin pipeline
 
+> **Moving to Postgres.** The app database is moving from MotherDuck to Supabase Postgres (see
+> [`DEPLOY.md`](../DEPLOY.md)). Once the data is migrated, these assets are refreshed from the
+> `supabase-default` connection and this page is updated. Until then they describe the MotherDuck
+> tables, which have the same columns.
+
 This pipeline mirrors the rc-notes app database (MotherDuck, `rc_notes.main`
 schema). It is **not** a generated dataset — the live database is owned by
 the Nuxt app (`app/server/utils/db.ts` runs the CREATE TABLE / ALTER

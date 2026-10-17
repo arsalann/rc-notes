@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { generateNoteDisplayId } from '~/server/utils/ids';
-import { listValue, VARCHAR, LIST } from '@duckdb/node-api';
+import { listValue, VARCHAR, LIST } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const displayId = await generateNoteDisplayId(title, tags);
 
   const cols = ['id', 'title', 'content', 'tags', 'display_id'];
-  const vals = ['uuid()::VARCHAR', '$title', '$content', '$tags', '$display_id'];
+  const vals = ['gen_random_uuid()::text', '$title', '$content', '$tags', '$display_id'];
   const params: Record<string, any> = { title, content, tags: listValue(tags), display_id: displayId };
   const types: Record<string, any> = { title: VARCHAR, content: VARCHAR, tags: LIST(VARCHAR), display_id: VARCHAR };
 

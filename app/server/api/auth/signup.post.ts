@@ -1,9 +1,13 @@
 import { useSession } from 'h3';
 import { getSessionConfig, hashPassword, type SessionUser } from '~/server/utils/auth';
 import { queryAll, execute } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
+import { signupEnabled } from '~/server/utils/requestPolicy';
 
 export default defineEventHandler(async (event) => {
+  if (!signupEnabled()) {
+    throw createError({ statusCode: 403, statusMessage: 'Sign-up is turned off. Ask an admin to add you.' });
+  }
   const body = await readBody(event);
   const { username: rawUsername, password } = body || {};
   const username = rawUsername?.toLowerCase?.();
@@ -31,7 +35,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const hash = await hashPassword(password);
-  const idRows = await queryAll("SELECT uuid()::VARCHAR as id");
+  const idRows = await queryAll("SELECT gen_random_uuid()::text as id");
   const userId = idRows[0].id as string;
 
   await execute(

@@ -1,5 +1,5 @@
 import { queryAll } from './db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 

@@ -1,9 +1,12 @@
-node_modules
-.nuxt
-.output
+**/node_modules
+**/.nuxt
+**/.output
+**/.env
+**/.env.*
 data/
-.env
 .bruin.yml
 pipeline/
+ios/
+.context/
 .git
 *.md

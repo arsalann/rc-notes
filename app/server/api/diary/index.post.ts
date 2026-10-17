@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { hydrateTasksByIds, taskIdsFromLinks } from '~/server/utils/taskHydration';
-import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
+import { listValue, LIST, VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
   // Create new entry — default to Work workspace
   const cols = ['id', 'entry_date', 'content', 'workspace_id'];
-  const vals = ['uuid()::VARCHAR', '$date::DATE', '$content', '$ws'];
+  const vals = ['gen_random_uuid()::text', '$date::DATE', '$content', '$ws'];
   const insertParams: Record<string, any> = { date: entryDate, content };
   const insertTypes: Record<string, any> = { date: VARCHAR, content: VARCHAR };
 
@@ -95,7 +95,7 @@ export default defineEventHandler(async (event) => {
       // uniqueness constraint on (entry_date, workspace_id); tracked in the plan's out-of-scope list.)
       await queryAll(
         `INSERT INTO links (id, source_type, source_id, target_type, target_id)
-         SELECT uuid()::VARCHAR, 'diary', $did, 'task', tid
+         SELECT gen_random_uuid()::text, 'diary', $did, 'task', tid
          FROM unnest($tids) AS u(tid)
          WHERE NOT EXISTS (
            SELECT 1 FROM links l
@@ -123,7 +123,7 @@ export default defineEventHandler(async (event) => {
   const sourceFilter = requestedWorkspaceId
     ? 'l.source_id = $id'
     : 'l.source_id IN (SELECT id FROM diary_entries WHERE entry_date = $date::DATE)';
-  // Bind only the placeholder used by the selected source filter; DuckDB errors on unused names.
+  // Bind only the placeholder used by the selected source filter.
   const linksReadParams: Record<string, any> = requestedWorkspaceId
     ? { id: String(newEntry.id), ws: requestedWorkspaceId }
     : { date: entryDate };

@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
   // Only log API calls
   if (!path.startsWith('/api/')) return;
+  if (path === '/api/health') return;
 
   const method = getMethod(event);
   const query = getQuery(event);

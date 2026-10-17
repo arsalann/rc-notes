@@ -1,6 +1,6 @@
 import { requireAdmin } from '~/server/utils/auth';
 import { execute } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const admin = await requireAdmin(event);

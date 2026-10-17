@@ -1,7 +1,7 @@
 import { queryAll, linkTaskToDiary } from '~/server/utils/db';
 import { isWithinNextDays } from '~/server/utils/dates';
 import { withStoredTaskTags } from '~/server/utils/taskTagPresenter';
-import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '@duckdb/node-api';
+import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const id = String(getRouterParam(event, 'id'));
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     if (body.due_at === null) {
       sets.push('due_at = NULL');
     } else {
-      sets.push('due_at = $due_at::TIMESTAMP');
+      sets.push("due_at = ($due_at::timestamptz AT TIME ZONE 'UTC')");
       params.due_at = body.due_at;
       types.due_at = VARCHAR;
       // Auto-set status to 'now' when due within next 7 days (unless already done or explicitly setting status)

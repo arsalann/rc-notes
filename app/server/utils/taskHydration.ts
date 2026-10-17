@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
+import { listValue, LIST, VARCHAR } from '~/server/utils/sqlTypes';
 
 /**
  * Hydrate a set of task IDs into exactly the shape `GET /api/tasks/[id]` returns — the full row plus
@@ -8,7 +8,7 @@ import { listValue, LIST, VARCHAR } from '@duckdb/node-api';
  *
  * Two queries regardless of how many IDs are passed. This replaces the diary page's N+1: it used to
  * issue one `/api/tasks/{id}` request per linked task, each of which was 2 SELECTs plus an
- * event_log INSERT, all serialized behind the single shared DuckDB connection.
+ * event_log INSERT, all serialized behind a single shared database connection.
  *
  * `parent_title` matters and is easy to drop by accident: `withDerivedTaskTags` uses it to resolve
  * tag icons, so omitting the LEFT JOIN makes tags silently differ from the per-ID endpoint rather
@@ -20,13 +20,12 @@ export async function hydrateTasksByIds(ids: string[]) {
 
   const idList = listValue(unique);
 
-  // Sequential on purpose: useDB() memoizes one shared connection, so Promise.all here would not
-  // overlap anything. Reducing the number of round trips is the only lever that works.
+  // Reducing round trips is what matters here: each one is a network hop to the database.
   const parents = await queryAll(
     `SELECT t.*, p.title AS parent_title
      FROM tasks t
      LEFT JOIN tasks p ON p.id = t.parent_id
-     WHERE list_contains($ids, t.id)`,
+     WHERE t.id = ANY($ids)`,
     { ids: idList },
     { ids: LIST(VARCHAR) }
   );
@@ -34,7 +33,7 @@ export async function hydrateTasksByIds(ids: string[]) {
     `SELECT t.*, p.title AS parent_title
      FROM tasks t
      LEFT JOIN tasks p ON p.id = t.parent_id
-     WHERE list_contains($ids, t.parent_id)
+     WHERE t.parent_id = ANY($ids)
      ORDER BY t.completed ASC, t.position ASC`,
     { ids: idList },
     { ids: LIST(VARCHAR) }

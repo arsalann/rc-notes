@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const { q, workspace_id } = getQuery(event);

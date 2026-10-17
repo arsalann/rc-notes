@@ -1,5 +1,5 @@
 import { queryAll } from '~/server/utils/db';
-import { listValue, VARCHAR, LIST, BOOLEAN } from '@duckdb/node-api';
+import { listValue, VARCHAR, LIST, BOOLEAN } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const id = String(getRouterParam(event, 'id'));

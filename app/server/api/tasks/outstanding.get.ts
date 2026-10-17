@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 // Returns incomplete parent tasks that are currently in 'now' status OR overdue.
 export default defineEventHandler(async (event) => {

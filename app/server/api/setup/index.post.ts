@@ -1,7 +1,7 @@
 import { useSession } from 'h3';
 import { getSessionConfig, hashPassword, type SessionUser } from '~/server/utils/auth';
 import { queryAll, execute, useDB } from '~/server/utils/db';
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   // Ensure DB is initialized
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
     );
   } else {
     // Create new user
-    const idRows = await queryAll("SELECT uuid()::VARCHAR as id");
+    const idRows = await queryAll("SELECT gen_random_uuid()::text as id");
     userId = idRows[0].id as string;
 
     await execute(

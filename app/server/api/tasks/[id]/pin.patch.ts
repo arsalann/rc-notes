@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/utils/db';
 import { withStoredTaskTags } from '~/server/utils/taskTagPresenter';
-import { BOOLEAN, VARCHAR } from '@duckdb/node-api';
+import { BOOLEAN, VARCHAR } from '~/server/utils/sqlTypes';
 
 /**
  * `PATCH /api/tasks/:id/pin` — body `{ pinned?: boolean }`

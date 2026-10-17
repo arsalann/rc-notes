@@ -1,4 +1,4 @@
-import { VARCHAR } from '@duckdb/node-api';
+import { VARCHAR } from '~/server/utils/sqlTypes';
 import { requireAuth } from '~/server/utils/auth';
 import { queryAll } from '~/server/utils/db';
 
