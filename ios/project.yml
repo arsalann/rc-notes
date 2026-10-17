@@ -29,6 +29,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.arsalann.daybook
         PRODUCT_NAME: daybook
+        # Personal team used for device installs from Xcode (team IDs are public, not secrets).
+        DEVELOPMENT_TEAM: 2PRKX5Z4Q8
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

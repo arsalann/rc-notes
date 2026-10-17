@@ -16,7 +16,8 @@ journal concurrency. The design is native iOS; the **functionality** is 1:1 with
 | 5 | Notes list + note editor | ✅ done |
 | 6 | Calendar, Settings | ✅ done |
 | 7 | XCUITest E2E suite (11 flows) + screenshots | ✅ done — all green |
-| 8 | xtool sideload | ⏸ not started — needs your Apple ID (see "Next steps") |
+| 8 | Install on a real iPhone | ✅ done via Xcode with a personal team (xtool not needed) |
+| 9 | Used against the real (MotherDuck) server from the phone | ✅ confirmed working 2026-10-17 |
 
 Last full run (`ios/scripts/test.sh`, 2026-10-16): **49/49 unit tests, 11/11 UI tests passed**;
 server `npm test` 18/18.
@@ -146,15 +147,12 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 
 ## Blocked / needs Arsalan
 
-Nothing blocked the build. These need you:
+Nothing is blocked. The app is installed on Arsalan's iPhone and works against the real server.
 
-1. **Installing on your iPhone** needs signing: either open `ios/Daybook.xcodeproj` in Xcode, pick your
-   Personal Team under Signing & Capabilities and Run on the device, or use xtool (`xtool auth`, then
-   `xtool dev`), which also needs your Apple ID. I did not touch any Apple account.
-2. **Real server**: I only ever ran against the throwaway local server. The first time you point the
-   app at your real daybook server, skim Today/Tasks/Notes to confirm the data looks right.
-3. **Optional**: `sudo xcode-select -s /Applications/Xcode.app` would let plain `swift test` /
-   `xcodebuild` work without `DEVELOPER_DIR`.
+- Free personal-team builds expire after 7 days. To renew, re-run from Xcode with the phone plugged in.
+- Until the backend is deployed, the phone reaches the dev server on the Mac's LAN IP. That IP
+  changes between networks; change it in Settings → Server. See AGENTS.md "iOS app" for the
+  dev-server pitfalls (iCloud restarts, the Secure cookie in production builds).
 
 ## Known gaps / not verified
 
@@ -167,9 +165,11 @@ Nothing blocked the build. These need you:
 
 ## Next steps
 
-- Device install (above). For xtool specifically: it builds SwiftPM packages, so it would need a small
-  `Package.swift` wrapper target around `Daybook/`; Xcode with a Personal Team is the faster route.
+- **Deploy the backend** (in progress): Supabase Postgres plus a Railway web service. When it is live,
+  enter its `https://` address in the app; nothing in the app changes. Once every server is HTTPS,
+  tighten ATS (drop `NSAllowsArbitraryLoads`).
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
+- TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.
 
 ## Parity checklist
 
