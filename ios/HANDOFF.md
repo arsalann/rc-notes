@@ -46,10 +46,21 @@ ios/scripts/test.sh                       # ~6 min; screenshots → .context/ios
 ios/scripts/test.sh -only-testing:DaybookUITests/JournalE2ETests   # one suite
 ```
 
-Run the app by hand: open `ios/Daybook.xcodeproj`, pick an iPhone simulator, Run. On first launch
-enter the server address: production is `https://rc-notes-production-a50f.up.railway.app`. For a
-throwaway server: `ios/scripts/test-server.sh start` → `http://127.0.0.1:3457`, user
-`master_tester` / `password123`.
+Run the app by hand: open `ios/Daybook.xcodeproj`, pick an iPhone simulator, Run. The production
+server (`AppModel.builtInServer`, `https://rc-notes-production-a50f.up.railway.app`) is built in.
+Debug builds can switch servers (Settings → Server → Change server), e.g. to a throwaway server:
+`ios/scripts/test-server.sh start` → `http://127.0.0.1:3457`, user `master_tester` / `password123`.
+
+**Release vs Debug** (the v0 on the phone is a Release build):
+
+| | Release | Debug |
+|---|---|---|
+| Server | Built-in Railway address only; "Can't reach daybook / Try again" when offline | Built-in by default; can be changed (address form, `-serverURL` launch argument) |
+| App Transport Security | HTTPS only (no exceptions) | Also plain HTTP on the local network (`NSAllowsLocalNetworking`) |
+
+`Daybook/Info.plist` is hand-maintained and preprocessed (`INFOPLIST_PREPROCESS`); the Debug config
+defines `DAYBOOK_DEBUG=1`, which is the only thing that adds the ATS exception. UI tests launch with
+`-uiTesting`, which disables the production fallback so a test can never reach the real server.
 
 ## Layout
 
@@ -121,9 +132,10 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 - **Simulator**: the installed iOS 27.1 runtime only supports the "iPhone Duo" device type (creating
   iPhone 16/17/18/Air devices fails with "Incompatible device"), so tests run there. On that device
   the tab bar renders as a side rail; the UI tests handle both layouts.
-- **Server address**: entered on first launch (same address as the phone browser), stored in
-  UserDefaults, changeable from Settings (signs out). ATS allows arbitrary loads because the server is
-  self-hosted on LAN/VPN addresses the app cannot know ahead of time.
+- **Server address**: built in (`AppModel.builtInServer`) since the backend moved to Railway; there is
+  one server, so asking for it only added a setup step. Debug builds keep an override for local dev and
+  UI tests. Earlier builds asked for the address and allowed arbitrary HTTP loads for LAN servers;
+  release builds now drop any stored address and allow HTTPS only.
 - **Session persistence**: the `rc-session` cookie is mirrored into the Keychain after every sign-in /
   auth check and restored at launch. `HTTPCookieStorage` writes asynchronously, and a UI test proved
   a kill right after sign-in lost the session.
@@ -158,7 +170,7 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, workspaces, prefs),
 
 ## Blocked / needs Arsalan
 
-Nothing is blocked. The backend is live on Railway; the phone app switches to it in Settings → Server.
+Nothing is blocked. The backend is live on Railway and built into the app.
 
 - Free personal-team builds expire after 7 days. To renew, re-run from Xcode with the phone plugged in.
 - **Legacy Railway project `exemplary-vitality`** (`https://rc-notes-production.up.railway.app`) still
@@ -180,8 +192,6 @@ Nothing is blocked. The backend is live on Railway; the phone app switches to it
 
 - **v0 on the phone**: final touches, then a Release build installed from Xcode, server set to the
   Railway address.
-- Tighten ATS now that production is HTTPS: drop `NSAllowsArbitraryLoads` but keep
-  `NSAllowsLocalNetworking` for LAN dev servers.
 - Consider a home-screen widget for Today's open tasks and a share extension for quick capture.
 - TestFlight would need a paid Apple Developer account, but it would remove the 7-day re-signing.
 
@@ -192,7 +202,7 @@ ported from the web code (pure logic unit-tested in DaybookKit) but **not yet dr
 worth a manual pass.
 
 **Auth & app shell**
-- ✅ Server address entry + validation · ✅ Sign in · ✅ Sign out · ✅ Session survives relaunch
+- ✅ Built-in server (release) · ✅ Server address entry + validation (debug) · ✅ Sign in · ✅ Sign out · ✅ Session survives relaunch
 - ☑️ First-run setup (create admin) · ☑️ Create account · ☑️ Session-expired notice · ☑️ Change server
 
 **Today (daybook)**

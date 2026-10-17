@@ -146,7 +146,11 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 - Device installs: open `ios/Daybook.xcodeproj` in Xcode, pick the iPhone, Run. Signing uses the personal
   team in `project.yml` (`DEVELOPMENT_TEAM`); free-team builds expire after 7 days, so re-run from Xcode then.
   The phone must trust the developer certificate (Settings → General → VPN & Device Management).
-- The phone normally uses the Railway HTTPS address. To point it at a local dev server instead:
+- The production server is built in (`AppModel.builtInServer`). Release builds use only it and allow
+  HTTPS only. Debug builds can change server and allow local-network HTTP: the ATS exception sits in a
+  `#if DAYBOOK_DEBUG` block of the preprocessed `Daybook/Info.plist`. UI tests must pass `-uiTesting`
+  (as `DaybookUITestCase.launch` does) so the app never falls back to production.
+- To point a Debug build at a local dev server:
   - Use `npx nuxt dev --host 0.0.0.0 --port 3000` and enter `http://<mac LAN IP>:3000` in the app. The
     Mac's IP changes between networks (`ipconfig getifaddr en0`); phone and Mac must be on the same Wi-Fi.
   - A local production build (`node .output/server/index.mjs`) can't log in over plain http: the session

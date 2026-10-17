@@ -7,8 +7,9 @@ final class AppFlowE2ETests: DaybookUITestCase {
     }
 
     func testServerSetupAndSignInSignOut() throws {
-        // Fresh install: no server stored, no launch argument.
-        app.launchArguments = ["-uiTestReset"]
+        // Fresh debug install with no server: the address form (debug builds only; release builds
+        // use the built-in server). `-uiTesting` keeps the production fallback off.
+        app.launchArguments = ["-uiTesting", "-uiTestReset"]
         app.launch()
         let url = waitFor(app.textFields["server.url"])
         snapshot("00-server")

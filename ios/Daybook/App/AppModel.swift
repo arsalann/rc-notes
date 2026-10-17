@@ -50,7 +50,24 @@ struct ToastMessage: Identifiable, Equatable {
 @MainActor
 @Observable
 final class AppModel {
+    /// `.server`: no server configured (debug builds only) or the server can't be reached.
     enum Phase: Equatable { case loading, server, setup, login, ready }
+
+    /// The production server, built into every build. See DEPLOY.md.
+    static let builtInServer = URL(string: "https://rc-notes-production-a50f.up.railway.app")!
+
+    /// Debug builds can point at another server (a local dev server, the UI-test server); release
+    /// builds always use `builtInServer`.
+    static var allowsServerOverride: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// UI tests pass `-uiTesting` and must never fall back to the production server.
+    private static let isUITesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
 
     private enum Keys {
         static let serverURL = "serverURL"
@@ -96,8 +113,12 @@ final class AppModel {
         } else {
             activeWorkspaceId = prefs.defaultWorkspace
         }
-        if let raw = defaults.string(forKey: Keys.serverURL), let url = APIClient.normalizeServerURL(raw) {
+        if Self.allowsServerOverride, let raw = defaults.string(forKey: Keys.serverURL), let url = APIClient.normalizeServerURL(raw) {
             api = makeClient(url)
+        } else if !Self.isUITesting {
+            // Release builds drop any address stored by older builds that asked for one.
+            if !Self.allowsServerOverride { defaults.removeObject(forKey: Keys.serverURL) }
+            api = makeClient(Self.builtInServer)
         }
     }
 
@@ -127,8 +148,9 @@ final class AppModel {
     // MARK: Auth flow (web `useAuth`)
 
     func bootstrap() async {
-        // A server URL passed as a launch argument (UI tests) wins over the stored one.
-        if let raw = defaults.volatileDomain(forName: UserDefaults.argumentDomain)[Keys.serverURL] as? String,
+        // A server URL passed as a launch argument (UI tests) wins over the stored one (debug only).
+        if Self.allowsServerOverride,
+           let raw = defaults.volatileDomain(forName: UserDefaults.argumentDomain)[Keys.serverURL] as? String,
            let url = APIClient.normalizeServerURL(raw), api?.baseURL != url {
             api = makeClient(url)
         }
@@ -139,8 +161,9 @@ final class AppModel {
         await checkAuth(silent: false)
     }
 
-    /// Validates a typed server address against `/api/setup/status` before saving it.
+    /// Validates a typed server address against `/api/setup/status` before saving it (debug only).
     func connect(to raw: String) async throws {
+        guard Self.allowsServerOverride else { throw APIError.invalidURL }
         guard let url = APIClient.normalizeServerURL(raw) else { throw APIError.invalidURL }
         let client = makeClient(url)
         _ = try await client.setupStatus()
@@ -150,6 +173,7 @@ final class AppModel {
     }
 
     func changeServer() async {
+        guard Self.allowsServerOverride else { return }
         await logout()
         api = nil
         user = nil

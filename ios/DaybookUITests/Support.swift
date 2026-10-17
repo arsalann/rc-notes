@@ -109,7 +109,8 @@ class DaybookUITestCase: XCTestCase {
     }
 
     func launch(reset: Bool = true) {
-        app.launchArguments = ["-serverURL", TestServer.baseURL.absoluteString]
+        // `-uiTesting` stops the app from ever falling back to the built-in production server.
+        app.launchArguments = ["-uiTesting", "-serverURL", TestServer.baseURL.absoluteString]
         if reset { app.launchArguments.append("-uiTestReset") }
         app.launch()
     }

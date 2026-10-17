@@ -21,7 +21,8 @@ struct BrandHeader: View {
     }
 }
 
-/// First launch: the address of the daybook server (the same one typed into the phone browser).
+/// Shown when the server can't be reached. Release builds offer a retry against the built-in server;
+/// debug builds also let you type another address (local dev server, UI tests).
 struct ServerView: View {
     @Environment(AppModel.self) private var model
     @State private var address = ""
@@ -29,6 +30,45 @@ struct ServerView: View {
     @State private var error: String?
 
     var body: some View {
+        if AppModel.allowsServerOverride { addressForm } else { unreachable }
+    }
+
+    private var unreachable: some View {
+        NavigationStack {
+            Form {
+                BrandHeader()
+                Section {
+                    Label("Can't reach daybook", systemImage: "wifi.exclamationmark")
+                        .font(.headline)
+                } footer: {
+                    Text("Check your internet connection and try again.")
+                }
+                if let message = model.authNotice {
+                    Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                }
+                Section {
+                    Button {
+                        guard !connecting else { return }
+                        connecting = true
+                        Task {
+                            defer { connecting = false }
+                            await model.checkAuth(silent: false)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Try again")
+                            Spacer()
+                            if connecting { ProgressView() }
+                        }
+                    }
+                    .disabled(connecting)
+                    .accessibilityIdentifier("server.retry")
+                }
+            }
+        }
+    }
+
+    private var addressForm: some View {
         NavigationStack {
             Form {
                 BrandHeader()
@@ -148,9 +188,11 @@ struct LoginView: View {
                         .disabled(!canSubmit || submitting)
                         .accessibilityIdentifier("auth.submit")
                 }
-                Section {
-                    LabeledContent("Server", value: model.serverURLString)
-                    Button("Change server") { Task { await model.changeServer() } }
+                if AppModel.allowsServerOverride {
+                    Section {
+                        LabeledContent("Server", value: model.serverURLString)
+                        Button("Change server") { Task { await model.changeServer() } }
+                    }
                 }
             }
             .onChange(of: mode) { error = nil; confirm = "" }
@@ -213,9 +255,11 @@ struct SetupView: View {
                         .disabled(!canSubmit || submitting)
                         .accessibilityIdentifier("auth.submit")
                 }
-                Section {
-                    LabeledContent("Server", value: model.serverURLString)
-                    Button("Change server") { Task { await model.changeServer() } }
+                if AppModel.allowsServerOverride {
+                    Section {
+                        LabeledContent("Server", value: model.serverURLString)
+                        Button("Change server") { Task { await model.changeServer() } }
+                    }
                 }
             }
             .onChange(of: mode) { error = nil; confirm = "" }
