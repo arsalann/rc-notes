@@ -1,0 +1,46 @@
+# iOS ← web parity (templates, tags, Today options, bulk select) — Handoff
+
+Branch: `arsalann/ios-web-parity` (from `main` at `321c58b`, PR #53 merged + deployed 2026-10-20).
+Update this file after every task, so work can resume from here if a session ends mid-way.
+
+## Already done on the web (PR #53, live in production)
+
+- **Templates**: table `task_templates` (not synced). `GET/POST /api/templates`, `PUT/DELETE /api/templates/:id`
+  (soft delete). Subtasks are a JSON array `{title, description, priority|null, tags}`. Using a template = create
+  the task, then each subtask, with client ids (`app/composables/useTemplates.ts`).
+- **Multi-select**: `POST /api/tasks/bulk` `{ids, action: archive|unarchive|delete|status|priority, value}`.
+  Delete hard-deletes tasks + subtasks (any depth) + their links; tombstones (with `row_data`) tell the app.
+- **Tags**: table `tag_settings` (not synced): per tag key (catalog key or `manual:<normalized>`) `label`/`emoji`
+  overrides and `archived`. `GET /api/tags` (list with counts), `PUT /api/tags` (overrides),
+  `POST /api/tags/rename` (custom tags only; rewrites `tasks.tags`/`notes.tags`).
+- **Today page**: per-device switches to hide the Journal / Weekly Goals cards. Web hides archived tasks on Today.
+
+## Plan for iOS (decisions)
+
+- Templates + tag settings are online-only on iOS (like users/workspaces): `APIClient` calls, no sync table.
+  Creating tasks from a template goes through `Repository.createTask` (works offline, queued).
+- Tag display overrides: fetched on launch/foreground, cached (in memory + UserDefaults), applied wherever tag
+  labels/emoji render; archived tags hidden from the tag picker.
+- Bulk delete needs a queued mutation → server `POST /api/tasks/bulk` must be in the push `ALLOWED` list
+  (server change in this branch; delete is an absolute action, so replay is safe).
+- Today section switches: `UserDefaults` (`@AppStorage`), per device like the web.
+
+## Tasks
+
+| # | Task | Status |
+|---|------|--------|
+| 0 | Survey iOS code, write this file | ✅ done |
+| 1 | Server: allow `POST /api/tasks/bulk` in sync push; smoke test | ⏳ |
+| 2 | DaybookKit: bulk delete mutation (`deleteTasks`) + local effect (tasks, subtasks, links) + tests | ⏳ |
+| 3 | DaybookKit: API models + `APIClient` calls for templates and tags; decoding tests | ⏳ |
+| 4 | Today: hide archived tasks; Settings switches to hide Journal / Goals | ⏳ |
+| 5 | Today: select mode + bulk bar (mark as, priority, archive, delete) | ⏳ |
+| 6 | Tasks: add Delete to the existing multi-select bar | ⏳ |
+| 7 | Task detail: Save as template; Quick add: create from template | ⏳ |
+| 8 | Settings: Templates section (list, edit, delete, use) | ⏳ |
+| 9 | Settings: Tags section (overrides, rename with warning, archive); apply overrides + hide archived in picker | ⏳ |
+| 10 | Tests (swift test, ios/scripts/test.sh, api/sync smoke), docs (HANDOFF.md parity list, AGENTS/README), PR | ⏳ |
+
+## Log
+
+- 2026-10-20: branch created, plan written.
