@@ -1,0 +1,43 @@
+[
+  {
+    "key": "content",
+    "label": "Content",
+    "name": "Content",
+    "emoji": "✍️",
+    "builtin": true,
+    "archived": false,
+    "task_count": 0,
+    "note_count": 0,
+    "variants": [],
+    "label_override": null,
+    "emoji_override": null
+  },
+  {
+    "key": "growth",
+    "label": "Growth & reach",
+    "name": "Growth",
+    "emoji": "🚀",
+    "builtin": true,
+    "archived": false,
+    "task_count": 0,
+    "note_count": 0,
+    "variants": [],
+    "label_override": "Growth & reach",
+    "emoji_override": "🚀"
+  },
+  {
+    "key": "manual:q4 plan",
+    "label": "Q4-Plan",
+    "name": "Q4-Plan",
+    "emoji": null,
+    "builtin": false,
+    "archived": true,
+    "task_count": 1,
+    "note_count": 0,
+    "variants": [
+      "Q4-Plan"
+    ],
+    "label_override": null,
+    "emoji_override": null
+  }
+]
