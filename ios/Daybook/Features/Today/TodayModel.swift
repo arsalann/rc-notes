@@ -67,6 +67,13 @@ final class TodayModel {
     var collapsedGroups: Set<String> = []
     private(set) var reorderState: ReorderState = .idle
 
+    // Multi-select (select button in the toolbar).
+    var selecting = false
+    var selection: Set<String> = []
+    private(set) var bulkBusy = false
+    /// Tasks deleted from this page; hidden until the day's links refresh.
+    private var deletedIds: Set<String> = []
+
     // Goals (one shared entry per Sunday-start week).
     private(set) var goals: GoalsEntry?
     var goalsText = ""
@@ -209,6 +216,9 @@ final class TodayModel {
         subtasksExpanded = true
         editMode = false
         loadError = nil
+        selecting = false
+        selection = []
+        deletedIds = []
     }
 
     func loadEntry() async {
@@ -247,7 +257,7 @@ final class TodayModel {
             if let link = taskLinks.first(where: { $0.targetTitle == ref || $0.targetId == ref }) { add(link.targetId) }
         }
         // Archived tasks keep their day link but leave the page (as on the web).
-        return ids.filter { !(taskCache[$0]?.archived ?? false) }
+        return ids.filter { !(taskCache[$0]?.archived ?? false) && !deletedIds.contains($0) }
     }
 
     var pendingIds: [String] { allTaskIds.filter { !(taskCache[$0]?.completed ?? false) } }
@@ -369,6 +379,81 @@ final class TodayModel {
         } catch {
             reorderState = .failed
             app.showToast("Order could not be saved", detail: "No changes were written; try moving it again.", style: .error)
+        }
+    }
+
+    // MARK: Multi-select
+
+    /// Open tasks first (in the page's order), then done ones.
+    var selectableIds: [String] {
+        let pending = taskSort == .manual ? manualPending.filter { pendingIds.contains($0) } : sorted(pendingIds)
+        return pending + sortedDoneIds
+    }
+
+    func toggleSelecting() {
+        selecting.toggle()
+        selection = []
+    }
+
+    func toggleSelected(_ id: String) {
+        if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+    }
+
+    func toggleSelectAll() {
+        let all = Set(selectableIds)
+        selection = selection == all ? [] : all
+    }
+
+    private func plural(_ n: Int) -> String { "\(n) task\(n == 1 ? "" : "s")" }
+
+    /// Status or priority for every selected task (each a queued edit, like the Tasks bar).
+    func bulkUpdate(_ patch: JSONObject, label: String) async {
+        let ids = Array(selection)
+        guard !ids.isEmpty, !bulkBusy else { return }
+        bulkBusy = true
+        defer { bulkBusy = false }
+        var updated = 0
+        for id in ids {
+            if let saved = await app.updateTask(id, patch) {
+                taskCache[id] = taskCache[id]?.merged(with: saved) ?? saved
+                updated += 1
+            }
+        }
+        syncManualLists()
+        app.showToast("Updated \(plural(updated))", detail: label, style: .success)
+    }
+
+    /// Archives the selected tasks and their subtasks; they leave the page.
+    func bulkArchive() async {
+        let ids = Array(selection)
+        guard !ids.isEmpty, !bulkBusy else { return }
+        bulkBusy = true
+        defer { bulkBusy = false }
+        for id in ids {
+            if let saved = try? await repo.archiveTask(id: id) { taskCache[id] = taskCache[id]?.merged(with: saved) ?? saved }
+        }
+        selection = []
+        selecting = false
+        syncManualLists()
+        app.showToast("Archived \(plural(ids.count))", detail: "Find them under Tasks → Archived.", style: .success)
+    }
+
+    /// Deletes the selected tasks, their subtasks and links, for good.
+    func bulkDelete() async {
+        let ids = Array(selection)
+        guard !ids.isEmpty, !bulkBusy else { return }
+        bulkBusy = true
+        defer { bulkBusy = false }
+        do {
+            try await repo.deleteTasks(ids: ids)
+            deletedIds.formUnion(ids)
+            for id in ids { taskCache[id] = nil }
+            selection = []
+            selecting = false
+            syncManualLists()
+            app.showToast("Deleted \(plural(ids.count))", style: .success)
+        } catch {
+            app.showError("Tasks could not be deleted", error)
         }
     }
 

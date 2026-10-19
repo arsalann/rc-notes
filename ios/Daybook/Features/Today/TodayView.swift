@@ -43,6 +43,7 @@ private struct TodayScreen: View {
     @State private var quickAddPriority: Int?
     @State private var quickAddTitle = ""
     @FocusState private var quickAddFocused: Bool
+    @State private var confirmBulkDelete = false
 
     private var journal: JournalSession { model.journal }
 
@@ -79,8 +80,12 @@ private struct TodayScreen: View {
 
                 if app.prefs.todayShowGoals { goalsSection }
                 if app.prefs.todayShowJournal { journalSection }
-                tasksSection.id("tasks")
-                doneSection
+                if model.selecting {
+                    selectSection.id("tasks")
+                } else {
+                    tasksSection.id("tasks")
+                    doneSection
+                }
             }
             .listStyle(.insetGrouped)
             .refreshable {
@@ -96,6 +101,9 @@ private struct TodayScreen: View {
             QuickAddSheet(defaultStatus: .now, defaultDueDay: model.selectedDate) { result in
                 await model.addTask(result)
             }
+        }
+        .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
+            Task { await model.bulkDelete() }
         }
         .sheet(isPresented: $showWeek) {
             WeekSummaryView(model: model)
@@ -143,6 +151,10 @@ private struct TodayScreen: View {
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
+            if model.selecting {
+                Button("Done") { model.toggleSelecting() }
+                    .accessibilityIdentifier("today.selectDone")
+            } else {
             NavigationLink(value: Route.search) { Image(systemName: "magnifyingglass") }
                 .accessibilityLabel("Search")
             Button {
@@ -173,6 +185,67 @@ private struct TodayScreen: View {
                 Image(systemName: "line.3.horizontal.decrease.circle")
             }
             .accessibilityLabel("View options")
+            Button {
+                model.toggleSelecting()
+            } label: {
+                Image(systemName: "checkmark.circle")
+            }
+            .disabled(model.allTaskIds.isEmpty)
+            .accessibilityLabel("Select tasks")
+            .accessibilityIdentifier("today.select")
+            }
+        }
+        if model.selecting {
+            ToolbarItem(placement: .bottomBar) {
+                BulkBar(allSelected: !model.selectableIds.isEmpty && model.selection.count == model.selectableIds.count,
+                        count: model.selection.count, busy: model.bulkBusy,
+                        onToggleAll: model.toggleSelectAll,
+                        onStatus: { status in Task { await model.bulkUpdate(["status": .string(status.rawValue)], label: "Status: \(status.rawValue.capitalized)") } },
+                        onPriority: { p in Task { await model.bulkUpdate(["priority": .int(p)], label: "Priority: \(Priority(value: p).label)") } },
+                        onArchive: { Task { await model.bulkArchive() } },
+                        onDelete: { confirmBulkDelete = true })
+            }
+        }
+    }
+
+    // MARK: Select mode
+
+    private var selectSection: some View {
+        Section {
+            ForEach(model.selectableIds, id: \.self) { id in
+                let selected = model.selection.contains(id)
+                let task = model.taskCache[id]
+                Button {
+                    model.toggleSelected(id)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(selected ? Color.accentColor : .secondary)
+                        Text(task?.title ?? "Loading…")
+                            .strikethrough(task?.completed ?? false)
+                            .foregroundStyle((task?.completed ?? false) ? .secondary : .primary)
+                            .lineLimit(2)
+                        Spacer()
+                        if let count = task?.subtasks?.count, count > 0 {
+                            Text("+\(count)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let p = task?.priority, p > 0 {
+                            Image(systemName: Priority(value: p).symbol).foregroundStyle(Priority(value: p).color)
+                        }
+                    }
+                    .frame(minHeight: 36)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("today.selectRow.\(task?.title ?? id)")
+            }
+            if model.selectableIds.isEmpty {
+                Text("No tasks for this day.").foregroundStyle(.secondary)
+            }
+        } header: {
+            Label("\(model.selection.count) selected", systemImage: "checkmark.circle")
         }
     }
 

@@ -17,6 +17,7 @@
 		26A7E8F74FCA22A2EFA662EC /* TaskRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112D9FEB0FD7D2BE86A8B6B5 /* TaskRows.swift */; };
 		37C72E664E66E57330F0AE6A /* NotesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C06C7658F8DEE72CBB38F8D0 /* NotesViews.swift */; };
 		3828EC167A607B0B1B023E52 /* AppFlowE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */; };
+		3A4D6B2198CCD8CA114E3DFD /* BulkBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DAEF051B93D6A8F1142C8FC /* BulkBar.swift */; };
 		457A8FE70087A00489C699A5 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2BDA5AFA02F6F39E4126DB /* Support.swift */; };
 		4D3D396A24A15BD75A0818F8 /* JournalE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F489DB34CC9DA1ADFD6CA8E /* JournalE2ETests.swift */; };
 		4F1B76FDA2CF130FFF6C2B25 /* CalendarAndSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAAF6A01755B2644ADDC6F4 /* CalendarAndSettings.swift */; };
@@ -56,6 +57,7 @@
 		5CC88F1E2056A7248DFFC94C /* TodayModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayModel.swift; sourceTree = "<group>"; };
 		645EB2E613C7049FBFA51B35 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6C2BDA5AFA02F6F39E4126DB /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
+		6DAEF051B93D6A8F1142C8FC /* BulkBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkBar.swift; sourceTree = "<group>"; };
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowE2ETests.swift; sourceTree = "<group>"; };
 		94CC93E29E0CB4DA71EAE001 /* DaybookUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaybookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,6 +88,7 @@
 		014391635A0904061A9D4C73 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				6DAEF051B93D6A8F1142C8FC /* BulkBar.swift */,
 				C2BB02A324C9C7639F7DA250 /* Components.swift */,
 				D6852E2B040AE181D9A66B57 /* MentionEditor.swift */,
 				20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */,
@@ -332,6 +335,7 @@
 			files = (
 				E6E92413DCEB37F1DD880BCC /* AppModel.swift in Sources */,
 				BA687AFC2E738D3F0D663879 /* AuthViews.swift in Sources */,
+				3A4D6B2198CCD8CA114E3DFD /* BulkBar.swift in Sources */,
 				4F1B76FDA2CF130FFF6C2B25 /* CalendarAndSettings.swift in Sources */,
 				6198C6752F921D587A867312 /* Components.swift in Sources */,
 				728BBFF437B07C30E87207D4 /* DaybookApp.swift in Sources */,
