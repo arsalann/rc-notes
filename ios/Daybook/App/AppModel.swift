@@ -24,6 +24,9 @@ struct Preferences: Codable, Equatable {
     var diaryGoalsCollapsed = false
     var diaryTaskSort: DiaryTaskSort = .manual
     var appearance: Appearance = .system
+    /// Settings → Today page: show the journal / weekly goals cards (per device, like the web).
+    var todayShowJournal = true
+    var todayShowGoals = true
 
     init() {}
 
@@ -39,6 +42,8 @@ struct Preferences: Codable, Equatable {
         diaryGoalsCollapsed = (try? c.decode(Bool.self, forKey: .diaryGoalsCollapsed)) ?? false
         diaryTaskSort = (try? c.decode(DiaryTaskSort.self, forKey: .diaryTaskSort)) ?? .manual
         appearance = (try? c.decode(Appearance.self, forKey: .appearance)) ?? .system
+        todayShowJournal = (try? c.decode(Bool.self, forKey: .todayShowJournal)) ?? true
+        todayShowGoals = (try? c.decode(Bool.self, forKey: .todayShowGoals)) ?? true
     }
 }
 

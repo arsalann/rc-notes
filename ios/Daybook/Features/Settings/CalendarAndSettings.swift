@@ -179,6 +179,17 @@ struct SettingsView: View {
                     Toggle("Show done tasks", isOn: $app.prefs.taskShowDone)
                 }
 
+                Section {
+                    Toggle("Journal", isOn: $app.prefs.todayShowJournal)
+                        .accessibilityIdentifier("settings.todayShowJournal")
+                    Toggle("Weekly goals", isOn: $app.prefs.todayShowGoals)
+                        .accessibilityIdentifier("settings.todayShowGoals")
+                } header: {
+                    Text("Today page")
+                } footer: {
+                    Text("Hiding a card keeps what you wrote. Saved on this device.")
+                }
+
                 Section("Appearance") {
                     Picker("Theme", selection: $app.prefs.appearance) {
                         ForEach(Preferences.Appearance.allCases, id: \.self) { Text($0.label).tag($0) }

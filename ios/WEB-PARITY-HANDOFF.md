@@ -33,7 +33,7 @@ Update this file after every task, so work can resume from here if a session end
 | 1 | Server: allow `POST /api/tasks/bulk` in sync push; smoke test | ✅ done (`push.post.ts` ALLOWED, `sync-smoke.mjs` bulk delete + replay + tombstones) |
 | 2 | DaybookKit: bulk delete mutation (`deleteTasks`) + local effect (tasks, subtasks, links) + tests | ✅ done (`Mutation.deleteTasks`, `LocalData.deleteTasks`, `Repository.deleteTasks(ids:)`, ack drops rows from the server copy; test `deleteTasksTakesSubtasksAndLinks`) |
 | 3 | DaybookKit: API models + `APIClient` calls for templates and tags; decoding tests | ✅ done (`Models/TemplatesAndTags.swift`: `TaskTemplate`, `TemplateSubtask`, `TagSummary`, `TagOverrides` (present/isArchived/pickerOptions), `TaskTags.manualKey`, `APIClient.templates/createTemplate/updateTemplate/deleteTemplate/tags/updateTag/renameTag`, `Repository.createTasks(from:)`; fixtures `templates.json`, `tags.json`; `TemplatesAndTagsTests.swift`) |
-| 4 | Today: hide archived tasks; Settings switches to hide Journal / Goals | ⏳ |
+| 4 | Today: hide archived tasks; Settings switches to hide Journal / Goals | ✅ done (`Preferences.todayShowJournal/todayShowGoals`, Settings "Today page" section, `TodayView` hides the cards, `TodayModel.allTaskIds` drops archived) |
 | 5 | Today: select mode + bulk bar (mark as, priority, archive, delete) | ⏳ |
 | 6 | Tasks: add Delete to the existing multi-select bar | ⏳ |
 | 7 | Task detail: Save as template; Quick add: create from template | ⏳ |
@@ -49,3 +49,4 @@ Update this file after every task, so work can resume from here if a session end
   Test server for this work: `DAYBOOK_TEST_PORT=3461 ios/scripts/test-server.sh start`.
 - Task 2: `swift test` 72/72 (run with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`).
 - Task 3: `swift test` 78/78.
+- Task 4: app builds (`xcodebuild ... -destination 'platform=iOS Simulator,name=iPhone Duo' -derivedDataPath build/DerivedData build`).

@@ -246,7 +246,8 @@ final class TodayModel {
         for ref in Mentions.references(in: journal.text) {
             if let link = taskLinks.first(where: { $0.targetTitle == ref || $0.targetId == ref }) { add(link.targetId) }
         }
-        return ids
+        // Archived tasks keep their day link but leave the page (as on the web).
+        return ids.filter { !(taskCache[$0]?.archived ?? false) }
     }
 
     var pendingIds: [String] { allTaskIds.filter { !(taskCache[$0]?.completed ?? false) } }

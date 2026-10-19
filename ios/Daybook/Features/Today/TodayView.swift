@@ -77,8 +77,8 @@ private struct TodayScreen: View {
                     }
                 }
 
-                goalsSection
-                journalSection
+                if app.prefs.todayShowGoals { goalsSection }
+                if app.prefs.todayShowJournal { journalSection }
                 tasksSection.id("tasks")
                 doneSection
             }
