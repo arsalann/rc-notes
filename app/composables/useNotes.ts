@@ -179,12 +179,23 @@ export function useTasks() {
     }
   }
 
+  /**
+   * One request for the multi-select bar: archive / unarchive / delete, or set status / priority on
+   * every selected task. Returns the rows as stored afterwards (none for delete) and the ids touched.
+   */
+  async function bulkUpdateTasks(ids: string[], action: 'archive' | 'unarchive' | 'delete' | 'status' | 'priority', value?: string | number) {
+    return await $fetch<{ action: string; ids: string[]; tasks: Task[] }>('/api/tasks/bulk', {
+      method: 'POST',
+      body: { ids, action, value },
+    });
+  }
+
   async function toggleArchive(id: string) {
     await $fetch<Task>(`/api/tasks/${id}/archive`, { method: 'PATCH' });
     tasks.value = tasks.value.filter(t => t.id !== id);
   }
 
-  return { tasks, loading, fetchTasks, createTask, newTaskId, updateTask, updateTaskPositions, deleteTask, toggleComplete, togglePin, toggleArchive, resyncTask };
+  return { tasks, loading, fetchTasks, createTask, newTaskId, updateTask, updateTaskPositions, deleteTask, toggleComplete, togglePin, toggleArchive, bulkUpdateTasks, resyncTask };
 }
 
 export function useNotesCrud() {

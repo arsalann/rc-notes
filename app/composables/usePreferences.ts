@@ -8,6 +8,10 @@ export interface Preferences {
   diaryGoalsCollapsed: boolean;
   diaryTaskSort: 'manual' | 'created' | 'priority';
   navWorkspaceIds: string[];
+  /** Today page: show the journal card. */
+  todayShowJournal: boolean;
+  /** Today page: show the weekly goals card. */
+  todayShowGoals: boolean;
 }
 
 const STORAGE_KEY = 'preferences';
@@ -22,6 +26,8 @@ const defaults: Preferences = {
   diaryGoalsCollapsed: false,
   diaryTaskSort: 'manual',
   navWorkspaceIds: [],
+  todayShowJournal: true,
+  todayShowGoals: true,
 };
 
 function load(): Preferences {

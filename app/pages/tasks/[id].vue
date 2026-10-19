@@ -3,7 +3,9 @@
     <div class="calm-page-header sticky top-0 z-30 flex items-center justify-between px-4 py-3 safe-top">
       <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" @click="goBack" />
       <div class="flex items-center gap-1">
-        <UButton color="neutral" variant="ghost" :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'" @click="copyAsMarkdown" />
+        <UButton color="neutral" variant="ghost" :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'" aria-label="Copy as markdown" @click="copyAsMarkdown" />
+        <UButton color="neutral" variant="ghost" icon="i-lucide-layout-template" aria-label="Save as template"
+          title="Save as template" :disabled="!task" @click="openSaveTemplate" />
         <UButton color="neutral" variant="ghost" :icon="task?.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'"
           :class="task?.pinned && 'text-(--ui-primary)'" @click="handlePin" />
         <UButton color="neutral" variant="ghost" icon="i-lucide-archive" @click="confirmArchive = true" />
@@ -119,7 +121,7 @@
         <div v-if="task.detected_tags?.length" class="mb-4">
           <p class="text-[11px] font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2">Detected</p>
           <div class="flex items-center gap-2 flex-wrap">
-            <UBadge v-for="tag in task.detected_tags" :key="tag.key" color="primary" variant="subtle" size="sm" class="gap-1.5 py-1">
+            <UBadge v-for="tag in presentAll(task.detected_tags)" :key="tag.key" color="primary" variant="subtle" size="sm" class="gap-1.5 py-1">
               <span aria-hidden="true">{{ tag.emoji }}</span>
               <span>{{ tag.label }}</span>
               <span class="text-(--ui-text-dimmed)">· {{ detectedTagReason(tag) }}</span>
@@ -164,6 +166,24 @@
       </UButton>
     </div>
 
+    <UModal v-model:open="saveTemplateOpen" title="Save as template"
+      :description="`Saves this task${subtasks.length ? ` and its ${subtasks.length} subtask${subtasks.length === 1 ? '' : 's'}` : ''} so you can create it again. Edit templates in Settings.`">
+      <template #body>
+        <form @submit.prevent="handleSaveTemplate">
+          <UFormField label="Template name">
+            <UInput v-model="templateName" placeholder="Template name" size="md" class="w-full" autofocus />
+          </UFormField>
+        </form>
+      </template>
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <UButton color="neutral" variant="soft" class="flex-1" @click="saveTemplateOpen = false">Cancel</UButton>
+          <UButton color="primary" class="flex-1" icon="i-lucide-layout-template" :loading="savingTemplate"
+            :disabled="!templateName.trim()" @click="handleSaveTemplate">Save template</UButton>
+        </div>
+      </template>
+    </UModal>
+
     <UModal v-model:open="confirmArchive" title="Archive task?" description="This task and its subtasks will be archived.">
       <template #footer>
         <div class="flex gap-3 w-full">
@@ -191,6 +211,8 @@ function goBack() {
 }
 const { updateTask, deleteTask, toggleComplete, togglePin, createTask } = useTasks();
 const { createNote } = useNotesCrud();
+const { saveTaskAsTemplate } = useTemplates();
+const { presentAll } = useTagSettings();
 const { workspaces } = useWorkspace();
 
 const toast = useToast();
@@ -409,6 +431,31 @@ async function copyAsMarkdown() {
     setTimeout(() => { copied.value = false; }, 1500);
   } catch {
     toast.add({ title: 'Copy failed', color: 'error' });
+  }
+}
+
+// --- Save as template ---
+const saveTemplateOpen = ref(false);
+const templateName = ref('');
+const savingTemplate = ref(false);
+
+function openSaveTemplate() {
+  if (!task.value) return;
+  templateName.value = task.value.title;
+  saveTemplateOpen.value = true;
+}
+
+async function handleSaveTemplate() {
+  if (!task.value || !templateName.value.trim() || savingTemplate.value) return;
+  savingTemplate.value = true;
+  try {
+    const t = await saveTaskAsTemplate(task.value, subtasks.value, templateName.value);
+    saveTemplateOpen.value = false;
+    toast.add({ title: `Template "${t.name}" saved`, description: 'Use it from the add-task form, or edit it in Settings.', color: 'success' });
+  } catch (err: any) {
+    toast.add({ title: 'Template not saved', description: err?.data?.statusMessage || 'Try again.', color: 'error' });
+  } finally {
+    savingTemplate.value = false;
   }
 }
 

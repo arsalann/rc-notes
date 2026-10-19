@@ -13,7 +13,8 @@
 
 ## Project Context
 - This is a mobile-first **todo/reminder + notes app** called **rc-notes**
-- Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar
+- Core features: tasks with subtasks, notes with @-mention linking, diary, workspaces, 5-day calendar,
+  task templates, tag settings, multi-select bulk actions
 - Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + Postgres (Supabase) + Bruin CLI, plus a native iOS app in `ios/`
   that works offline on a local copy and syncs (see "Offline sync" below)
 - Deployed on Railway (see `DEPLOY.md`); it includes setup and login flows, but data endpoints are not yet consistently scoped by `user_id`
@@ -32,7 +33,13 @@
 - `app/server/api/sync/` — `push` (replays queued iOS changes) and `pull` (rows changed since a cursor)
 - `app/server/utils/syncContext.ts` — device/op/client-time headers → the write context the triggers read
 - `ios/DaybookKit/Sources/DaybookKit/Sync/` — the iOS local copy, change queue and sync engine
-- `app/server/api/tasks/` — Task CRUD endpoints
+- `app/server/api/tasks/` — Task CRUD endpoints; `bulk.post.ts` is the multi-select bar (archive / unarchive /
+  delete / status / priority for many ids in one request)
+- `app/server/api/templates/` + `server/utils/templates.ts` — task templates CRUD (soft delete)
+- `app/server/api/tags/` + `server/utils/tags.ts` — tag list with usage counts, display overrides, rename
+- `app/components/BulkActionBar.vue` — the select-mode toolbar shared by Tasks and Today
+- `app/components/SettingsTemplates.vue`, `SettingsTags.vue` — the Settings sections
+- `app/composables/useTemplates.ts` (save / edit / instantiate), `useTagSettings.ts` (overrides, `present()`)
 - `app/server/api/notes/` — Notes CRUD endpoints
 - `app/composables/useNotes.ts` — exports `useTasks()`, `useNotesCrud()`, `Task`, `Note` types
 - `app/composables/useWorkspace.ts` — workspace state management
@@ -47,6 +54,16 @@ All content tables include `user_id` and `user_name` for future multi-user suppo
 - **links**: bidirectional links between tasks and notes (source_type/id ↔ target_type/id)
 - **diary_entries**: workspace_id, entry_date, content, deleted_at
 - **event_log**: audit log of all API actions with user_id, user_name
+- **task_templates**: name, title, description, priority, tags[], `subtasks` JSONB (ordered, one level:
+  `{title, description, priority|null, tags}`), workspace_id, position, deleted_at (soft delete). Using a template
+  creates ordinary tasks from the client (`useTemplates().instantiateTemplate`, client ids → idempotent)
+- **tag_settings**: one row per tag key (`tag_key` unique): catalog key or `manual:<normalized>` (`manualTaskTagKey`
+  in `utils/taskTags.ts`), with display `label` / `emoji` overrides and `archived` (hidden from pickers). Overrides
+  are display only and applied on the client (`useTagSettings().present`); renaming a custom tag rewrites
+  `tasks.tags` / `notes.tags` (`POST /api/tags/rename`). Built-in tags cannot be renamed, only relabelled
+- Not synced: `task_templates` and `tag_settings` are web-only; the iOS app ignores them
+- Today page section switches (`todayShowJournal`, `todayShowGoals`) are per-device preferences in localStorage
+  (`usePreferences`), like the other view settings
 
 ## Color System — CRITICAL
 The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app/assets/css/main.css` is the source of truth: use its `--daybook-*` variables and mapped `--ui-*` tokens rather than reintroducing a separate palette.
@@ -80,7 +97,9 @@ The iOS app keeps a local copy of the data and a queue of changes; the web app s
 - **Synced tables**: `SYNCED_TABLES` in `schema.ts` (workspaces, tasks, notes, links, diary_entries,
   goals_weekly). Each has `sync_seq`, `field_clock`, `created_device_kind/id`, `updated_device_kind/id`,
   `client_updated_at`, `sync_op_id`, maintained by the `daybook_sync_row` trigger; hard deletes leave a row
-  in `sync_tombstones` (`daybook_sync_tombstone` trigger). `sync_ops` is the push ledger (op id → result).
+  in `sync_tombstones` (`daybook_sync_tombstone` trigger) that also keeps the deleted row as JSON in
+  `row_data` (not returned by pull) — the recovery path for bulk-deleted tasks. Hard deletes happen for
+  links and for tasks deleted from the multi-select bar. `sync_ops` is the push ledger (op id → result).
 - **Write context**: before a write, `db.ts` sets `daybook.device_kind/device_id/op_id/op_time/updated_by`
   on the connection (session `set_config` cached per pooled client; a local transaction on PGlite) from the
   request (`syncContext.ts`, via `nitro.experimental.asyncContext`). Endpoints don't pass anything.
@@ -119,6 +138,13 @@ The iOS app keeps a local copy of the data and a queue of changes; the web app s
 - `app/scripts/api-smoke.mjs` exercises every route against the local test server and checks the iOS
   fixture shapes; run it after any SQL change. `app/scripts/sync-smoke.mjs` does the same for sync.
 
+## Web UI gotchas
+- `NuxtLink` ignores `preventDefault()` from a fall-through `@click`: a "select instead of open" mode must render
+  a plain element (`<component :is="selectMode ? 'button' : NuxtLink">`, see `TaskItem.vue`).
+- The Today page renders both a desktop board and a mobile list (one hidden by CSS), so every task appears
+  twice in the DOM; browser tests must pick the visible one.
+- The Today page hides archived tasks client-side (`allTaskIds` filters `archived`); their diary links stay.
+
 ## Nitro Routing
 - Nested routes: `server/api/tasks/[id]/complete.patch.ts` → PATCH /api/tasks/:id/complete
 - Top-level CRUD: `[id].get.ts`, `[id].put.ts`, `[id].delete.ts`
@@ -141,10 +167,14 @@ The iOS app keeps a local copy of the data and a queue of changes; the web app s
 Whenever a change is made to the database schema (new table, dropped table, added/removed/renamed column, type change), you MUST refresh the Bruin asset definitions so `pipeline/` stays an accurate mirror of the database:
 
 1. Run `bruin import database --connection supabase-default pipeline` from the project root.
-2. Keep ONLY the asset files for the real app tables (tasks, notes, workspaces, diary_entries, goals_weekly, links, event_log, users). Delete anything for the `backup` schema (snapshot tables are operational, not pipeline assets) and any Supabase system schemas (`auth`, `storage`, `realtime`, `extensions`, …).
+2. Keep ONLY the asset files for the real app tables (tasks, notes, workspaces, diary_entries, goals_weekly, links, event_log, users, task_templates, tag_settings). Delete anything for the `backup` schema (snapshot tables are operational, not pipeline assets) and any Supabase system schemas (`auth`, `storage`, `realtime`, `extensions`, …).
 3. Re-add per-column `description:` text on any columns the importer touched — `bruin import` strips descriptions, and the asset YAMLs are the canonical column dictionary.
 4. Run `bruin validate pipeline/` and confirm "No issues found" before committing.
 5. Commit the asset changes alongside the schema change in `app/server/utils/schema.ts` so the two never drift.
+
+Until `supabase-default` exists (runbook step 6 in `DEPLOY.md`) the import cannot run: write or edit the asset
+YAML by hand from `TABLE_DDL` in `schema.ts` (done this way for `task_templates` and `tag_settings` on
+2026-10-20), then `bruin validate pipeline/`.
 
 Also use the Bruin MCP tools when available for richer schema inspection — the CLI import is the source of truth for the on-disk asset files.
 

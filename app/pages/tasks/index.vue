@@ -10,7 +10,7 @@
           <ThemeToggle />
           <UButton :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'" color="neutral"
             :variant="showArchived ? 'soft' : 'ghost'" size="sm" @click="toggleArchived" />
-          <UButton icon="i-lucide-list-checks" color="neutral"
+          <UButton icon="i-lucide-list-checks" color="neutral" aria-label="Select tasks"
             :variant="selectMode ? 'soft' : 'ghost'" size="sm" @click="toggleSelectMode" />
           <UButton icon="i-lucide-calendar" color="neutral" variant="ghost" size="sm" to="/calendar" />
         </div>
@@ -30,7 +30,7 @@
       </div>
     </div>
     <div v-if="!showArchived" class="mt-2">
-      <QuickAdd placeholder="What needs to be done?" @add="handleAdd" />
+      <QuickAdd placeholder="What needs to be done?" @add="handleAdd" @template="handleTemplate" />
     </div>
     <div v-if="loading" class="px-4 mt-4 space-y-3">
       <USkeleton v-for="i in 4" :key="i" class="h-18 w-full" />
@@ -164,56 +164,24 @@
       </div>
     </template>
 
-    <!-- Bulk action bar -->
-    <Transition
-      enter-active-class="transition ease-out duration-150"
-      enter-from-class="opacity-0 translate-y-2"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition ease-in duration-100"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0 translate-y-2">
-      <div v-if="selectMode" class="fixed left-0 right-0 z-40 px-4"
-        style="bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem)">
-        <div class="calm-bulk-bar max-w-lg md:max-w-2xl mx-auto rounded-2xl px-3 py-2.5">
-          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <span class="text-sm font-semibold text-(--ui-text) whitespace-nowrap pl-1.5 pr-1">
-              {{ selectedIds.size }} selected
-            </span>
-            <UButton size="xs" color="neutral" variant="ghost" @click="selectAll" class="shrink-0">
-              All
-            </UButton>
-            <USeparator orientation="vertical" class="h-4 shrink-0" />
-            <UDropdownMenu :items="bulkStatusItems" :ui="{ content: 'min-w-32' }">
-              <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-circle-dot" trailing-icon="i-lucide-chevron-up" :disabled="!selectedIds.size" class="shrink-0">
-                Status
-              </UButton>
-            </UDropdownMenu>
-            <UDropdownMenu :items="bulkPriorityItems" :ui="{ content: 'min-w-36' }">
-              <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-flame" trailing-icon="i-lucide-chevron-up" :disabled="!selectedIds.size" class="shrink-0">
-                Priority
-              </UButton>
-            </UDropdownMenu>
-            <UButton size="xs" color="neutral" variant="soft"
-              :icon="showArchived ? 'i-lucide-archive-restore' : 'i-lucide-archive'"
-              :disabled="!selectedIds.size" @click="bulkArchive" class="shrink-0" />
-            <div class="flex-1" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="exitSelectMode" class="shrink-0" />
-          </div>
-        </div>
-      </div>
-    </Transition>
-
+    <BulkActionBar :open="selectMode" :count="selectedIds.size" :total="sortedTasks.length" :busy="bulkBusy"
+      :archived="showArchived" @toggle-all="toggleSelectAll" @close="exitSelectMode"
+      @status="bulkApply('status', $event)" @priority="bulkApply('priority', $event)"
+      @archive="bulkArchive" @delete="bulkDelete" />
   </div>
 </template>
 
 <script setup lang="ts">
 import draggable from 'vuedraggable';
 import type { Task } from '~/composables/useNotes';
+import type { TaskTemplate } from '~/composables/useTemplates';
 import { parseUTC } from '~/composables/useDate';
 import { PRIORITY_OPTIONS } from '~/composables/usePriority';
 import { resolveTaskTags, TASK_TAG_CATALOG } from '~/utils/taskTags';
 
-const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask, toggleArchive } = useTasks();
+const { tasks, loading, fetchTasks, createTask, toggleComplete, updateTask, bulkUpdateTasks } = useTasks();
+const { instantiateTemplate } = useTemplates();
+const { present: presentTag } = useTagSettings();
 const { activeId } = useWorkspace();
 const { prefs } = usePreferences();
 const toast = useToast();
@@ -375,7 +343,8 @@ const tagGroups = computed(() => {
       groups.set(group.key, group);
       continue;
     }
-    for (const tag of tags) {
+    for (const raw of tags) {
+      const tag = presentTag(raw);
       const label = tag.label;
       const group = groups.get(tag.key) || { key: tag.key, label, emoji: tag.emoji, tasks: [] };
       group.tasks.push(task);
@@ -411,6 +380,16 @@ async function handleAdd(data: { title: string; due_at?: string; subtasks?: stri
     await load();
   }
 }
+async function handleTemplate(template: TaskTemplate) {
+  try {
+    await instantiateTemplate(template, { workspace_id: activeId.value ?? template.workspace_id });
+    await load();
+    toast.add({ title: `Created "${template.title || template.name}" from template`, color: 'success' });
+  } catch {
+    toast.add({ title: 'Template could not be used', description: 'Some tasks may have been created; check the list.', color: 'error' });
+    await load();
+  }
+}
 async function handleToggle(id: string) {
   const updated = await toggleComplete(id);
   // Update status in local state so grouping reflects the change
@@ -435,49 +414,60 @@ function toggleSelect(id: string) {
   if (next.has(id)) next.delete(id); else next.add(id);
   selectedIds.value = next;
 }
-function selectAll() {
-  selectedIds.value = new Set(sortedTasks.value.map(t => t.id));
+function toggleSelectAll() {
+  const all = sortedTasks.value.map(t => t.id);
+  selectedIds.value = selectedIds.value.size === all.length ? new Set() : new Set(all);
 }
 
-async function bulkApply(patch: Partial<Task>) {
+const bulkBusy = ref(false);
+
+async function runBulk(action: 'archive' | 'unarchive' | 'delete' | 'status' | 'priority', value?: string | number) {
   const ids = [...selectedIds.value];
-  if (!ids.length) return;
-  await Promise.all(ids.map(id => updateTask(id, patch)));
-  for (const id of ids) {
-    const idx = tasks.value.findIndex(t => t.id === id);
-    if (idx >= 0) {
-      const merged: any = { ...tasks.value[idx], ...patch };
-      if ('status' in patch) merged.completed = patch.status === 'done';
-      tasks.value[idx] = merged;
-    }
+  if (!ids.length || bulkBusy.value) return null;
+  bulkBusy.value = true;
+  try {
+    return await bulkUpdateTasks(ids, action, value);
+  } catch (err: any) {
+    toast.add({ title: 'Bulk action failed', description: err?.data?.statusMessage || 'Nothing was changed; try again.', color: 'error' });
+    await load();
+    return null;
+  } finally {
+    bulkBusy.value = false;
   }
-  toast.add({ title: `Updated ${ids.length} task${ids.length === 1 ? '' : 's'}`, color: 'success' });
+}
+
+const plural = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
+
+async function bulkApply(action: 'status' | 'priority', value: string | number) {
+  const result = await runBulk(action, value);
+  if (!result) return;
+  for (const row of result.tasks) {
+    const idx = tasks.value.findIndex(t => t.id === row.id);
+    if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...row };
+  }
+  // The desktop boards only rebuild when the set of ids changes; these moved between columns.
+  buildKanbanColumns();
+  buildPriorityKanbanColumns();
+  toast.add({ title: `Updated ${plural(result.tasks.length)}`, color: 'success' });
 }
 
 async function bulkArchive() {
-  const ids = [...selectedIds.value];
-  if (!ids.length) return;
-  await Promise.all(ids.map(id => toggleArchive(id)));
-  toast.add({ title: `${showArchived.value ? 'Restored' : 'Archived'} ${ids.length} task${ids.length === 1 ? '' : 's'}`, color: 'success' });
+  const result = await runBulk(showArchived.value ? 'unarchive' : 'archive');
+  if (!result) return;
+  const gone = new Set(result.ids);
+  tasks.value = tasks.value.filter(t => !gone.has(t.id));
+  toast.add({ title: `${showArchived.value ? 'Restored' : 'Archived'} ${plural(result.ids.length)}`, color: 'success' });
   exitSelectMode();
 }
 
-const bulkStatusItems = computed(() => [
-  [
-    { label: 'Next', icon: 'i-lucide-circle', onSelect: () => bulkApply({ status: 'next', completed: false } as any) },
-    { label: 'Now', icon: 'i-lucide-circle-dot', onSelect: () => bulkApply({ status: 'now', completed: false } as any) },
-    { label: 'Done', icon: 'i-lucide-circle-check', onSelect: () => bulkApply({ status: 'done', completed: true } as any) },
-  ],
-]);
+async function bulkDelete() {
+  const count = selectedIds.value.size;
+  const result = await runBulk('delete');
+  if (!result) return;
+  const gone = new Set(result.ids);
+  tasks.value = tasks.value.filter(t => !gone.has(t.id));
+  toast.add({ title: `Deleted ${plural(count)}`, color: 'success' });
+  exitSelectMode();
+}
 
-const bulkPriorityItems = computed(() => [
-  [
-    ...PRIORITY_OPTIONS.map(p => ({
-      label: p.label,
-      icon: p.icon,
-      onSelect: () => bulkApply({ priority: p.value } as any),
-    })),
-    { label: 'None', icon: 'i-lucide-minus', onSelect: () => bulkApply({ priority: 0 } as any) },
-  ],
-]);
 </script>

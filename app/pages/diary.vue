@@ -88,6 +88,9 @@
         <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="showAddTask = !showAddTask">
           Task
         </UButton>
+        <UButton :color="selectMode ? 'primary' : 'neutral'" :variant="selectMode ? 'soft' : 'ghost'" size="sm"
+          icon="i-lucide-list-checks" :aria-label="selectMode ? 'Stop selecting' : 'Select tasks'"
+          :aria-pressed="selectMode" :disabled="!allTaskIds.length && !selectMode" @click="toggleSelectMode" />
         <UButton :color="hideDone ? 'primary' : 'neutral'" :variant="hideDone ? 'soft' : 'ghost'" size="sm"
           :icon="hideDone ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="hideDone ? 'Show done' : 'Hide done'"
           @click="toggleHideDone" />
@@ -106,7 +109,7 @@
 
     <!-- Quick add task -->
     <div v-if="showAddTask" class="calm-diary-quick-add after-hours-quick-add mt-3 -mx-0">
-      <QuickAdd placeholder="Add a task for this day..." default-status="now" @add="handleAddTask" />
+      <QuickAdd placeholder="Add a task for this day..." default-status="now" @add="handleAddTask" @template="handleTemplate" />
     </div>
 
     <Transition
@@ -134,9 +137,9 @@
     <div v-else class="calm-diary-content after-hours-diary-content px-4 mt-3 pb-8 space-y-6">
       <!-- Reflect grid: journal + weekly goals. Desktop: journal left, goals right.
            Mobile: goals on top, journal below (via column-reverse). -->
-      <div class="daybook-reflect-grid">
-      <!-- Journal section -->
-      <div class="daybook-reflect-journal calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !journalOpen }">
+      <div v-if="showJournalSection || showGoalsSection" class="daybook-reflect-grid">
+      <!-- Journal section (Settings → Today page can hide it) -->
+      <div v-if="showJournalSection" class="daybook-reflect-journal calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !journalOpen }">
         <div class="daybook-journal-heading">
           <button type="button" class="daybook-journal-toggle" :aria-expanded="journalOpen"
             aria-label="Toggle journal" @click="toggleJournal">
@@ -196,7 +199,7 @@
       </div>
 
       <!-- Weekly goals section (shared across the whole week) -->
-      <div class="daybook-reflect-goals calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !goalsOpen }">
+      <div v-if="showGoalsSection" class="daybook-reflect-goals calm-diary-note after-hours-note-card" :class="{ 'is-collapsed': !goalsOpen }">
         <div class="daybook-journal-heading">
           <button type="button" class="daybook-journal-toggle" :aria-expanded="goalsOpen"
             aria-label="Toggle goals" @click="toggleGoals">
@@ -266,6 +269,26 @@
           {{ reorderState === 'saving' ? 'Saving order…' : reorderState === 'saved' ? 'Order saved' : 'Order could not be saved' }}
         </p>
 
+        <!-- Select mode: one flat, tappable list of the day's tasks (open first, then done) -->
+        <div v-if="selectMode" class="daybook-select-list space-y-1.5" role="group" aria-label="Select tasks">
+          <button v-for="id in selectableTaskIds" :key="id" type="button"
+            class="daybook-select-row w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left ring-1 transition-colors"
+            :class="selectedIds.has(id) ? 'bg-(--ui-primary)/12 ring-(--ui-primary)/50' : 'bg-(--ui-bg-elevated) ring-(--ui-border)'"
+            :aria-pressed="selectedIds.has(id)" @click="toggleSelect(id)">
+            <UIcon :name="selectedIds.has(id) ? 'i-lucide-check-square' : 'i-lucide-square'" class="size-5 shrink-0"
+              :class="selectedIds.has(id) ? 'text-(--ui-primary)' : 'text-(--ui-text-dimmed)'" />
+            <span class="flex-1 min-w-0 truncate text-sm" :class="taskCompleted[id] && 'line-through text-(--ui-text-muted)'">
+              {{ taskCache[id]?.title || 'Loading…' }}
+            </span>
+            <span v-if="taskCache[id]?.subtasks?.length" class="text-[11px] text-(--ui-text-dimmed) shrink-0">
+              +{{ taskCache[id]!.subtasks!.length }}
+            </span>
+            <UIcon v-if="priorityIcon(id)" :name="priorityIcon(id)!.icon" class="size-4 shrink-0" :class="priorityIcon(id)!.textClass" />
+          </button>
+          <p v-if="!selectableTaskIds.length" class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day.</p>
+        </div>
+
+        <template v-else>
         <!-- Desktop priority board -->
         <div class="daybook-desktop-task-view">
           <div class="daybook-kanban-grid">
@@ -416,9 +439,10 @@
         <p v-else-if="!allTaskIds.length" class="text-sm text-(--ui-text-dimmed) italic">No tasks for this day. Tap + Task to add one.</p>
         <p v-else class="text-sm text-(--ui-text-dimmed) italic">All tasks done for this day.</p>
         </div>
+        </template>
 
       <!-- Done section (collapsed by default) -->
-      <div v-if="doneTaskIds.length && !hideDone" class="calm-diary-done after-hours-done-card">
+      <div v-if="doneTaskIds.length && !hideDone && !selectMode" class="calm-diary-done after-hours-done-card">
         <button @click="doneOpen = !doneOpen"
           class="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-dimmed) mb-2 py-1">
           <UIcon :name="doneOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
@@ -468,6 +492,11 @@
       </div>
         </div>
       </div>
+
+    <BulkActionBar :open="selectMode" :count="selectedIds.size" :total="selectableTaskIds.length" :busy="bulkBusy"
+      @toggle-all="toggleSelectAll" @close="exitSelectMode"
+      @status="bulkApply('status', $event)" @priority="bulkApply('priority', $event)"
+      @archive="bulkArchive" @delete="bulkDelete" />
 
     <!-- Week summary modal -->
     <UModal v-model:open="weekSummaryOpen" :ui="{ content: 'max-w-lg' }">
@@ -609,6 +638,7 @@ import {
   type DiaryDraftIdentity,
 } from '~/utils/diaryDraft';
 import type { Task } from '~/composables/useNotes';
+import type { TaskTemplate } from '~/composables/useTemplates';
 
 interface DiaryEntry {
   id: string;
@@ -623,7 +653,8 @@ interface DiaryEntry {
 }
 
 const { activeId, workspaces, setActive } = useWorkspace();
-const { createTask, newTaskId, updateTask, updateTaskPositions } = useTasks();
+const { createTask, newTaskId, updateTask, updateTaskPositions, bulkUpdateTasks } = useTasks();
+const { instantiateTemplate } = useTemplates();
 const { user } = useAuth();
 const route = useRoute();
 const router = useRouter();
@@ -662,6 +693,10 @@ function runSearch(q: string) {
 }
 const { prefs, set: setPref } = usePreferences();
 const toast = useToast();
+
+// Settings → Today page: hide the journal and/or goals cards entirely.
+const showJournalSection = computed(() => prefs.value.todayShowJournal !== false);
+const showGoalsSection = computed(() => prefs.value.todayShowGoals !== false);
 
 const journalOpen = ref(!prefs.value.diaryJournalCollapsed);
 watch(() => prefs.value.diaryJournalCollapsed, value => { journalOpen.value = !value; });
@@ -958,7 +993,8 @@ const allTaskIds = computed(() => {
     const linked = taskLinks.find((l: any) => l.target_title === ref || l.target_id === ref);
     if (linked) ids.add(linked.target_id);
   }
-  return [...ids];
+  // Archived tasks keep their diary link but leave the page (archive from the select bar).
+  return [...ids].filter(id => !taskCache.value[id]?.archived);
 });
 
 const pendingTaskIds = computed(() => allTaskIds.value.filter(id => !taskCompleted.value[id]));
@@ -1919,6 +1955,125 @@ async function handleAddTask(data: { title: string; due_at?: string; subtasks?: 
   entryDates.value.add(selectedDate.value);
   saveContent();
   showAddTask.value = false;
+}
+
+async function handleTemplate(template: TaskTemplate) {
+  const dueAt = new Date(`${selectedDate.value}T09:00`).toISOString();
+  try {
+    const task = await instantiateTemplate(template, {
+      workspace_id: activeId.value ?? template.workspace_id,
+      due_at: dueAt,
+      status: 'now',
+    });
+    const [full] = await $fetch<(Task & { subtasks?: Task[] })[]>('/api/tasks/batch', { query: { ids: task.id } }).catch(() => []);
+    mergeTaskCache([full || { ...task, subtasks: [] }]);
+    if (entry.value) {
+      await $fetch('/api/links', { method: 'POST', body: { source_type: 'diary', source_id: entry.value.id, target_type: 'task', target_id: task.id } }).catch(() => {});
+      entry.value.links = [...(entry.value.links || []), { link_id: '', target_type: 'task', target_id: task.id, target_title: task.title }];
+    }
+    entryDates.value.add(selectedDate.value);
+    showAddTask.value = false;
+    toast.add({ title: `Added "${task.title}" from template`, color: 'success' });
+  } catch {
+    toast.add({ title: 'Template could not be used', description: 'Some tasks may have been created; reload to check.', color: 'error' });
+  }
+}
+
+// --- Multi-select / bulk actions ---
+const selectMode = ref(false);
+const selectedIds = ref(new Set<string>());
+const bulkBusy = ref(false);
+const selectableTaskIds = computed(() => [...sortedPendingTaskIds.value, ...sortedDoneTaskIds.value]);
+
+function toggleSelectMode() {
+  if (selectMode.value) exitSelectMode();
+  else selectMode.value = true;
+}
+function exitSelectMode() {
+  selectMode.value = false;
+  selectedIds.value = new Set();
+}
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  selectedIds.value = next;
+}
+function toggleSelectAll() {
+  const all = selectableTaskIds.value;
+  selectedIds.value = selectedIds.value.size === all.length ? new Set() : new Set(all);
+}
+function priorityIcon(id: string) {
+  const p = taskCache.value[id]?.priority;
+  return p ? PRIORITY_OPTIONS.find(o => o.value === p) ?? null : null;
+}
+// A different day or workspace is a different list.
+watch([selectedDate, activeId], exitSelectMode);
+
+const pluralTasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
+
+async function runBulk(action: 'archive' | 'delete' | 'status' | 'priority', value?: string | number) {
+  const ids = [...selectedIds.value];
+  if (!ids.length || bulkBusy.value) return null;
+  bulkBusy.value = true;
+  try {
+    return await bulkUpdateTasks(ids, action, value);
+  } catch (err: any) {
+    toast.add({ title: 'Bulk action failed', description: err?.data?.statusMessage || 'Nothing was changed; try again.', color: 'error' });
+    return null;
+  } finally {
+    bulkBusy.value = false;
+  }
+}
+
+/** Fold updated rows into the cache, keeping each task's hydrated subtasks. */
+function applyBulkRows(rows: Task[]) {
+  const next = { ...taskCache.value };
+  const nextCompleted = { ...taskCompleted.value };
+  for (const row of rows) {
+    if (!next[row.id]) continue;
+    next[row.id] = { ...next[row.id]!, ...row, subtasks: next[row.id]!.subtasks };
+    nextCompleted[row.id] = !!row.completed;
+  }
+  taskCache.value = next;
+  taskCompleted.value = nextCompleted;
+}
+
+/** Drop tasks from this page: their links, carry-forward entries and cache. */
+function removeFromPage(ids: string[]) {
+  const gone = new Set(ids);
+  if (entry.value) entry.value.links = (entry.value.links || []).filter((l: any) => !(l.target_type === 'task' && gone.has(l.target_id)));
+  carriedTasks.value = carriedTasks.value.filter(t => !gone.has(t.id));
+  const next = { ...taskCache.value };
+  const nextCompleted = { ...taskCompleted.value };
+  for (const id of gone) { delete next[id]; delete nextCompleted[id]; }
+  taskCache.value = next;
+  taskCompleted.value = nextCompleted;
+}
+
+async function bulkApply(action: 'status' | 'priority', value: string | number) {
+  const result = await runBulk(action, value);
+  if (!result) return;
+  applyBulkRows(result.tasks);
+  if (action === 'priority') buildDesktopBoardColumns();
+  toast.add({ title: `Updated ${pluralTasks(result.tasks.length)}`, color: 'success' });
+}
+
+async function bulkArchive() {
+  const result = await runBulk('archive');
+  if (!result) return;
+  applyBulkRows(result.tasks);
+  removeFromPage(result.ids);
+  toast.add({ title: `Archived ${pluralTasks(result.ids.length)}`, description: 'Find them under Tasks → Archived.', color: 'success' });
+  exitSelectMode();
+}
+
+async function bulkDelete() {
+  const count = selectedIds.value.size;
+  const result = await runBulk('delete');
+  if (!result) return;
+  removeFromPage(result.ids);
+  toast.add({ title: `Deleted ${pluralTasks(count)}`, color: 'success' });
+  exitSelectMode();
 }
 
 // --- Per-priority-group quick add ---

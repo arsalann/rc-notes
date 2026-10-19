@@ -200,7 +200,8 @@ export const TABLE_DDL: Record<string, string> = {
       updated_device_id VARCHAR DEFAULT NULL,
       sync_op_id VARCHAR DEFAULT NULL,
       sync_seq BIGINT NOT NULL DEFAULT nextval('sync_seq'),
-      deleted_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+      deleted_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+      row_data JSONB DEFAULT NULL
     )`,
   sync_ops: `
     CREATE TABLE sync_ops (
@@ -213,6 +214,36 @@ export const TABLE_DDL: Record<string, string> = {
       response TEXT DEFAULT NULL,
       client_time TIMESTAMP DEFAULT NULL,
       received_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+    )`,
+  task_templates: `
+    CREATE TABLE task_templates (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      user_id VARCHAR DEFAULT NULL,
+      user_name VARCHAR DEFAULT NULL,
+      workspace_id VARCHAR DEFAULT NULL,
+      name VARCHAR NOT NULL,
+      title VARCHAR NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      priority INTEGER NOT NULL DEFAULT 2,
+      tags VARCHAR[] NOT NULL DEFAULT '{}',
+      subtasks JSONB NOT NULL DEFAULT '[]',
+      position INTEGER NOT NULL DEFAULT 0,
+      deleted_at TIMESTAMP DEFAULT NULL,
+      updated_by VARCHAR DEFAULT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+      updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+    )`,
+  tag_settings: `
+    CREATE TABLE tag_settings (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      user_id VARCHAR DEFAULT NULL,
+      tag_key VARCHAR NOT NULL,
+      label VARCHAR DEFAULT NULL,
+      emoji VARCHAR DEFAULT NULL,
+      archived BOOLEAN NOT NULL DEFAULT false,
+      updated_by VARCHAR DEFAULT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+      updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
     )`,
 };
 
@@ -259,6 +290,7 @@ const COLUMN_MIGRATIONS: { table: string; column: string; type: string }[] = [
   { table: 'event_log', column: 'device_id', type: 'VARCHAR DEFAULT NULL' },
   { table: 'event_log', column: 'sync_op_id', type: 'VARCHAR DEFAULT NULL' },
   { table: 'event_log', column: 'client_time', type: 'TIMESTAMP DEFAULT NULL' },
+  { table: 'sync_tombstones', column: 'row_data', type: 'JSONB DEFAULT NULL' },
 ];
 
 /**
@@ -352,15 +384,19 @@ BEGIN
 END
 $fn$`;
 
-/** Hard deletes (only `links` today) leave a tombstone so clients drop their copy. */
+/**
+ * Hard deletes (links, and tasks deleted in bulk) leave a tombstone so clients drop their copy. The
+ * tombstone keeps the deleted row as JSON (`row_data`): the way back if a delete was a mistake.
+ */
 const SYNC_TOMBSTONE_FUNCTION = `
 CREATE OR REPLACE FUNCTION daybook_sync_tombstone() RETURNS trigger LANGUAGE plpgsql AS $fn$
 BEGIN
-  INSERT INTO sync_tombstones (table_name, row_id, updated_device_kind, updated_device_id, sync_op_id)
+  INSERT INTO sync_tombstones (table_name, row_id, updated_device_kind, updated_device_id, sync_op_id, row_data)
   VALUES (TG_TABLE_NAME, OLD.id,
     NULLIF(current_setting('daybook.device_kind', true), ''),
     NULLIF(current_setting('daybook.device_id', true), ''),
-    NULLIF(current_setting('daybook.op_id', true), ''));
+    NULLIF(current_setting('daybook.op_id', true), ''),
+    to_jsonb(OLD));
   RETURN OLD;
 END
 $fn$`;
@@ -390,6 +426,7 @@ const INDEX_MIGRATIONS: { name: string; ddl: string }[] = [
   ...SYNCED_TABLES.map(t => ({ name: `idx_${t}_sync_seq`, ddl: `CREATE INDEX idx_${t}_sync_seq ON ${t} (sync_seq)` })),
   { name: 'idx_sync_tombstones_seq', ddl: 'CREATE INDEX idx_sync_tombstones_seq ON sync_tombstones (sync_seq)' },
   { name: 'idx_sync_ops_received', ddl: 'CREATE INDEX idx_sync_ops_received ON sync_ops (received_at)' },
+  { name: 'idx_tag_settings_key', ddl: 'CREATE UNIQUE INDEX idx_tag_settings_key ON tag_settings (tag_key)' },
 ];
 
 /**

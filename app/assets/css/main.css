@@ -412,6 +412,25 @@
   backdrop-filter: blur(18px);
 }
 
+.daybook-bulk-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: 2.9rem;
+  border-radius: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--daybook-ink);
+  background: color-mix(in srgb, var(--daybook-ink) 6%, transparent);
+  transition: background-color 120ms ease;
+}
+.daybook-bulk-action:active:not(:disabled) { background: color-mix(in srgb, var(--daybook-ink) 12%, transparent); }
+.daybook-bulk-action:disabled { opacity: 0.45; cursor: not-allowed; }
+.daybook-bulk-action.is-danger { color: var(--daybook-danger); }
+
 .calm-workspace-button {
   border: 1px solid var(--daybook-line) !important;
   border-radius: 999px !important;
@@ -540,6 +559,14 @@
 }
 .daybook-carry-title { color: var(--daybook-ink); font-size: 0.78rem; font-weight: 650; }
 .daybook-carry-copy { margin-top: 0.1rem; color: var(--daybook-ink-muted); font-size: 0.72rem; }
+
+/* Settings → Tags: a rename that rewrites existing tasks. */
+.daybook-warning {
+  color: var(--daybook-ink);
+  background: color-mix(in srgb, var(--daybook-warm) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--daybook-warm) 45%, var(--daybook-line));
+}
+.daybook-warning p:first-child { color: var(--daybook-warm); }
 
 .daybook-draft-recovery {
   display: flex;

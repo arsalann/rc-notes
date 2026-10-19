@@ -29,8 +29,12 @@ const props = withDefaults(defineProps<{
   limit?: number;
 }>(), { limit: 2 });
 
-const visibleTags = computed(() => visibleEmojiTaskTags(props.tags, props.limit));
-const hiddenTags = computed(() => emojiTaskTags(props.tags).slice(props.limit));
+// Settings → Tags can relabel a tag or give a custom tag an emoji.
+const { presentAll, ensureLoaded } = useTagSettings();
+ensureLoaded();
+const presented = computed(() => presentAll(props.tags));
+const visibleTags = computed(() => visibleEmojiTaskTags(presented.value, props.limit));
+const hiddenTags = computed(() => emojiTaskTags(presented.value).slice(props.limit));
 
 function tagDescription(tag: ResolvedTaskTag): string {
   const reasons: string[] = [];

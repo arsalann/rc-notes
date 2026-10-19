@@ -19,7 +19,9 @@
           :class="selected ? 'bg-(--ui-primary)' : 'border-2 border-(--ui-text-dimmed)'">
           <UIcon v-if="selected" name="i-lucide-check" class="size-3.5 text-white" />
         </button>
-        <NuxtLink :to="`/tasks/${task.id}`" class="flex-1 min-w-0" @click="onLinkClick">
+        <!-- In select mode the body selects instead of opening the task. -->
+        <component :is="selectMode ? 'button' : NuxtLink" v-bind="selectMode ? { type: 'button' } : { to: `/tasks/${task.id}` }"
+          class="flex-1 min-w-0 text-left" :aria-pressed="selectMode ? !!selected : undefined" @click="onBodyClick">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium leading-snug" :class="task.completed && 'line-through text-(--ui-text-muted)'">
               {{ task.title }}
@@ -43,7 +45,7 @@
               {{ task.subtask_done }}/{{ task.subtask_count }}
             </UBadge>
           </div>
-        </NuxtLink>
+        </component>
         <UButton v-if="task.subtask_count" color="neutral" variant="ghost" size="sm"
           :icon="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
           @click.prevent="toggleExpand" class="shrink-0" />
@@ -70,14 +72,12 @@
 
 <script setup lang="ts">
 import type { Task } from '~/composables/useNotes';
+import { NuxtLink } from '#components';
 const props = defineProps<{ task: Task; selectMode?: boolean; selected?: boolean }>();
 const emit = defineEmits<{ toggle: [id: string]; select: [] }>();
 
-function onLinkClick(e: MouseEvent) {
-  if (props.selectMode) {
-    e.preventDefault();
-    emit('select');
-  }
+function onBodyClick() {
+  if (props.selectMode) emit('select');
 }
 
 const expanded = ref(false);

@@ -62,6 +62,10 @@ function sameShape(name, actual, expected, path = name) {
     sameShape(name, actual[key], expected[key], `${path}.${key}`);
   }
 }
+function check(label, ok) {
+  console.log(`${ok ? 'ok  ' : 'FAIL'} check ${label}`);
+  if (!ok) failures++;
+}
 function report(msg) {
   failures++;
   console.log(`FAIL shape ${msg}`);
@@ -146,6 +150,72 @@ await call('GET', `/api/mention?q=${encodeURIComponent(tag)}&type=task`);
 await call('GET', `/api/mention?q=${encodeURIComponent(tag)}&type=note`);
 await call('GET', '/api/stats');
 await call('GET', '/api/events?limit=5');
+
+// Templates
+const tpl = await call('POST', '/api/templates', {
+  id: crypto.randomUUID(), name: `${tag} template`, title: `${tag} from template`, priority: 3, tags: ['launch'],
+  workspace_id: work.id, subtasks: [{ title: `${tag} step 1` }, { title: `${tag} step 2`, priority: 1, tags: ['x'] }, { title: '  ' }],
+});
+check('template keeps two subtasks', tpl.subtasks?.length === 2 && tpl.subtasks[1].priority === 1 && tpl.subtasks[0].priority === null);
+const tplReplay = await call('POST', '/api/templates', { id: tpl.id, name: 'replayed' });
+check('template create is idempotent', tplReplay.id === tpl.id && tplReplay.name === tpl.name);
+await call('POST', '/api/templates', { name: '' }, { expect: [400] });
+const tplEdited = await call('PUT', `/api/templates/${tpl.id}`, { name: `${tag} template 2`, subtasks: [{ title: `${tag} only step` }] });
+check('template edit replaces subtasks', tplEdited.subtasks.length === 1 && tplEdited.name.endsWith('template 2'));
+await call('PUT', `/api/templates/${tpl.id}`, { title: '' }, { expect: [400] });
+check('template listed', (await call('GET', '/api/templates')).some(t => t.id === tpl.id));
+await call('DELETE', `/api/templates/${tpl.id}`);
+check('deleted template hidden', !(await call('GET', '/api/templates')).some(t => t.id === tpl.id));
+await call('PUT', `/api/templates/${tpl.id}`, { name: 'gone' }, { expect: [404] });
+
+// Bulk actions
+const b1 = await call('POST', '/api/tasks', { title: `${tag} bulk 1`, workspace_id: work.id, tags: [`${tag}-Old`] });
+const b2 = await call('POST', '/api/tasks', { title: `${tag} bulk 2`, workspace_id: work.id, tags: [`${tag.toLowerCase()} old`, 'keep'] });
+const b2sub = await call('POST', '/api/tasks', { title: `${tag} bulk 2 sub`, parent_id: b2.id });
+await call('POST', '/api/links', { source_type: 'note', source_id: note.id, target_type: 'task', target_id: b2sub.id });
+let bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id, b2.id], action: 'status', value: 'done' });
+check('bulk done', bulk.tasks.length === 2 && bulk.tasks.every(t => t.completed && t.status === 'done' && t.completed_at));
+bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id, b2.id], action: 'status', value: 'now' });
+check('bulk now', bulk.tasks.every(t => !t.completed && t.status === 'now' && !t.completed_at));
+bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id, b2.id], action: 'priority', value: 1 });
+check('bulk priority', bulk.tasks.every(t => t.priority === 1));
+await call('POST', '/api/tasks/bulk', { ids: [b1.id], action: 'priority', value: 9 }, { expect: [400] });
+await call('POST', '/api/tasks/bulk', { ids: [], action: 'archive' }, { expect: [400] });
+await call('POST', '/api/tasks/bulk', { ids: [b1.id], action: 'explode' }, { expect: [400] });
+
+// Tags (before b2 goes away): the two spellings are one custom tag
+let tagList = await call('GET', '/api/tags');
+const oldKey = `manual:${tag.toLowerCase().replace(/_/g, ' ')} old`;
+const oldTag = tagList.find(t => t.key === oldKey);
+check('custom tag counted once per spelling group', oldTag?.task_count === 2 && oldTag.variants.length === 2);
+check('built-in tags listed', tagList.some(t => t.builtin && t.key === 'growth'));
+await call('PUT', '/api/tags', { key: 'growth', label: 'Growth!', emoji: '🚀' });
+await call('PUT', '/api/tags', { key: oldKey, archived: true, emoji: '🧪' });
+tagList = await call('GET', '/api/tags');
+check('tag overrides applied', tagList.find(t => t.key === 'growth')?.label === 'Growth!' && tagList.find(t => t.key === oldKey)?.archived === true);
+const renamed = await call('POST', '/api/tags/rename', { key: oldKey, to: `${tag}-new` });
+check('rename rewrote both tasks', renamed.tasks === 2);
+const afterRename = await call('GET', `/api/tasks/batch?ids=${b1.id},${b2.id}`);
+check('rename replaced every spelling, kept order + other tags',
+  afterRename.find(t => t.id === b1.id)?.tags.join() === `${tag}-new` && afterRename.find(t => t.id === b2.id)?.tags.join() === `${tag}-new,keep`);
+tagList = await call('GET', '/api/tags');
+check('tag settings moved with the rename', tagList.find(t => t.key === renamed.key)?.archived === true && !tagList.some(t => t.key === oldKey));
+await call('POST', '/api/tags/rename', { key: 'growth', to: 'x' }, { expect: [400] });
+await call('POST', '/api/tags/rename', { key: 'manual:does not exist', to: 'x' }, { expect: [404] });
+await call('PUT', '/api/tags', { key: 'growth', label: '', emoji: null });
+await call('PUT', '/api/tags', { key: renamed.key, archived: false, emoji: null });
+
+bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id], action: 'archive' });
+check('bulk archive', bulk.tasks[0]?.archived === true);
+check('archived task left the list', !(await call('GET', `/api/tasks?workspace_id=${work.id}`)).some(t => t.id === b1.id));
+bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id], action: 'unarchive' });
+check('bulk unarchive', bulk.tasks[0]?.archived === false);
+bulk = await call('POST', '/api/tasks/bulk', { ids: [b1.id, b2.id], action: 'delete' });
+check('bulk delete takes subtasks', bulk.ids.length === 3 && bulk.ids.includes(b2sub.id));
+await call('GET', `/api/tasks/${b2sub.id}`, undefined, { expect: [404] });
+const pulled = await call('GET', '/api/sync/pull?since=0&limit=5000');
+check('delete leaves tombstones for the app', [b1.id, b2.id, b2sub.id].every(id => pulled.tombstones.some(t => t.table_name === 'tasks' && t.row_id === id)));
+check('tombstones stay small (no row data in pull)', pulled.tombstones.every(t => !('row_data' in t)));
 
 // Archive paths
 await call('PATCH', `/api/tasks/${child.id}/archive`);

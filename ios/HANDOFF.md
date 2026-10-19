@@ -244,6 +244,12 @@ Nothing is blocked. The backend is live on Railway and built into the app.
 - Offline the phone shows a day page's tasks from its links plus tasks due that day; the server's rarer
   page repairs (re-carrying into an empty page) and display IDs (`#xyz001`) appear after the next sync.
 - Signing out keeps the local copy on the device (per account) so queued changes are not lost.
+- Web-only for now (2026-10-20): task templates, Settings → Tags (label/emoji overrides, archived tags),
+  the Today page journal/goals switches and multi-select on Today. What reaches the phone: tasks deleted
+  in bulk on the web arrive as tombstones and disappear; a renamed custom tag arrives as rewritten
+  `tasks.tags`; tasks created from a template are ordinary tasks. Built-in tag label/emoji overrides
+  do not show on the phone. `POST /api/tasks/bulk` is not in the push `ALLOWED` list (the app doesn't
+  use it). The web Today page hides archived tasks; the phone's day page still shows them.
 
 ## Next steps
 

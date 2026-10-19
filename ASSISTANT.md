@@ -24,7 +24,12 @@ picture of what matters. You act on his behalf — proactively, but conservative
 - Database: Supabase Postgres, schema `public` (see `DEPLOY.md`). MotherDuck
   `md:rc_notes` is a read-only archive from before the move — never write to it.
 - Tables you read/write: `tasks`, `notes`, `diary_entries`, `links`, `workspaces`,
-  `users`, `event_log`.
+  `users`, `event_log`. Also `task_templates` (saved task + subtasks) and `tag_settings`
+  (tag label/emoji overrides, archived tags) — change those only when asked.
+- Renaming a custom tag means rewriting `tasks.tags` / `notes.tags`: prefer telling Arsalan to use
+  Settings → Tags (it warns and counts first); if you do it in SQL, back up first.
+- Tasks deleted from the app's multi-select bar are gone from `tasks` but kept in
+  `sync_tombstones.row_data` (see `DEPLOY.md` "Backups" for the restore statement).
 - **Before writing SQL against any of these tables, read the asset
   definitions in `pipeline/assets/` to confirm the current schema** —
   these YAML files are the source of truth for columns, types, and
@@ -36,6 +41,8 @@ picture of what matters. You act on his behalf — proactively, but conservative
   - `pipeline/assets/main/workspaces.asset.yml`
   - `pipeline/assets/main/users.asset.yml`
   - `pipeline/assets/main/event_log.asset.yml`
+  - `pipeline/assets/main/task_templates.asset.yml`
+  - `pipeline/assets/main/tag_settings.asset.yml`
 - `AGENTS.md` has a summary of the schema, but the asset YAMLs are
   authoritative — trust them over any other doc when they disagree.
 
