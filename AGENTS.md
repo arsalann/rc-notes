@@ -68,8 +68,6 @@ The app uses one dim, warm-neutral Daybook theme with no light/dark toggle. `app
   catalog; RLS is enabled on every table (no policies; the server is the owner and bypasses it).
 - MotherDuck (`md:rc_notes`) was the database until the Postgres move. It is now a read-only archive;
   `app/scripts/migrate-motherduck-to-postgres.ts` did the one-time copy on 2026-10-17. Never write to it.
-  Exception to be cleaned up: the legacy Railway project `exemplary-vitality` still serves the old
-  DuckDB-era app against it (see `DEPLOY.md` "Status").
 - Production: Railway `fearless-embrace` → `https://rc-notes-production-a50f.up.railway.app`, Supabase
   `eu-west-1`. Railway needs `PORT=3000` (it injects 8080 otherwise; the domain targets 3000).
 - The worktree's `app/.env` may point at production Supabase: a local `npm run dev` then edits real data.

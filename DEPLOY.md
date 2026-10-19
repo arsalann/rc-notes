@@ -29,15 +29,11 @@ browser ────┘
 | Clients | iPhone app and phone browser switch to the Railway address |
 | Bruin | **Pending**: `.bruin.yml` still has only the MotherDuck connection; step 6 below not done yet |
 | Offline sync | `/api/sync/push` + `/api/sync/pull`, sync triggers and device columns; added to the schema on boot by the deploy that ships them (see "Schema changes on deploy") |
-| MotherDuck | Frozen archive as of the 2026-10-17 copy. Nothing writes to it except the legacy service below |
+| MotherDuck | Frozen archive as of the 2026-10-17 copy. Nothing writes to it |
 
-**Legacy Railway project, still to handle.** `exemplary-vitality` (service `rc-notes`,
-`https://rc-notes-production.up.railway.app`) is an older deployment from before this work. Its last
-successful deploy still runs the DuckDB-era code against MotherDuck with its own
-`MOTHERDUCK_NOTEBOOK_RC` and `MASTER_PASSWORD_HASH`. Its newer deploys fail because `main` now
-needs `DATABASE_URL`. Anything written through it lands in MotherDuck, not Supabase. Kept for now at
-Arsalan's request. Plan: stop using it, then delete the project, or at least remove its domain and
-MotherDuck token.
+**Legacy Railway project: deleted 2026-10-20.** `exemplary-vitality` (`https://rc-notes-production.up.railway.app`)
+ran the DuckDB-era app against MotherDuck. It deployed from `main` too, so its builds started failing
+once `main` required `DATABASE_URL`; it was deleted. `fearless-embrace` is the only Railway project.
 
 **Operating Railway from a terminal**: `brew install railway`, `railway login`, then in any
 directory `railway link -p fearless-embrace -e production -s rc-notes`. Useful commands:
