@@ -159,6 +159,18 @@ const visit = await call('POST', '/api/sync/push', { ops: [op('GET', `/api/diary
 check('day visit runs without returning the page', visit.data.results[0].status === 200 && visit.data.results[0].body === null);
 
 // --- Disallowed routes and bad input.
+// Bulk delete from the phone's multi-select bar: replayed once, leaves tombstones for subtasks too.
+const bulkParent = (await call('POST', '/api/tasks', { title: `${tag}_bulk_parent`, workspace_id: work.id })).data;
+const bulkChild = (await call('POST', '/api/tasks', { title: `${tag}_bulk_child`, parent_id: bulkParent.id })).data;
+const bulkOp = op('POST', '/api/tasks/bulk', { ids: [bulkParent.id], action: 'delete' });
+const bulk1 = await call('POST', '/api/sync/push', { ops: [bulkOp] });
+const bulk2 = await call('POST', '/api/sync/push', { ops: [bulkOp] });
+check('bulk delete through the queue', bulk1.data.results[0].status === 200 && bulk1.data.results[0].body?.ids?.length === 2,
+  JSON.stringify(bulk1.data.results[0]));
+check('a replayed bulk delete is not applied again', bulk2.data.results[0].replayed === true);
+const afterBulk = await pullAll(0);
+check('bulk delete tombstones reach the app', [bulkParent.id, bulkChild.id].every(id => afterBulk.tombstones.some(t => t.table_name === 'tasks' && t.row_id === id)));
+
 const bad = await call('POST', '/api/sync/push', { ops: [op('POST', '/api/users', { username: 'x', password: 'yyyyyyyy' })] });
 check('auth/admin routes are refused inside a batch', bad.data.results[0].status === 400);
 const noId = await call('POST', '/api/sync/push', { ops: [{ method: 'POST', path: '/api/tasks', body: { title: 'x' } }] });

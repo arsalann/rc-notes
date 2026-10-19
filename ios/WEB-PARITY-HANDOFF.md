@@ -30,7 +30,7 @@ Update this file after every task, so work can resume from here if a session end
 | # | Task | Status |
 |---|------|--------|
 | 0 | Survey iOS code, write this file | ✅ done |
-| 1 | Server: allow `POST /api/tasks/bulk` in sync push; smoke test | ⏳ |
+| 1 | Server: allow `POST /api/tasks/bulk` in sync push; smoke test | ✅ done (`push.post.ts` ALLOWED, `sync-smoke.mjs` bulk delete + replay + tombstones) |
 | 2 | DaybookKit: bulk delete mutation (`deleteTasks`) + local effect (tasks, subtasks, links) + tests | ⏳ |
 | 3 | DaybookKit: API models + `APIClient` calls for templates and tags; decoding tests | ⏳ |
 | 4 | Today: hide archived tasks; Settings switches to hide Journal / Goals | ⏳ |
@@ -44,3 +44,6 @@ Update this file after every task, so work can resume from here if a session end
 ## Log
 
 - 2026-10-20: branch created, plan written.
+- Task 1: push accepts `POST /api/tasks/bulk`. NOTE: this server change must deploy BEFORE an iOS build that
+  queues bulk deletes, or those ops get a 400 (final) and the delete is lost on the server side.
+  Test server for this work: `DAYBOOK_TEST_PORT=3461 ios/scripts/test-server.sh start`.

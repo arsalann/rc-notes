@@ -31,6 +31,8 @@ const ALLOWED: { method: string; path: RegExp }[] = [
   { method: 'DELETE', path: new RegExp(`^/api/tasks/${ID}$`) },
   { method: 'PATCH', path: new RegExp(`^/api/tasks/${ID}/(complete|pin)$`) },
   { method: 'PATCH', path: /^\/api\/tasks\/positions$/ },
+  // Multi-select bar: archive / status / priority / delete for many tasks (absolute, safe to replay).
+  { method: 'POST', path: /^\/api\/tasks\/bulk$/ },
   { method: 'POST', path: /^\/api\/tasks\/from-checklist$/ },
   { method: 'POST', path: /^\/api\/notes$/ },
   { method: 'PUT', path: new RegExp(`^/api/notes/${ID}$`) },
