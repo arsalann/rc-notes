@@ -82,6 +82,21 @@ describe('sync triggers', () => {
     expect(tomb[0]).toMatchObject({ table_name: 'links', updated_device_id: 'd4', updated_device_kind: 'browser' });
   });
 
+  it('keeps the deleted row in the tombstone', async () => {
+    await run(`INSERT INTO tasks (id, title, tags) VALUES ('gone', 'deleted task', '{a,b}')`);
+    await edit(`DELETE FROM tasks WHERE id = 'gone'`, { device: 'd5', kind: 'browser' });
+    const [tomb] = await run(`SELECT * FROM sync_tombstones WHERE row_id = 'gone'`);
+    expect(tomb).toMatchObject({ table_name: 'tasks', updated_device_id: 'd5' });
+    expect(tomb!.row_data).toMatchObject({ id: 'gone', title: 'deleted task', tags: ['a', 'b'] });
+
+    // The restore statement documented in DEPLOY.md "Backups".
+    await run(`INSERT INTO tasks SELECT * FROM jsonb_populate_record(NULL::tasks, (SELECT row_data FROM sync_tombstones
+               WHERE table_name = 'tasks' AND row_id = 'gone' ORDER BY sync_seq DESC LIMIT 1))`);
+    const [restored] = await run(`SELECT * FROM tasks WHERE id = 'gone'`);
+    expect(restored).toMatchObject({ title: 'deleted task', tags: ['a', 'b'] });
+    expect(Number(restored!.sync_seq)).toBeGreaterThan(Number(tomb!.sync_seq));
+  });
+
   it('runs no DDL on a second boot', async () => {
     const statements: string[] = [];
     await ensureSchema(async (sql, values) => {

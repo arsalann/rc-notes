@@ -29,6 +29,7 @@ browser ────┘
 | Clients | iPhone app and phone browser switch to the Railway address |
 | Bruin | **Pending**: `.bruin.yml` still has only the MotherDuck connection; step 6 below not done yet |
 | Offline sync | `/api/sync/push` + `/api/sync/pull`, sync triggers and device columns; added to the schema on boot by the deploy that ships them (see "Schema changes on deploy") |
+| Templates + tags (2026-10-20) | New tables `task_templates`, `tag_settings`, new column `sync_tombstones.row_data`, new tombstone trigger body; added on boot. Backups `backup.<table>_20261020_<N>` taken before the deploy |
 | MotherDuck | Frozen archive as of the 2026-10-17 copy. Nothing writes to it except the legacy service below |
 
 **Legacy Railway project, still to handle.** `exemplary-vitality` (service `rc-notes`,
@@ -102,6 +103,9 @@ deploy. Before merging one:
 2. Merge; watch `railway logs` for `[db] connection ready` and no `could not add` warnings.
 3. Check `https://<domain>/api/health`, then sign in and look at a page.
 
+For the templates/tags deploy (2026-10-20) every public table was snapshotted, since bulk delete and tag
+rename are new ways to change existing `tasks`/`notes`/`links` rows.
+
 Additions only (new columns with defaults, new tables, triggers) need no downtime. Rolling back the
 code leaves the extra columns and triggers in place; the old code ignores them, and the triggers only
 fill bookkeeping columns.
@@ -117,6 +121,10 @@ the switch would have to be copied back by hand, so decide within the first day.
 - Supabase takes daily backups (7 days on the free plan, more on paid).
 - Before any risky write, snapshot into a `backup` schema in the same database:
   `CREATE TABLE backup.<table>_<YYYYMMDD>_<N> AS TABLE public.<table>;` (see AGENTS.md).
+- Tasks deleted from the multi-select bar (and deleted links) are kept as JSON in
+  `sync_tombstones.row_data`. To restore one:
+  `INSERT INTO tasks SELECT * FROM jsonb_populate_record(NULL::tasks, (SELECT row_data FROM sync_tombstones WHERE table_name = 'tasks' AND row_id = '<id>' ORDER BY sync_seq DESC LIMIT 1));`
+  (subtasks and links the same way; the insert gets a new `sync_seq`, so the phone pulls it back).
 
 ## Known limits (unchanged from before the move)
 

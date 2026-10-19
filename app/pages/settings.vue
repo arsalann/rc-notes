@@ -260,6 +260,39 @@
         </div>
       </UCard>
 
+      <!-- Today page -->
+      <UCard>
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-book-open" class="size-5" />
+            <span class="font-semibold">Today Page</span>
+          </div>
+        </template>
+        <div class="space-y-5">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Journal</p>
+              <p class="text-xs text-(--ui-text-muted) mt-0.5">Show the daily journal card. Hiding it keeps everything you wrote.</p>
+            </div>
+            <USwitch :model-value="prefs.todayShowJournal" aria-label="Show journal on the Today page"
+              @update:model-value="set('todayShowJournal', $event)" />
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-xs text-(--ui-text-dimmed) uppercase tracking-wider">Weekly Goals</p>
+              <p class="text-xs text-(--ui-text-muted) mt-0.5">Show the weekly goals card. Hiding it keeps your goals.</p>
+            </div>
+            <USwitch :model-value="prefs.todayShowGoals" aria-label="Show weekly goals on the Today page"
+              @update:model-value="set('todayShowGoals', $event)" />
+          </div>
+          <p class="text-xs text-(--ui-text-dimmed)">Saved on this device.</p>
+        </div>
+      </UCard>
+
+      <SettingsTemplates />
+
+      <SettingsTags />
+
     </div>
   </div>
 </template>

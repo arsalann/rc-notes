@@ -38,6 +38,11 @@
             </UButton>
             <UButton v-if="dueAt" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" @click="dueAt = ''" />
             <TaskTagPicker v-model="selectedTags" label="Tags" />
+            <UDropdownMenu v-if="templates.length && !parentId" :items="templateMenuItems" :ui="{ content: 'min-w-52 max-h-80' }">
+              <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-layout-template" trailing-icon="i-lucide-chevron-down">
+                Template
+              </UButton>
+            </UDropdownMenu>
           </div>
           <div v-if="showDatePicker" class="flex gap-2 flex-wrap">
             <UButton v-for="opt in dateShortcuts" :key="opt.label" color="neutral" variant="soft" size="sm"
@@ -74,12 +79,25 @@
 import { PRIORITY_OPTIONS, getPriorityOption, type PriorityValue } from '~/composables/usePriority';
 import { parseHashtags } from '~/composables/useHashtagParse';
 import { resolveTaskTags } from '~/utils/taskTags';
+import type { TaskTemplate } from '~/composables/useTemplates';
 
 const props = withDefaults(
   defineProps<{ placeholder?: string; parentId?: string; defaultStatus?: 'next' | 'now' | 'done' }>(),
   { defaultStatus: 'next' },
 );
-const emit = defineEmits<{ add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }] }>();
+const emit = defineEmits<{
+  add: [data: { title: string; parent_id?: string; due_at?: string; subtasks?: string[]; tags?: string[]; priority?: number; status?: string }];
+  template: [template: TaskTemplate];
+}>();
+const { templates, ensureLoaded: ensureTemplatesLoaded } = useTemplates();
+ensureTemplatesLoaded();
+const templateMenuItems = computed(() => [
+  templates.value.map(t => ({
+    label: t.subtasks.length ? `${t.name} (${t.subtasks.length})` : t.name,
+    icon: 'i-lucide-layout-template',
+    onSelect: () => { emit('template', t); collapse(); },
+  })),
+]);
 const title = ref(''); const dueAt = ref(''); const subtasks = ref<string[]>([]); const newSubtask = ref('');
 const selectedTags = ref<string[]>([]);
 const priority = ref<PriorityValue>(2);
@@ -117,11 +135,12 @@ const dateShortcuts = computed(() => [
 
 // Reactive parse — drives preview and auto-applies recognized hashtags to the buttons.
 const parsed = computed(() => parseHashtags(title.value));
+const { present: presentTag } = useTagSettings();
 const manualTagsForCreate = computed(() => mergeManualTags(parsed.value.tags, selectedTags.value));
 const previewTags = computed(() => resolveTaskTags({
   title: parsed.value.title,
   manualTags: manualTagsForCreate.value,
-}).resolved_tags);
+}).resolved_tags.map(presentTag));
 const captureSummary = computed(() => {
   const summary: string[] = [];
   if (parsed.value.priority !== undefined) {

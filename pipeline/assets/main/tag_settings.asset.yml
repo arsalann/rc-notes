@@ -1,0 +1,42 @@
+name: main.tag_settings
+type: empty
+description: |-
+  Per-tag settings from Settings → Tags. One row per tag key: a built-in
+  catalog key (`data-stack`, `content`, … from `app/utils/taskTags.ts`) or
+  `manual:<normalized text>` for a custom tag stored in `tasks.tags` /
+  `notes.tags` (spellings that differ only in case or punctuation share a key).
+
+  `label` and `emoji` are display overrides only. Renaming a custom tag
+  rewrites `tasks.tags` and `notes.tags` (`POST /api/tags/rename`) and moves
+  this row to the new key. `archived` hides the tag from the tag pickers;
+  tasks keep it. Not a synced table (the iOS app shows built-in labels).
+  Added 2026-10-20.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key.
+  - name: user_id
+    type: VARCHAR
+    description: Id of the user who last changed the setting. Not used for scoping yet.
+  - name: tag_key
+    type: VARCHAR
+    description: The tag this row configures (unique, index `idx_tag_settings_key`).
+  - name: label
+    type: VARCHAR
+    description: Display name override; NULL = the catalog label or the most used spelling.
+  - name: emoji
+    type: VARCHAR
+    description: Emoji override; NULL = default (catalog emoji, none for custom tags); '' hides a built-in emoji.
+  - name: archived
+    type: BOOLEAN
+    description: True hides the tag from tag pickers and lists it under "Archived" in Settings.
+  - name: updated_by
+    type: VARCHAR
+    description: Provenance for the last write; filled from the request when the statement does not set it.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp (UTC).
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last change timestamp (UTC).

@@ -4,6 +4,8 @@ import {
   emojiTaskTags,
   hiddenEmojiTaskTagCount,
   canonicalManualTaskTagKey,
+  manualTaskTagKey,
+  isBuiltInTaskTagKey,
   normalizeTaskTagText,
   resolveTaskTags,
   visibleEmojiTaskTags,
@@ -87,5 +89,21 @@ describe('hashtag parsing compatibility', () => {
       tags: ['doc', 'read'],
       priority: 2,
     });
+  });
+});
+
+describe('manualTaskTagKey', () => {
+  it('maps catalog keys, labels and aliases to the catalog key', () => {
+    expect(manualTaskTagKey('data-stack')).toBe('data-stack');
+    expect(manualTaskTagKey('Data stack')).toBe('data-stack');
+    expect(manualTaskTagKey('doc')).toBe('content');
+    expect(isBuiltInTaskTagKey('content')).toBe(true);
+  });
+
+  it('groups custom spellings that differ only in case or punctuation', () => {
+    expect(manualTaskTagKey('Q4-Plan')).toBe('manual:q4 plan');
+    expect(manualTaskTagKey('q4_plan')).toBe('manual:q4 plan');
+    expect(isBuiltInTaskTagKey('manual:q4 plan')).toBe(false);
+    expect(manualTaskTagKey('  ')).toBeNull();
   });
 });

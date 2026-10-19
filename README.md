@@ -29,8 +29,11 @@ migration from MotherDuck, and rollback.
 ## Features
 
 - **Tasks**: Create tasks with subtasks, due dates, tags, priority. Quick-add with inline subtask/date picker (Today/Tomorrow/Next week shortcuts). Drag-and-drop reordering and workspace assignment.
+- **Multi-select**: On Tasks and Today, the select button (next to the add/filter controls) turns on selection; then mark as Next/Now/Done, set priority, archive or delete the selected tasks in one go.
+- **Templates**: Save a task and its subtasks as a template (template icon on the task page), edit templates in Settings → Templates, and create them again from **Template** in the add-task form or **Use** in Settings.
+- **Tags**: Settings → Tags lists built-in and custom tags with how many tasks use them. Rename (custom tags are rewritten on every task and note, after a warning), set an emoji, or archive tags to hide them from the tag picker.
 - **Notes**: Markdown notes with @-mention linking to tasks or other notes. Autosave.
-- **Daybook**: The default daily journal, with deep-linkable dates, carry-forward of incomplete tasks, quick capture, daily progress, and a weekly summary.
+- **Daybook**: The default daily journal, with deep-linkable dates, carry-forward of incomplete tasks, quick capture, daily progress, and a weekly summary. Settings → Today Page can hide the journal or weekly goals card (per device).
 - **Calendar**: 5-day view (2 days before + today + 2 days after) showing scheduled tasks.
 - **Search**: Unified search across tasks and notes.
 - **Workspaces**: Filter-based labels (Personal, Work, etc.) — seeded by default. Tasks can be grouped by workspace or tag and sorted by newest or due date.
@@ -44,6 +47,8 @@ and Settings. It is **offline first**: it keeps a local copy of your data, saves
 phone at once and syncs with the deployed API (address built in) in the background, within seconds
 when online. Edits made offline merge by field (the newest edit wins); journal pages changed on two
 devices are never overwritten, the phone's version is offered as a draft.
+Templates, tag settings, the Today page section switches and multi-select on Today are web-only for
+now; tasks deleted or tags renamed on the web reach the phone through sync.
 Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 
 - **Requirements**: Xcode 27+, iOS 18+, `brew install xcodegen`.

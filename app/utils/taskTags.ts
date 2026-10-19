@@ -137,6 +137,20 @@ export function canonicalManualTaskTagKey(rawTag: string | null | undefined): st
   return normalized ? manualAliasToKey.get(normalized) || null : null;
 }
 
+/**
+ * The key a stored manual tag resolves to: its catalog key (`data-stack`) or `manual:<normalized>`.
+ * Tags that differ only in case or punctuation (`Q4-plan`, `q4 plan`) share a key.
+ */
+export function manualTaskTagKey(rawTag: string | null | undefined): string | null {
+  const normalized = normalizeTaskTagText(rawTag);
+  if (!normalized) return null;
+  return manualAliasToKey.get(normalized) || `manual:${normalized}`;
+}
+
+export function isBuiltInTaskTagKey(key: string): boolean {
+  return catalogByKey.has(key);
+}
+
 function resolveManualTag(rawTag: string): ResolvedTaskTag | null {
   const label = rawTag.trim();
   const normalized = normalizeTaskTagText(label);

@@ -14,7 +14,10 @@ description: |-
     - `priority` is 0..3 — 0 = none, 1 = snack, 2 = focus, 3 = critical
       (see `app/composables/useHashtagParse.ts`).
     - Soft-delete via `deleted_at`; archive via `archived = true`. Neither
-      removes the row.
+      removes the row. "Delete" in the multi-select bar (`POST
+      /api/tasks/bulk`, action `delete`) does remove the task, its subtasks
+      and their links; each removed row is kept as JSON in
+      `sync_tombstones.row_data`.
     - Setting `due_at` auto-creates a `links` row of (`diary`, diary_id) →
       (`task`, task_id) so the task surfaces on that day's diary entry; the
       link is rewritten if the due date changes and cleared if it is removed.

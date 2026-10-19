@@ -1,0 +1,61 @@
+name: main.task_templates
+type: empty
+description: |-
+  Task templates: a task plus its subtasks saved so they can be created again
+  ("Save as template" on a task, edited in Settings → Templates, used from the
+  "Template" menu in the add-task form). Creating from a template inserts
+  ordinary `tasks` rows (the task, then each subtask with `parent_id`); the
+  template itself is never linked to the tasks it produced.
+
+  Not a synced table: the iOS app does not see templates. Deletes are soft
+  (`deleted_at`). Added 2026-10-20.
+
+columns:
+  - name: id
+    type: VARCHAR
+    description: UUID primary key. Clients may supply it so a retried create returns the same template.
+  - name: user_id
+    type: VARCHAR
+    description: Id of the user who created the template (session user). Not used for scoping yet.
+  - name: user_name
+    type: VARCHAR
+    description: Denormalized username of the creator.
+  - name: workspace_id
+    type: VARCHAR
+    description: FK → workspaces.id. Workspace for tasks created from the template when the app shows "All" workspaces; NULL = the app's default. The open workspace always wins.
+  - name: name
+    type: VARCHAR
+    description: Template name shown in Settings and the Template menu.
+  - name: title
+    type: VARCHAR
+    description: Title of the task the template creates.
+  - name: description
+    type: VARCHAR
+    description: Description copied to the created task.
+  - name: priority
+    type: INTEGER
+    description: Priority of the created task, 0..3 (0 none, 1 snack, 2 focus, 3 critical). Default 2.
+  - name: tags
+    type: VARCHAR[]
+    description: Manual tags copied to the created task.
+  - name: subtasks
+    type: JSON
+    description: |-
+      Ordered JSON array of subtasks, one level deep:
+      `[{ "title": text, "description": text, "priority": 0..3 or null, "tags": [text] }]`.
+      A null priority means the subtask takes the task's priority.
+  - name: position
+    type: INTEGER
+    description: Sort order in Settings (lower first); new templates go last.
+  - name: deleted_at
+    type: TIMESTAMP
+    description: Set when the template is deleted in Settings (soft delete); NULL for live templates.
+  - name: updated_by
+    type: VARCHAR
+    description: Provenance for the last write (`user_in_app`, `agent_query_<purpose>_<date>`, …); filled from the request when the statement does not set it.
+  - name: created_at
+    type: TIMESTAMP
+    description: Insert timestamp (UTC).
+  - name: updated_at
+    type: TIMESTAMP
+    description: Last edit timestamp (UTC).

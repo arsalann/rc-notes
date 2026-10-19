@@ -9,6 +9,7 @@ function resolveEventType(method: string, path: string): string {
   const p = path.replace(/\/api\//, '');
 
   // Tasks
+  if (p.match(/^tasks\/bulk$/) && m === 'POST') return 'task.bulk';
   if (p.match(/^tasks$/) && m === 'GET') return 'task.list';
   if (p.match(/^tasks$/) && m === 'POST') return 'task.create';
   if (p.match(/^tasks\/[^/]+$/) && m === 'GET') return 'task.view';
@@ -43,6 +44,15 @@ function resolveEventType(method: string, path: string): string {
   // Calendar
   if (p.match(/^calendar$/)) return 'calendar.view';
 
+  // Templates & tags
+  if (p.match(/^templates$/) && m === 'GET') return 'template.list';
+  if (p.match(/^templates$/) && m === 'POST') return 'template.create';
+  if (p.match(/^templates\/[^/]+$/) && m === 'PUT') return 'template.update';
+  if (p.match(/^templates\/[^/]+$/) && m === 'DELETE') return 'template.delete';
+  if (p.match(/^tags$/) && m === 'GET') return 'tag.list';
+  if (p.match(/^tags$/) && m === 'PUT') return 'tag.update';
+  if (p.match(/^tags\/rename$/) && m === 'POST') return 'tag.rename';
+
   // Workspaces
   if (p.match(/^workspaces$/) && m === 'GET') return 'workspace.list';
   if (p.match(/^workspaces$/) && m === 'POST') return 'workspace.create';
@@ -59,8 +69,13 @@ function resolveEventType(method: string, path: string): string {
 function resolveEntity(path: string): { entity_type: string | null; entity_id: string | null } {
   const p = path.replace(/\/api\//, '');
 
+  // `tasks/bulk` names several tasks; they are in the request body.
+  if (p === 'tasks/bulk') return { entity_type: 'task', entity_id: null };
   const taskMatch = p.match(/^tasks\/([^/]+)/);
   if (taskMatch) return { entity_type: 'task', entity_id: taskMatch[1] };
+
+  const templateMatch = p.match(/^templates\/([^/]+)/);
+  if (templateMatch) return { entity_type: 'template', entity_id: templateMatch[1] };
 
   const noteMatch = p.match(/^notes\/([^/]+)/);
   if (noteMatch) return { entity_type: 'note', entity_id: noteMatch[1] };
