@@ -65,8 +65,12 @@ struct NotesView: View {
                 }
             }
             .navigationTitle(showArchived ? "Archived notes" : "Notebook")
-            .refreshable { await load() }
+            .refreshable {
+                await app.syncNow()
+                await load()
+            }
             .task { await load() }
+            .onChange(of: app.store?.revision) { Task { await load() } }
             .onChange(of: app.activeWorkspaceId) { Task { await load() } }
             .onChange(of: showArchived) { otherExpanded = true; Task { await load() } }
             .toolbar {
@@ -112,20 +116,19 @@ struct NotesView: View {
     }
 
     private func load() async {
-        guard let api = app.api else { return }
+        guard let repo = app.repo else { return }
         loading = true
         defer { loading = false }
-        async let fetchedNotes = try? api.notes(workspaceId: app.activeWorkspaceId, archived: showArchived)
         if !showArchived {
-            diaryNotes = (try? await api.diaryList(workspaceId: app.activeWorkspaceId)) ?? []
+            diaryNotes = (try? await repo.diaryList(workspaceId: app.activeWorkspaceId)) ?? []
         }
-        notes = await fetchedNotes ?? notes
+        notes = (try? await repo.notes(workspaceId: app.activeWorkspaceId, archived: showArchived)) ?? notes
     }
 
     private func createNote() async {
-        guard let api = app.api else { return }
+        guard let repo = app.repo else { return }
         do {
-            let note = try await api.createNote(title: "Untitled", workspaceId: app.activeWorkspaceId)
+            let note = try await repo.createNote(title: "Untitled", workspaceId: app.activeWorkspaceId)
             notes.insert(note, at: 0)
             path.append(Route.note(note.id))
         } catch {
@@ -135,10 +138,10 @@ struct NotesView: View {
 
     /// Optimistic pin with rollback (web `togglePin`).
     private func togglePin(_ note: Note) async {
-        guard let api = app.api, let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
+        guard let repo = app.repo, let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
         notes[index].pinned.toggle()
         do {
-            try await api.updateNote(id: note.id, ["pinned": .bool(notes[index].pinned)])
+            try await repo.updateNote(id: note.id, ["pinned": .bool(notes[index].pinned)])
         } catch {
             if let i = notes.firstIndex(where: { $0.id == note.id }) { notes[i].pinned = note.pinned }
             app.showError("Could not update that note", error)
@@ -164,7 +167,7 @@ struct NoteDetailView: View {
     @State private var confirmArchive = false
     @State private var saveTask: Task<Void, Never>?
 
-    private var api: APIClient { app.api! }
+    private var repo: Repository { app.repo! }
 
     var body: some View {
         Group {
@@ -179,6 +182,7 @@ struct NoteDetailView: View {
         .navigationTitle(note?.displayId ?? "Note")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .onChange(of: app.store?.revision) { Task { await refresh() } }
         .onDisappear { Task { await flush() } }
     }
 
@@ -254,7 +258,7 @@ struct NoteDetailView: View {
 
     private func load() async {
         do {
-            let loaded = try await api.note(id: noteId)
+            let loaded = try await repo.note(id: noteId)
             note = loaded
             title = loaded.title
             content = loaded.content
@@ -265,9 +269,29 @@ struct NoteDetailView: View {
         }
     }
 
+    /// After a sync: new links always; title and text only when nothing typed here is unsaved and
+    /// the editor is closed.
+    private func refresh() async {
+        guard let current = note, let fresh = try? await repo.note(id: noteId) else { return }
+        note?.links = fresh.links
+        note?.pinned = fresh.pinned
+        note?.archived = fresh.archived
+        note?.displayId = fresh.displayId
+        let unsaved = title != current.title || content != current.content
+        if !editing && !unsaved && !saving {
+            note?.title = fresh.title
+            note?.content = fresh.content
+            title = fresh.title
+            content = fresh.content
+        }
+        for id in taskCache.keys {
+            if let task = try? await repo.task(id: id) { taskCache[id] = task }
+        }
+    }
+
     private func hydrate(_ ids: [String]) async {
         let missing = ids.filter { taskCache[$0] == nil }
-        guard !missing.isEmpty, let tasks = try? await api.tasksBatch(ids: missing) else { return }
+        guard !missing.isEmpty, let tasks = try? await repo.tasksBatch(ids: missing) else { return }
         for task in tasks { taskCache[task.id] = task }
     }
 
@@ -286,7 +310,7 @@ struct NoteDetailView: View {
 
     private func save(_ body: JSONObject) async {
         do {
-            let saved = try await api.updateNote(id: noteId, body)
+            let saved = try await repo.updateNote(id: noteId, body)
             note?.title = saved.title
             note?.content = saved.content
         } catch {
@@ -303,9 +327,9 @@ struct NoteDetailView: View {
 
     private func link(_ item: MentionResult) async {
         do {
-            try await api.createLink(sourceType: "note", sourceId: noteId, targetType: item.type, targetId: item.id)
+            try await repo.createLink(sourceType: "note", sourceId: noteId, targetType: item.type, targetId: item.id)
             await flush()
-            if let fresh = try? await api.note(id: noteId) { note?.links = fresh.links }
+            if let fresh = try? await repo.note(id: noteId) { note?.links = fresh.links }
         } catch {
             app.showError("Could not link that item", error)
         }
@@ -317,11 +341,11 @@ struct NoteDetailView: View {
             defer { creatingTasks = false }
             let items = Checklist.parse(content)
             do {
-                try await api.tasksFromChecklist(items: Checklist.rawInputs(items), sourceType: "note", sourceId: note.id,
+                try await repo.tasksFromChecklist(items: Checklist.rawInputs(items), sourceType: "note", sourceId: note.id,
                                                  workspaceId: note.workspaceId, dueDate: nil)
                 content = Checklist.replaceWithMentions(content, roots: items.map { (original: $0.title, clean: $0.title) })
                 await flush()
-                if let fresh = try? await api.note(id: noteId) { self.note?.links = fresh.links }
+                if let fresh = try? await repo.note(id: noteId) { self.note?.links = fresh.links }
             } catch {
                 app.showError("Checklist could not be turned into tasks", error)
                 return
@@ -335,7 +359,7 @@ struct NoteDetailView: View {
     private func togglePin() async {
         guard let note else { return }
         do {
-            let saved = try await api.updateNote(id: noteId, ["pinned": .bool(!note.pinned)])
+            let saved = try await repo.updateNote(id: noteId, ["pinned": .bool(!note.pinned)])
             self.note?.pinned = saved.pinned
         } catch {
             app.showError("Could not update that note", error)
@@ -346,7 +370,7 @@ struct NoteDetailView: View {
         guard let note else { return }
         await flush()
         do {
-            try await api.updateNote(id: noteId, ["archived": .bool(!note.archived)])
+            try await repo.updateNote(id: noteId, ["archived": .bool(!note.archived)])
             dismiss()
         } catch {
             app.showError("Could not update that note", error)

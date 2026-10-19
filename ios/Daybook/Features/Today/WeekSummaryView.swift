@@ -140,10 +140,10 @@ struct SearchView: View {
                 return
             }
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled, let api = app.api else { return }
+            guard !Task.isCancelled, let repo = app.repo else { return }
             searching = true
             defer { searching = false }
-            results = (try? await api.search(q, workspaceId: app.activeWorkspaceId)) ?? []
+            results = (try? await repo.search(q, workspaceId: app.activeWorkspaceId)) ?? []
         }
     }
 }

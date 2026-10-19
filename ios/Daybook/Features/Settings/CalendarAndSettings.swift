@@ -54,7 +54,11 @@ struct CalendarView: View {
         }
         .navigationTitle("Calendar")
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            await app.syncNow()
+            await load()
+        }
+        .onChange(of: app.store?.revision) { Task { await load() } }
         .onChange(of: app.activeWorkspaceId) { Task { await load() } }
     }
 
@@ -62,7 +66,7 @@ struct CalendarView: View {
         if selected.isEmpty { selected = app.days.today() }
         loading = true
         defer { loading = false }
-        data = (try? await app.api?.calendar(workspaceId: app.activeWorkspaceId)) ?? data
+        data = (try? await app.repo?.calendar(workspaceId: app.activeWorkspaceId)) ?? data
     }
 
     /// Optimistic toggle (web flips `status` between done and now here).
@@ -108,6 +112,8 @@ struct SettingsView: View {
                     Button("Sign out", role: .destructive) { confirmSignOut = true }
                         .accessibilityIdentifier("settings.signOut")
                 }
+
+                SyncSection()
 
                 Section("Server") {
                     LabeledContent("Address", value: app.serverURLString)

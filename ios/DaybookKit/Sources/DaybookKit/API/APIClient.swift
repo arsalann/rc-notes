@@ -31,15 +31,20 @@ public final class APIClient: Sendable {
     private let session: URLSession
     private let onUnauthorized: @Sendable () -> Void
 
-    public init(baseURL: URL, cookieStorage: HTTPCookieStorage = .shared, onUnauthorized: @escaping @Sendable () -> Void = {}) {
+    /// `deviceId` goes out as `X-Daybook-Device` on every request, so the server can record which
+    /// device made each change (`updated_device_id` columns, `event_log.device_id`).
+    public init(baseURL: URL, cookieStorage: HTTPCookieStorage = .shared, userAgent: String = APIClient.userAgent,
+                deviceId: String? = nil, onUnauthorized: @escaping @Sendable () -> Void = {}) {
         self.baseURL = baseURL
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = cookieStorage
         config.httpShouldSetCookies = true
         config.httpCookieAcceptPolicy = .always
-        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForRequest = 30
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.httpAdditionalHeaders = ["User-Agent": Self.userAgent, "Accept": "application/json"]
+        var headers: [String: String] = ["User-Agent": userAgent, "Accept": "application/json"]
+        if let deviceId { headers["X-Daybook-Device"] = deviceId }
+        config.httpAdditionalHeaders = headers
         session = URLSession(configuration: config)
         self.onUnauthorized = onUnauthorized
     }

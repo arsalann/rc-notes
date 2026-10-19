@@ -71,3 +71,12 @@ columns:
   - name: duration_ms
     type: INTEGER
     description: Request handling latency in milliseconds (middleware-measured).
+  - name: device_id
+    type: VARCHAR
+    description: Device id from the `X-Daybook-Device` header (iOS app and browser).
+  - name: sync_op_id
+    type: VARCHAR
+    description: For changes replayed by `POST /api/sync/push`, the id of the queued change (matches `sync_ops.op_id` and the row's `sync_op_id`).
+  - name: client_time
+    type: TIMESTAMP
+    description: For replayed changes, when the change was made on the device (UTC, capped at the receive time).

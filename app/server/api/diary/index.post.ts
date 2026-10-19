@@ -1,4 +1,4 @@
-import { queryAll } from '~/server/utils/db';
+import { queryAll, diaryIdSql } from '~/server/utils/db';
 import { hydrateTasksByIds, taskIdsFromLinks } from '~/server/utils/taskHydration';
 import { listValue, LIST, VARCHAR } from '~/server/utils/sqlTypes';
 
@@ -27,9 +27,9 @@ export default defineEventHandler(async (event) => {
 
   // Create new entry — default to Work workspace
   const cols = ['id', 'entry_date', 'content', 'workspace_id'];
-  const vals = ['gen_random_uuid()::text', '$date::DATE', '$content', '$ws'];
-  const insertParams: Record<string, any> = { date: entryDate, content };
-  const insertTypes: Record<string, any> = { date: VARCHAR, content: VARCHAR };
+  // The id comes from the date and workspace, so a page created offline on the phone and the same
+  // page created here are one row (see `diaryIdSql`).
+  const vals = [diaryIdSql('$date', '$ws'), '$date::DATE', '$content', '$ws'];
 
   // Use provided workspace or look up Work workspace
   let wsId = workspaceId;
@@ -37,18 +37,26 @@ export default defineEventHandler(async (event) => {
     const { getDefaultWorkspaceId } = await import('~/server/utils/db');
     wsId = await getDefaultWorkspaceId();
   }
-  if (wsId) {
-    insertParams.ws = wsId;
-    insertTypes.ws = VARCHAR;
-  } else {
+  const insertParams: Record<string, any> = { date: String(entryDate).slice(0, 10), content, ws: wsId || null };
+  const insertTypes: Record<string, any> = { date: VARCHAR, content: VARCHAR, ws: VARCHAR };
+  if (!wsId) {
     cols.pop();
     vals.pop();
   }
 
   const rows = await queryAll(
-    `INSERT INTO diary_entries (${cols.join(', ')}) VALUES (${vals.join(', ')}) RETURNING *`,
+    `INSERT INTO diary_entries (${cols.join(', ')}) VALUES (${vals.join(', ')})
+     ON CONFLICT (id) DO NOTHING RETURNING *`,
     insertParams, insertTypes
   );
+  if (!rows.length) {
+    // Created meanwhile by another request for the same page (it has the same id).
+    const raced = await queryAll(
+      `SELECT * FROM diary_entries WHERE id = ${diaryIdSql('$date', '$ws')}`, insertParams, insertTypes
+    );
+    if (raced.length) return raced[0];
+    throw createError({ statusCode: 500, statusMessage: 'Diary entry could not be created' });
+  }
   const newEntry = rows[0];
 
   // Carry forward undone tasks from the most recent previous entry

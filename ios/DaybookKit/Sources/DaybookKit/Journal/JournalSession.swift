@@ -111,6 +111,29 @@ public final class JournalSession {
         entry = current
     }
 
+    /// A sync changed the page underneath: another device's writing arrived, or this device's own
+    /// save came back with the server's revision. Takes the new copy only while nothing typed here
+    /// is unsaved; otherwise the next save's compare-and-swap decides (a conflict keeps the writing
+    /// as a draft). A recovery draft left by the sync (a rejected offline save) is offered.
+    public func refresh(from fresh: DiaryEntry) {
+        guard let current = entry, current.id == fresh.id, var identity else { return }
+        refreshRelations(from: fresh)
+        guard !isSaving, text == current.content, recoveryDraft == nil else { return }
+        guard fresh.content != current.content || fresh.updatedAt != current.updatedAt else {
+            offerDraft(for: identity, serverContent: current.content)
+            return
+        }
+        var next = current
+        next.content = fresh.content
+        next.updatedAt = fresh.updatedAt
+        entry = next
+        text = fresh.content
+        identity.updatedAt = fresh.updatedAt
+        self.identity = identity
+        latestUpdatedAtByEntry[identity.entryId] = fresh.updatedAt
+        offerDraft(for: identity, serverContent: fresh.content)
+    }
+
     public func appendLocalLink(_ link: LinkItem) {
         guard var current = entry else { return }
         current.links = (current.links ?? []) + [link]

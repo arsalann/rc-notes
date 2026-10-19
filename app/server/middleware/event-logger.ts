@@ -1,4 +1,5 @@
 import { logEvent, bufferEvent } from '~/server/utils/eventLog';
+import { CLIENT_TIME_HEADER, DEVICE_HEADER, OP_HEADER, editTime, headerToken } from '~/server/utils/syncContext';
 
 /**
  * Keys whose values must never reach event_log. `middleware/auth.ts` returns early for
@@ -77,6 +78,9 @@ export default defineEventHandler(async (event) => {
       response_status: status,
       request_ip: ip,
       duration_ms: Date.now() - start,
+      device_id: headerToken(getRequestHeader(event, DEVICE_HEADER)),
+      sync_op_id: headerToken(getRequestHeader(event, OP_HEADER)),
+      client_time: editTime(getRequestHeader(event, CLIENT_TIME_HEADER)),
       // Left unset on purpose: eventLog stamps it in the DB's own naive server-local format.
     };
     // Reads are buffered; every mutation is written immediately so the recovery log cannot lose a

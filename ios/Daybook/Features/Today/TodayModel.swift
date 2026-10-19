@@ -90,7 +90,7 @@ final class TodayModel {
 
     init(app: AppModel) {
         self.app = app
-        journal = JournalSession(backend: app.api!, store: app.draftStore, userId: app.user?.id ?? "")
+        journal = JournalSession(backend: app.repo!, store: app.draftStore, userId: app.user?.id ?? "")
         let today = app.days.today()
         todayDate = today
         selectedDate = today
@@ -101,7 +101,7 @@ final class TodayModel {
         goalsExpanded = !app.prefs.diaryGoalsCollapsed
     }
 
-    private var api: APIClient { app.api! }
+    private var repo: Repository { app.repo! }
     private var days: DayMath { app.days }
     var workspaceId: String? { app.activeWorkspaceId }
 
@@ -165,6 +165,28 @@ final class TodayModel {
     }
 
     func refreshToday() { todayDate = days.today() }
+
+    private var storeRefresh: Task<Void, Never>?
+
+    /// A sync (or a change on another screen) updated the local copy: refresh the page's tasks,
+    /// links and dots, and the journal text when nothing typed here is unsaved. Debounced, since
+    /// every local save also bumps the revision.
+    func storeChanged() {
+        storeRefresh?.cancel()
+        storeRefresh = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, !navigating, !journal.isLoading else { return }
+            if let entry = journal.entry, let fresh = repo.diaryPage(date: entry.entryDate, workspaceId: workspaceId), fresh.id == entry.id {
+                journal.refresh(from: fresh)
+                merge(fresh.tasks ?? [])
+                syncManualLists()
+            } else if journal.entry == nil || repo.diaryPage(date: selectedDate, workspaceId: workspaceId)?.id != journal.entry?.id {
+                await loadEntry()
+            }
+            await fetchIndicators()
+            if !goalsEditing && !goalsSaving { await fetchGoals() }
+        }
+    }
 
     var windowDays: [String] { (-3...3).map { days.addDays(windowCenter, $0) } }
 
@@ -236,7 +258,7 @@ final class TodayModel {
 
     private func hydrateMissing() async {
         let missing = allTaskIds.filter { taskCache[$0] == nil }
-        guard !missing.isEmpty, let tasks = try? await api.tasksBatch(ids: missing) else { return }
+        guard !missing.isEmpty, let tasks = try? await repo.tasksBatch(ids: missing) else { return }
         merge(tasks)
     }
 
@@ -339,7 +361,7 @@ final class TodayModel {
         manualReady = true
         reorderState = .saving
         do {
-            try await api.updateTaskPositions(order.enumerated().map { .init(id: $0.element, position: $0.offset) })
+            try await repo.updateTaskPositions(order.enumerated().map { .init(id: $0.element, position: $0.offset) })
             reorderState = .saved
             try? await Task.sleep(for: .seconds(1.8))
             if reorderState == .saved { reorderState = .idle }
@@ -360,13 +382,13 @@ final class TodayModel {
     /// Sheet-based add: due on the page's day unless chosen; mention appended to the journal.
     func addTask(_ result: QuickAddResult) async {
         do {
-            let task = try await api.createTask(NewTask(title: result.title, workspaceId: workspaceId,
+            let task = try await repo.createTask(NewTask(title: result.title, workspaceId: workspaceId,
                                                         tags: result.tags.isEmpty ? nil : result.tags,
                                                         dueAt: result.dueAt ?? days.dueISO(selectedDate),
                                                         priority: result.priority, status: result.status))
             var subtasks: [TaskItem] = []
             for title in result.subtasks {
-                if let sub = try? await api.createTask(NewTask(title: title, parentId: task.id, workspaceId: workspaceId)) { subtasks.append(sub) }
+                if let sub = try? await repo.createTask(NewTask(title: title, parentId: task.id, workspaceId: workspaceId)) { subtasks.append(sub) }
             }
             var stored = task
             stored.subtasks = subtasks
@@ -375,7 +397,7 @@ final class TodayModel {
             let current = journal.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if journal.canEdit { journal.edit(current.isEmpty ? mention : "\(journal.text)\n\(mention)") }
             if let entry = journal.entry {
-                try? await api.createLink(sourceType: "diary", sourceId: entry.id, targetType: "task", targetId: task.id)
+                try? await repo.createLink(sourceType: "diary", sourceId: entry.id, targetType: "task", targetId: task.id)
                 journal.appendLocalLink(LinkItem(targetType: "task", targetId: task.id, targetTitle: task.title))
             }
             entryDates.insert(selectedDate)
@@ -396,11 +418,11 @@ final class TodayModel {
         entryDates.insert(selectedDate)
         syncManualLists()
         do {
-            var task = try await api.createTask(NewTask(id: id, title: title, workspaceId: workspaceId, dueAt: due, priority: priority, status: .now))
+            var task = try await repo.createTask(NewTask(id: id, title: title, workspaceId: workspaceId, dueAt: due, priority: priority, status: .now))
             task.subtasks = []
             taskCache[id] = task
             if let entry = journal.entry {
-                try? await api.createLink(sourceType: "diary", sourceId: entry.id, targetType: "task", targetId: id)
+                try? await repo.createLink(sourceType: "diary", sourceId: entry.id, targetType: "task", targetId: id)
             }
         } catch {
             taskCache.removeValue(forKey: id)
@@ -445,10 +467,10 @@ final class TodayModel {
         guard !items.isEmpty else { return }
         let parsed = Checklist.parsedInputs(items, days: days)
         do {
-            try await api.tasksFromChecklist(items: parsed, sourceType: "diary", sourceId: entry.id, workspaceId: workspaceId, dueDate: selectedDate)
+            try await repo.tasksFromChecklist(items: parsed, sourceType: "diary", sourceId: entry.id, workspaceId: workspaceId, dueDate: selectedDate)
             let roots = zip(items, parsed).map { (original: $0.title, clean: $1.title) }
             journal.edit(Checklist.replaceWithMentions(journal.text, roots: roots))
-            if let fresh = try? await api.diaryEntry(date: selectedDate, workspaceId: workspaceId) {
+            if let fresh = repo.diaryPage(date: selectedDate, workspaceId: workspaceId) {
                 merge(fresh.tasks ?? [])
                 journal.refreshRelations(from: fresh)
                 syncManualLists()
@@ -461,7 +483,7 @@ final class TodayModel {
     func mentionPicked(_ item: MentionResult) async {
         guard let entry = journal.entry else { return }
         do {
-            try await api.createLink(sourceType: "diary", sourceId: entry.id, targetType: item.type, targetId: item.id)
+            try await repo.createLink(sourceType: "diary", sourceId: entry.id, targetType: item.type, targetId: item.id)
             journal.appendLocalLink(LinkItem(targetType: item.type, targetId: item.id, targetTitle: item.title))
             await hydrateMissing()
             syncManualLists()
@@ -483,7 +505,7 @@ final class TodayModel {
 
     func copyPrevious() async {
         let previous = days.addDays(selectedDate, -1)
-        let entry = try? await api.diaryEntry(date: previous, workspaceId: workspaceId)
+        let entry = repo.diaryPage(date: previous, workspaceId: workspaceId)
         guard let content = entry?.content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             app.showToast("No notes on the previous page")
             return
@@ -511,7 +533,7 @@ final class TodayModel {
         indicatorRequest += 1
         let request = indicatorRequest
         let window = windowDays
-        guard let dates = try? await api.diaryDates(from: window.first!, to: window.last!, workspaceId: workspaceId),
+        guard let dates = try? await repo.diaryDates(from: window.first!, to: window.last!, workspaceId: workspaceId),
               request == indicatorRequest else { return }
         entryDates = Set(dates)
     }
@@ -525,7 +547,7 @@ final class TodayModel {
         goalsRequest += 1
         let request = goalsRequest
         let week = selectedWeekStart
-        let entry = try? await api.goals(weekStart: week, workspaceId: workspaceId)
+        let entry = try? await repo.goals(weekStart: week, workspaceId: workspaceId)
         guard request == goalsRequest else { return }
         goals = entry
         goalsText = entry?.content ?? ""
@@ -546,7 +568,7 @@ final class TodayModel {
 
     private func persistGoals(week: String, content: String, workspaceId: String?) async {
         do {
-            try await api.saveGoals(weekStart: week, content: content, workspaceId: workspaceId)
+            try await repo.saveGoals(weekStart: week, content: content, workspaceId: workspaceId)
             if goals?.weekStart == week { goals?.content = content }
         } catch {
             app.showToast("Goals could not be saved", detail: "Your writing is still here; try again in a moment.", style: .error)
@@ -588,13 +610,13 @@ final class TodayModel {
         guard !weekStart.isEmpty else { return }
         weekLoading = true
         defer { weekLoading = false }
-        weekTasks = (try? await api.completedTasks(from: weekStart, to: days.addDays(weekStart, 6), workspaceId: workspaceId)) ?? []
+        weekTasks = (try? await repo.completedTasks(from: weekStart, to: days.addDays(weekStart, 6), workspaceId: workspaceId)) ?? []
     }
 
     func loadOutstanding() async {
         outstandingLoading = true
         defer { outstandingLoading = false }
-        outstanding = (try? await api.outstandingTasks(workspaceId: workspaceId)) ?? []
+        outstanding = (try? await repo.outstandingTasks(workspaceId: workspaceId)) ?? []
     }
 
     var weekDays: [WeekDay] {

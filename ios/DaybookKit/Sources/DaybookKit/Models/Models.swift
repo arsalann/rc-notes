@@ -434,4 +434,9 @@ public struct AdminUser: Decodable, Identifiable, Hashable, Sendable {
 public struct PositionsResult: Decodable, Sendable {
     public var requested: Int
     public var updated: Int
+
+    public init(requested: Int, updated: Int) {
+        self.requested = requested
+        self.updated = updated
+    }
 }

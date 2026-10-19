@@ -119,6 +119,10 @@ export interface EventLogInput {
   response_status?: number | null;
   request_ip?: string | null;
   duration_ms?: number | null;
+  /** `X-Daybook-Device` of the client, and for replayed queued changes their id and device time. */
+  device_id?: string | null;
+  sync_op_id?: string | null;
+  client_time?: string | null;
   /**
    * When the event was observed, not when it is written. Matters for buffered rows.
    * Must be a naive UTC timestamp string — see `utcTimestamp`.
@@ -126,11 +130,12 @@ export interface EventLogInput {
   occurred_at?: string;
 }
 
-/** The 17 bound columns, in insert order. `created_at` is appended separately. */
+/** The bound columns, in insert order. `created_at` is appended separately. */
 const FIELDS = [
   'event_type', 'method', 'path', 'entity_type', 'entity_id',
   'workspace_id', 'metadata', 'user_agent', 'user_id', 'user_name',
   'updated_by', 'request_body', 'response_status', 'client_kind', 'request_ip', 'duration_ms',
+  'device_id', 'sync_op_id', 'client_time',
 ] as const;
 
 const FIELD_TYPES: Record<string, any> = {
@@ -139,6 +144,7 @@ const FIELD_TYPES: Record<string, any> = {
   metadata: VARCHAR, user_agent: VARCHAR, user_id: VARCHAR, user_name: VARCHAR,
   updated_by: VARCHAR, request_body: VARCHAR, response_status: INTEGER,
   client_kind: VARCHAR, request_ip: VARCHAR, duration_ms: INTEGER,
+  device_id: VARCHAR, sync_op_id: VARCHAR, client_time: VARCHAR,
   created_at: VARCHAR,
 };
 
@@ -173,6 +179,9 @@ function buildRow(opts: EventLogInput): Record<string, any> {
     client_kind: clientKind,
     request_ip: opts.request_ip || '',
     duration_ms: opts.duration_ms ?? null,
+    device_id: opts.device_id || null,
+    sync_op_id: opts.sync_op_id || null,
+    client_time: opts.client_time || null,
     created_at: opts.occurred_at || utcTimestamp(),
   };
 }
@@ -186,7 +195,7 @@ async function insertRows(rows: Record<string, any>[]) {
       const key = `${f}_${i}`;
       params[key] = row[f];
       types[key] = FIELD_TYPES[f];
-      return f === 'created_at' ? `$${key}::TIMESTAMP` : `$${key}`;
+      return f === 'created_at' || f === 'client_time' ? `$${key}::TIMESTAMP` : `$${key}`;
     });
     return `(gen_random_uuid()::text, ${placeholders.join(', ')})`;
   });

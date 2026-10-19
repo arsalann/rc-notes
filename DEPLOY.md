@@ -28,6 +28,7 @@ browser ────┘
 | Railway | Project `fearless-embrace`, service `rc-notes`, region EU West (Amsterdam), `https://rc-notes-production-a50f.up.railway.app`, deploys on push to `main` |
 | Clients | iPhone app and phone browser switch to the Railway address |
 | Bruin | **Pending**: `.bruin.yml` still has only the MotherDuck connection; step 6 below not done yet |
+| Offline sync | `/api/sync/push` + `/api/sync/pull`, sync triggers and device columns; added to the schema on boot by the deploy that ships them (see "Schema changes on deploy") |
 | MotherDuck | Frozen archive as of the 2026-10-17 copy. Nothing writes to it except the legacy service below |
 
 **Legacy Railway project, still to handle.** `exemplary-vitality` (service `rc-notes`,
@@ -89,6 +90,21 @@ Production: Railway project `fearless-embrace`, service `rc-notes`, `https://rc-
 6. **Bruin** (pending): add a `postgres` connection named `supabase-default` to `.bruin.yml`. Then refresh the
    asset files (`bruin import database --connection supabase-default pipeline`) and point
    `pipeline/pipeline.yml` at it.
+
+## Schema changes on deploy
+
+The server adds missing tables, columns, indexes and triggers when it boots (`ensureSchema` in
+`app/server/utils/schema.ts`), so a merge to `main` that changes the schema migrates production on
+deploy. Before merging one:
+
+1. Snapshot the affected tables into the `backup` schema (AGENTS.md "Always back up"), e.g. for the
+   offline-sync deploy: `workspaces`, `tasks`, `notes`, `links`, `diary_entries`, `goals_weekly`.
+2. Merge; watch `railway logs` for `[db] connection ready` and no `could not add` warnings.
+3. Check `https://<domain>/api/health`, then sign in and look at a page.
+
+Additions only (new columns with defaults, new tables, triggers) need no downtime. Rolling back the
+code leaves the extra columns and triggers in place; the old code ignores them, and the triggers only
+fill bookkeeping columns.
 
 ## Rollback
 

@@ -2,21 +2,21 @@ import DaybookKit
 import SwiftUI
 
 extension AppModel {
-    /// Explicit completion target; on failure refetch the row instead of guessing (web `InlineTask`).
+    /// Explicit completion target (web `InlineTask`). Saved locally at once; syncs in the background.
     func setCompleted(_ task: TaskItem, _ completed: Bool) async -> TaskItem? {
-        guard let api, !task.isPending else { return nil }
+        guard let repo, !task.isPending else { return nil }
         do {
-            return try await api.setTaskCompleted(id: task.id, completed)
+            return try await repo.setTaskCompleted(id: task.id, completed)
         } catch {
             showError("Could not update that task", error)
-            return try? await api.task(id: task.id)
+            return try? await repo.task(id: task.id)
         }
     }
 
     func updateTask(_ id: String, _ patch: JSONObject, errorTitle: String = "Could not update that task") async -> TaskItem? {
-        guard let api else { return nil }
+        guard let repo else { return nil }
         do {
-            return try await api.updateTask(id: id, patch)
+            return try await repo.updateTask(id: id, patch)
         } catch {
             showError(errorTitle, error)
             return nil
@@ -24,11 +24,11 @@ extension AppModel {
     }
 
     func createSubtask(parent: TaskItem, title: String) async -> TaskItem? {
-        guard let api else { return nil }
+        guard let repo else { return nil }
         let parsed = Hashtags.parse(title, days: days)
         guard !parsed.title.isEmpty else { return nil }
         do {
-            return try await api.createTask(NewTask(title: parsed.title, parentId: parent.id, workspaceId: activeWorkspaceId,
+            return try await repo.createTask(NewTask(title: parsed.title, parentId: parent.id, workspaceId: activeWorkspaceId,
                                                     tags: parsed.tags.isEmpty ? nil : parsed.tags, dueAt: parsed.dueISO(days),
                                                     priority: parsed.priority, status: parsed.status))
         } catch {

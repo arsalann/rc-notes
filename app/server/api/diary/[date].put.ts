@@ -52,8 +52,7 @@ export default defineEventHandler(async (event) => {
      SET content = $content,
          user_id = COALESCE(user_id, $user_id),
          user_name = COALESCE(user_name, $user_name),
-         updated_at = current_timestamp,
-         updated_by = 'user_in_app'
+         updated_at = current_timestamp
      WHERE ${identityWhere}
        AND updated_at = $expected_updated_at::TIMESTAMP
      RETURNING *`,

@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		00267C2954DFEF51EFDA193D /* WeekSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFD68ECC300C1F19A04088A /* WeekSummaryView.swift */; };
+		007FE816B8F810659B95170B /* OfflineE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF60D662053F395AF02DB2E0 /* OfflineE2ETests.swift */; };
+		0272F10D49BBFB344434A54C /* SyncViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F7441E741A77BAA1686E96 /* SyncViews.swift */; };
 		0637959DC1F270C8B3087E6E /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE7EA10D728802B2E620B58 /* Toast.swift */; };
 		1A237DFEB3233C4CC0D394F5 /* DaybookKit in Frameworks */ = {isa = PBXBuildFile; productRef = 199F350A21A82DCF4B027234 /* DaybookKit */; };
 		1CFB8EC0603100A3A396974A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41D360D382C3BD4F5CF56A64 /* Assets.xcassets */; };
@@ -43,6 +45,7 @@
 /* Begin PBXFileReference section */
 		112D9FEB0FD7D2BE86A8B6B5 /* TaskRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRows.swift; sourceTree = "<group>"; };
 		14BBDCAF0B5AA0B1EF4E3FF3 /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
+		14F7441E741A77BAA1686E96 /* SyncViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncViews.swift; sourceTree = "<group>"; };
 		1D428DCE1079D33D01C34EB9 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1F489DB34CC9DA1ADFD6CA8E /* JournalE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalE2ETests.swift; sourceTree = "<group>"; };
 		20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddSheet.swift; sourceTree = "<group>"; };
@@ -57,6 +60,7 @@
 		8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowE2ETests.swift; sourceTree = "<group>"; };
 		94CC93E29E0CB4DA71EAE001 /* DaybookUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaybookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F5CCEE2DAE27D23FF1BF99F /* SessionCookieVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCookieVault.swift; sourceTree = "<group>"; };
+		AF60D662053F395AF02DB2E0 /* OfflineE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineE2ETests.swift; sourceTree = "<group>"; };
 		B110E72E5D3F5B5777326C07 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BBE7EA10D728802B2E620B58 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		C06C7658F8DEE72CBB38F8D0 /* NotesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesViews.swift; sourceTree = "<group>"; };
@@ -85,6 +89,7 @@
 				C2BB02A324C9C7639F7DA250 /* Components.swift */,
 				D6852E2B040AE181D9A66B57 /* MentionEditor.swift */,
 				20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */,
+				14F7441E741A77BAA1686E96 /* SyncViews.swift */,
 				112D9FEB0FD7D2BE86A8B6B5 /* TaskRows.swift */,
 				BBE7EA10D728802B2E620B58 /* Toast.swift */,
 			);
@@ -96,6 +101,7 @@
 			children = (
 				8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */,
 				1F489DB34CC9DA1ADFD6CA8E /* JournalE2ETests.swift */,
+				AF60D662053F395AF02DB2E0 /* OfflineE2ETests.swift */,
 				6C2BDA5AFA02F6F39E4126DB /* Support.swift */,
 			);
 			path = DaybookUITests;
@@ -315,6 +321,7 @@
 			files = (
 				3828EC167A607B0B1B023E52 /* AppFlowE2ETests.swift in Sources */,
 				4D3D396A24A15BD75A0818F8 /* JournalE2ETests.swift in Sources */,
+				007FE816B8F810659B95170B /* OfflineE2ETests.swift in Sources */,
 				457A8FE70087A00489C699A5 /* Support.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -332,6 +339,7 @@
 				37C72E664E66E57330F0AE6A /* NotesViews.swift in Sources */,
 				D9A18DFE4919EE24BFD3E368 /* QuickAddSheet.swift in Sources */,
 				5ADAC22F0F7568BFB8E137E9 /* SessionCookieVault.swift in Sources */,
+				0272F10D49BBFB344434A54C /* SyncViews.swift in Sources */,
 				D6DC745D654A8F5388CAE77F /* TaskDetailView.swift in Sources */,
 				26A7E8F74FCA22A2EFA662EC /* TaskRows.swift in Sources */,
 				7C42CC8ABA178B40E5AB013A /* TasksView.swift in Sources */,
