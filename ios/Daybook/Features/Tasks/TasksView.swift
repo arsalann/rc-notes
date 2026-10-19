@@ -223,6 +223,20 @@ final class TasksModel {
         selection = []
         app.showToast("\(restoring ? "Restored" : "Archived") \(ids.count) task\(ids.count == 1 ? "" : "s")", style: .success)
     }
+
+    /// Deletes the selected tasks with their subtasks and links, for good.
+    func bulkDelete() async {
+        let ids = Array(selection)
+        guard !ids.isEmpty else { return }
+        do {
+            try await repo.deleteTasks(ids: ids)
+            tasks.removeAll { ids.contains($0.id) }
+            selection = []
+            app.showToast("Deleted \(ids.count) task\(ids.count == 1 ? "" : "s")", style: .success)
+        } catch {
+            app.showError("Tasks could not be deleted", error)
+        }
+    }
 }
 
 struct TasksView: View {
@@ -247,6 +261,7 @@ private struct TasksScreen: View {
     @Bindable var model: TasksModel
     @State private var showAdd = false
     @State private var editMode: EditMode = .inactive
+    @State private var confirmBulkDelete = false
 
     private var selecting: Bool { editMode == .active }
 
@@ -303,6 +318,9 @@ private struct TasksScreen: View {
                         .accessibilityLabel("Calendar")
                         .accessibilityIdentifier("tasks.calendar")
                     viewMenu
+                    Button { editMode = .active } label: { Image(systemName: "checkmark.circle") }
+                        .accessibilityLabel("Select tasks")
+                        .accessibilityIdentifier("tasks.select")
                     if !model.showArchived {
                         Button { showAdd = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("New task")
@@ -313,7 +331,13 @@ private struct TasksScreen: View {
                 }
             }
             if selecting {
-                ToolbarItemGroup(placement: .bottomBar) { bulkBar }
+                ToolbarItem(placement: .bottomBar) { bulkBar }
+            }
+        }
+        .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
+            Task {
+                await model.bulkDelete()
+                editMode = .inactive
             }
         }
         .sheet(isPresented: $showAdd) {
@@ -344,34 +368,16 @@ private struct TasksScreen: View {
         .accessibilityIdentifier("tasks.view")
     }
 
-    @ViewBuilder
     private var bulkBar: some View {
-        Button("All") { model.selection = Set(model.sorted.map(\.id)) }
-        Spacer()
-        Menu("Status") {
-            Button("Next", systemImage: "circle") { Task { await model.bulk(["status": "next"], label: "Status: Next") } }
-            Button("Now", systemImage: "circle.inset.filled") { Task { await model.bulk(["status": "now"], label: "Status: Now") } }
-            Button("Done", systemImage: "checkmark.circle") { Task { await model.bulk(["status": "done"], label: "Status: Done") } }
-        }
-        .disabled(model.selection.isEmpty)
-        Spacer()
-        Menu("Priority") {
-            ForEach(Priority.options) { p in
-                Button(p.label, systemImage: p.symbol) { Task { await model.bulk(["priority": .int(p.rawValue)], label: "Priority: \(p.label)") } }
-            }
-            Button("None", systemImage: "minus") { Task { await model.bulk(["priority": 0], label: "Priority: None") } }
-        }
-        .disabled(model.selection.isEmpty)
-        Spacer()
-        Button(model.showArchived ? "Restore" : "Archive") {
-            Task {
-                await model.bulkArchive()
-                editMode = .inactive
-            }
-        }
-        .disabled(model.selection.isEmpty)
+        let all = Set(model.sorted.map(\.id))
+        return BulkBar(allSelected: !all.isEmpty && model.selection == all, count: model.selection.count,
+                       archiveLabel: model.showArchived ? "Restore" : "Archive",
+                       onToggleAll: { model.selection = model.selection == all ? [] : all },
+                       onStatus: { status in Task { await model.bulk(["status": .string(status.rawValue)], label: "Status: \(status.rawValue.capitalized)") } },
+                       onPriority: { p in Task { await model.bulk(["priority": .int(p)], label: "Priority: \(Priority(value: p).label)") } },
+                       onArchive: { Task { await model.bulkArchive(); editMode = .inactive } },
+                       onDelete: { confirmBulkDelete = true })
     }
-
 
     private func rowActions<Content: View>(_ content: Content, _ task: TaskItem) -> some View {
         content
