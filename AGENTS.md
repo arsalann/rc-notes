@@ -237,7 +237,7 @@ Procedure that was validated on `v12_subtask_priority_inherit` (2026-08-25, fixe
 7. **Verify** the affected-count is 0 and row totals are unchanged. Revert = restore `public.tasks` from a backup + delete the ledger row.
 
 Gotchas:
-- Ad-hoc maintenance scripts live **under `app/scripts/`** (so `pg` resolves from `app/node_modules`), run with `npx tsx`, and connect with `openDatabase()` from `server/utils/db.ts` *without* calling `ensureSchema()`, so no migration/backfill side effects fire mid-procedure.
+- Ad-hoc maintenance scripts live **under `app/scripts/`** (so `pg` resolves from `app/node_modules`), run with `npx tsx`, and connect with `openDatabase()` from `server/utils/db.ts` *without* calling `ensureSchema()`, so no migration/backfill side effects fire mid-procedure. Query through the returned `db.run(sql, params)`: `queryAll()` / `execute()` go through `useDB()`, which runs `ensureSchema()` first, so a "read-only" script using them applies the checked-out branch's schema to whatever `DATABASE_URL` points at (this happened on 2026-10-19: the offline-sync schema reached production before its backup). `tsx` does not load `app/.env`; pass `--env-file=.env` (without it you silently get local PGlite).
 - Postgres runs statements in a transaction when you ask it to: wrap multi-statement repairs in `BEGIN … COMMIT` on a single client so a failure leaves nothing half-applied.
 - Only backup snapshots + no `public` schema change means **no Bruin asset refresh is needed** (backup tables are excluded from `pipeline/` anyway).
 
