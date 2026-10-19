@@ -227,9 +227,6 @@ Key app files: `Daybook/App/AppModel.swift` (server, auth, local copy + sync tri
 Nothing is blocked. The backend is live on Railway and built into the app.
 
 - Free personal-team builds expire after 7 days. To renew, re-run from Xcode with the phone plugged in.
-- **Legacy Railway project `exemplary-vitality`** (`https://rc-notes-production.up.railway.app`) still
-  serves the old DuckDB-era app against MotherDuck. Don't point the app at it: writes there never reach
-  Supabase. Kept for now at Arsalan's request; to be stopped/deleted later (`DEPLOY.md` "Status").
 - Bruin still points at MotherDuck; switching it to Supabase is `DEPLOY.md` runbook step 6.
 - A local dev server (LAN IP) still works for testing; see AGENTS.md "iOS app" for the pitfalls.
 
