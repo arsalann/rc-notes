@@ -84,6 +84,13 @@ public final class Repository {
         return try await task(id: id)
     }
 
+    /// Deletes tasks for good, with their subtasks and links (the multi-select bar's Delete).
+    public func deleteTasks(ids: [String]) async throws {
+        let existing = ids.filter { data.tasks[$0] != nil }
+        guard !existing.isEmpty else { throw Self.notFound("Task") }
+        store.enqueue(.deleteTasks(ids: existing))
+    }
+
     /// Restore from (or move to) the archive: an explicit target, so a repeated change cannot flip twice.
     @discardableResult
     public func toggleTaskArchived(id: String) async throws -> TaskItem {

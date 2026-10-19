@@ -12,6 +12,9 @@ public enum Mutation: Codable, Hashable, Sendable {
     /// Archives the task and its subtasks.
     case archiveTask(id: String)
     case setTaskPositions([PositionInput])
+    /// Deletes tasks for good, with their subtasks (any depth) and every link to them
+    /// (`POST /api/tasks/bulk`, action `delete`). The server keeps each row in its tombstone.
+    case deleteTasks(ids: [String])
     case tasksFromChecklist(items: [ChecklistInput], sourceType: String, sourceId: String, workspaceId: String?, dueDate: String?)
     case createNote(id: String, title: String, content: String, workspaceId: String?)
     case updateNote(id: String, patch: JSONObject)
@@ -87,6 +90,8 @@ public enum Mutation: Codable, Hashable, Sendable {
                 return .object(object)
             }
             return Request(method: "PATCH", path: "/api/tasks/positions", body: .object(["items": .array(array)]))
+        case .deleteTasks(let ids):
+            return Request(method: "POST", path: "/api/tasks/bulk", body: .object(["ids": .strings(ids), "action": .string("delete")]))
         case .tasksFromChecklist(let items, let sourceType, let sourceId, let workspaceId, let dueDate):
             var body: JSONObject = [
                 "items": .array(items.map(\.json)),
@@ -133,6 +138,7 @@ public enum Mutation: Codable, Hashable, Sendable {
         case .setTaskPinned: "Task pin"
         case .archiveTask: "Task archived"
         case .setTaskPositions: "Task order"
+        case .deleteTasks(let ids): ids.count == 1 ? "Task deleted" : "\(ids.count) tasks deleted"
         case .tasksFromChecklist: "Checklist to tasks"
         case .createNote(_, let title, _, _): "New note “\(title)”"
         case .updateNote: "Note edit"

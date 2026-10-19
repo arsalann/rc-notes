@@ -32,6 +32,8 @@ extension LocalData {
                 if let p = item.priority, (0...3).contains(p) { tasks[item.id]!.priority = p }
                 tasks[item.id]!.updatedAt = now
             }
+        case .deleteTasks(let ids):
+            deleteTasks(ids)
         case .tasksFromChecklist(let items, let sourceType, let sourceId, let workspaceId, let dueDate):
             checklist(items, sourceType: sourceType, sourceId: sourceId, workspaceId: workspaceId, dueDate: dueDate, now: now)
         case .createNote(let id, let title, let content, let workspaceId):
@@ -147,6 +149,24 @@ extension LocalData {
                     links[linkId] = nil
                 }
             }
+        }
+    }
+
+    /// Port of the `delete` action of `POST /api/tasks/bulk`: the tasks, their subtasks at any depth,
+    /// and every link from or to any of them.
+    mutating func deleteTasks(_ ids: [String]) {
+        var doomed = Set(ids.filter { tasks[$0] != nil })
+        var frontier = doomed
+        while !frontier.isEmpty {
+            let children = Set(tasks.values.filter { $0.parentId.map(frontier.contains) ?? false }.map(\.id)).subtracting(doomed)
+            doomed.formUnion(children)
+            frontier = children
+        }
+        guard !doomed.isEmpty else { return }
+        for id in doomed { tasks[id] = nil }
+        for (linkId, link) in links where (link.sourceType == "task" && doomed.contains(link.sourceId))
+            || (link.targetType == "task" && doomed.contains(link.targetId)) {
+            links[linkId] = nil
         }
     }
 
