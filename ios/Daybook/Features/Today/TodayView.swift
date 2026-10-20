@@ -101,6 +101,12 @@ private struct TodayScreen: View {
         .navigationTitle(model.selectedDayLabel)
         .navigationBarTitleDisplayMode(.large)
         .toolbar { toolbar }
+        .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+            if !model.selecting {
+                FloatingCreateButton(identifier: "today.addTask", onTask: { showAddTask = true },
+                                     onTemplate: { await model.addFromTemplate($0) })
+            }
+        }
         .sheet(isPresented: $showAddTask) {
             QuickAddSheet(defaultStatus: .now, defaultDueDay: model.selectedDate, onAdd: { result in
                 await model.addTask(result)
@@ -407,14 +413,7 @@ private struct TodayScreen: View {
                     }
                 }
             }
-            if model.taskGroup != .priority {
-                Button {
-                    showAddTask = true
-                } label: {
-                    Label("Add task", systemImage: "plus.circle.fill")
-                }
-                .accessibilityIdentifier("today.addTask")
-            }
+
         } header: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {

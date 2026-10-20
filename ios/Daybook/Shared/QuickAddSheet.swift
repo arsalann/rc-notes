@@ -108,6 +108,13 @@ struct QuickAddSheet: View {
                         dueChip("Tomorrow", model.days.offsetFromToday(1))
                         dueChip("Next week", model.days.offsetFromToday(7))
                     }
+                    if defaultDueDay == nil {
+                        Button("No due date") {
+                            dueDay = nil
+                            useCustomDue = false
+                        }
+                        .foregroundStyle(dueDay == nil && !useCustomDue ? Color.accentColor : .secondary)
+                    }
                     Toggle("Pick date & time", isOn: $useCustomDue)
                     if useCustomDue {
                         DatePicker("Due", selection: $customDue)
@@ -141,6 +148,8 @@ struct QuickAddSheet: View {
                 }
             }
             .onAppear {
+                priority = model.prefs.defaultPriority
+                dueDay = defaultDueDay ?? model.prefs.defaultDue.dayOffset.map { model.days.offsetFromToday($0) }
                 status = defaultStatus
                 titleFocused = true
             }
@@ -177,7 +186,7 @@ struct QuickAddSheet: View {
             due = model.days.dueISO(d)
         } else if useCustomDue {
             due = DayMath.isoString(customDue)
-        } else if let d = dueDay ?? defaultDueDay {
+        } else if let d = dueDay {
             due = model.days.dueISO(d)
         } else {
             due = nil
@@ -223,6 +232,82 @@ struct TagPicker: View {
                 }
             }
             .padding(.vertical, 2)
+        }
+    }
+}
+
+
+/// Native context menu keeps tap-to-compose and hold-to-choose mutually exclusive.
+struct FloatingCreateButton: View {
+    @Environment(AppModel.self) private var app
+    var identifier: String
+    var onTask: () -> Void
+    var onTemplate: (TaskTemplate) async -> Void
+    @State private var showTemplates = false
+    @State private var submitting = false
+    @State private var noteID: String?
+
+    var body: some View {
+        Button(action: onTask) {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(Color(uiColor: .systemBackground))
+                .frame(width: 56, height: 56)
+                .background(Color.accentColor, in: Circle())
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("New task")
+        .accessibilityHint("Touch and hold to create a task, use a template, or create a note")
+        .accessibilityIdentifier(identifier)
+        .contextMenu {
+            Button("New task", systemImage: "plus", action: onTask)
+            Button("From template", systemImage: "square.on.square") { showTemplates = true }
+            Button("New note", systemImage: "note.text") { Task { await createNote() } }
+                .disabled(submitting)
+        }
+        .accessibilityAction(named: "From template") { showTemplates = true }
+        .accessibilityAction(named: "New note") { Task { await createNote() } }
+        .sheet(isPresented: $showTemplates) {
+            NavigationStack {
+                List {
+                    if app.templates.isEmpty {
+                        ContentUnavailableView("No templates", systemImage: "square.on.square",
+                                               description: Text("Create a template in Settings → Templates."))
+                    }
+                    ForEach(app.templates) { template in
+                        Button(template.name) {
+                            submitting = true
+                            Task {
+                                await onTemplate(template)
+                                submitting = false
+                                showTemplates = false
+                            }
+                        }
+                        .disabled(submitting)
+                    }
+                }
+                .navigationTitle("From template")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showTemplates = false }
+                    }
+                }
+            }
+        }
+        .navigationDestination(item: $noteID) { id in NoteDetailView(noteId: id) }
+        .padding(20)
+    }
+
+    private func createNote() async {
+        guard !submitting, let repo = app.repo else { return }
+        submitting = true
+        defer { submitting = false }
+        do {
+            let note = try await repo.createNote(title: "Untitled", workspaceId: app.activeWorkspaceId)
+            noteID = note.id
+        } catch {
+            app.showError("Could not create a note", error)
         }
     }
 }

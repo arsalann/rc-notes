@@ -15,6 +15,28 @@ struct Preferences: Codable, Equatable {
     enum DiaryTaskSort: String, Codable, CaseIterable { case manual, created, priority }
     enum Appearance: String, Codable, CaseIterable { case system, light, dark }
 
+    enum DefaultDue: String, Codable, CaseIterable {
+        case none, today, tomorrow, nextWeek
+        var label: String {
+            switch self {
+            case .none: "No due date"
+            case .today: "Today"
+            case .tomorrow: "Tomorrow"
+            case .nextWeek: "In one week"
+            }
+        }
+        var dayOffset: Int? {
+            switch self {
+            case .none: nil
+            case .today: 0
+            case .tomorrow: 1
+            case .nextWeek: 7
+            }
+        }
+    }
+
+    var defaultPriority = Priority.focus.rawValue
+    var defaultDue: DefaultDue = .none
     var defaultWorkspace: String?
     var taskGroupBy: TaskGroupBy = .status
     var taskOrderBy: TaskOrderBy = .created
@@ -33,6 +55,9 @@ struct Preferences: Codable, Equatable {
     // Tolerate older/newer stored blobs.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let storedPriority = (try? c.decode(Int.self, forKey: .defaultPriority)) ?? Priority.focus.rawValue
+        defaultPriority = ([0] + Priority.options.map(\.rawValue)).contains(storedPriority) ? storedPriority : Priority.focus.rawValue
+        defaultDue = (try? c.decode(DefaultDue.self, forKey: .defaultDue)) ?? .none
         defaultWorkspace = try c.decodeIfPresent(String.self, forKey: .defaultWorkspace)
         taskGroupBy = (try? c.decode(TaskGroupBy.self, forKey: .taskGroupBy)) ?? .status
         taskOrderBy = (try? c.decode(TaskOrderBy.self, forKey: .taskOrderBy)) ?? .created

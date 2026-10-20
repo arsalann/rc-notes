@@ -94,3 +94,9 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
   private; accounts can be deleted in Settings. Privacy policy at `/privacy`, support at `/support`
 - Every content row records which device last wrote it and when (`updated_device_kind/id`,
   `client_updated_at`), and a per-field clock for offline sync (see `AGENTS.md` "Offline sync")
+
+
+### Future improvements
+
+- Customize task defaults (priority and due date) by workspace.
+- In addition to storing preferences locally, persist defaults in a database table keyed by user and workspace so they follow the user across devices.

@@ -310,6 +310,12 @@ private struct TasksScreen: View {
                                        description: Text(model.showArchived ? "Archived tasks show up here." : "Add one with the + button."))
             }
         }
+        .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+            if !selecting && !model.showArchived {
+                FloatingCreateButton(identifier: "tasks.add", onTask: { showAdd = true },
+                                     onTemplate: { await model.addFromTemplate($0) })
+            }
+        }
         .environment(\.editMode, $editMode)
         .navigationTitle(model.showArchived ? "Archived" : "Tasks")
         .refreshable {
@@ -331,11 +337,6 @@ private struct TasksScreen: View {
                     Button { editMode = .active } label: { Image(systemName: "checkmark.circle") }
                         .accessibilityLabel("Select tasks")
                         .accessibilityIdentifier("tasks.select")
-                    if !model.showArchived {
-                        Button { showAdd = true } label: { Image(systemName: "plus") }
-                            .accessibilityLabel("New task")
-                            .accessibilityIdentifier("tasks.add")
-                    }
                 } else {
                     Button("Done") { editMode = .inactive; model.selection = [] }
                 }
