@@ -37,7 +37,7 @@ Update this file after every task, so work can resume from here if a session end
 | 5 | Today: select mode + bulk bar (mark as, priority, archive, delete) | ✅ done (toolbar `today.select` button; `selectSection` flat list; shared `Shared/BulkBar.swift` + `bulkDeleteConfirmation`; `TodayModel.bulkUpdate/bulkArchive/bulkDelete`, `deletedIds` hides deleted rows until links refresh). Not yet UI-tested — see task 10 |
 | 6 | Tasks: add Delete to the existing multi-select bar | ✅ done (Tasks uses `BulkBar`; `TasksModel.bulkDelete`; select button `tasks.select` in the top bar next to view menu / add; "Select tasks" stays in the view menu too) |
 | 7 | Task detail: Save as template; Quick add: create from template | ✅ done (AppModel `templates` + `tagOverrides`, cached in UserDefaults, refreshed by `refreshTemplatesAndTags()` after each sync; QuickAddSheet "From template" section (`onTemplate`); `TodayModel.addFromTemplate` (due on the page's day), `TasksModel.addFromTemplate`; `TaskDetailView` "Save as template" (`detail.saveTemplate`, online only)) |
-| 8 | Settings: Templates section (list, edit, delete, use) | ⏳ |
+| 8 | Settings: Templates section (list, edit, delete, use) | ✅ done (`Features/Settings/TemplatesSettings.swift`: `TemplatesSection` + `TemplateEditor` (name, title, details, priority, workspace, tags, subtasks add/delete/reorder, Save, Delete, Create task); Settings refreshes templates/tags on open) |
 | 9 | Settings: Tags section (overrides, rename with warning, archive); apply overrides + hide archived in picker | ⏳ |
 | 10 | Tests (swift test, ios/scripts/test.sh, api/sync smoke), docs (HANDOFF.md parity list, AGENTS/README), PR | ⏳ |
 
@@ -52,3 +52,4 @@ Update this file after every task, so work can resume from here if a session end
 - Task 4: app builds (`xcodebuild ... -destination 'platform=iOS Simulator,name=iPhone Duo' -derivedDataPath build/DerivedData build`).
 - Task 5: builds after `xcodegen generate` (new file `Daybook/Shared/BulkBar.swift`).
 - Task 7: builds, `swift test` 78/78.
+- Task 8: builds after `xcodegen generate` (new file `TemplatesSettings.swift`).

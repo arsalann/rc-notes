@@ -190,6 +190,8 @@ struct SettingsView: View {
                     Text("Hiding a card keeps what you wrote. Saved on this device.")
                 }
 
+                TemplatesSection()
+
                 Section("Appearance") {
                     Picker("Theme", selection: $app.prefs.appearance) {
                         ForEach(Preferences.Appearance.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -204,6 +206,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .task {
                 await app.fetchWorkspaces()
+                await app.refreshTemplatesAndTags()
                 if app.user?.isAdmin == true { users = (try? await app.api?.users()) ?? [] }
             }
             .sheet(isPresented: $creatingWorkspace) { NewWorkspaceSheet() }
