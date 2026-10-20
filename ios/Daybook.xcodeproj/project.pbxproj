@@ -33,6 +33,7 @@
 		D9A18DFE4919EE24BFD3E368 /* QuickAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */; };
 		DEAF3AC4F7BE801812D6037C /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E9E11EBE713C4C2BA063B9C /* TodayView.swift */; };
 		E6E92413DCEB37F1DD880BCC /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D428DCE1079D33D01C34EB9 /* AppModel.swift */; };
+		FB5B50B5C5210F91311951EC /* ParityE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5630254AAFC606792E68096 /* ParityE2ETests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		CCAAF6A01755B2644ADDC6F4 /* CalendarAndSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndSettings.swift; sourceTree = "<group>"; };
 		CDE226C5C02C24D3E74D83B6 /* DaybookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DaybookKit; path = DaybookKit; sourceTree = SOURCE_ROOT; };
 		D6852E2B040AE181D9A66B57 /* MentionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionEditor.swift; sourceTree = "<group>"; };
+		E5630254AAFC606792E68096 /* ParityE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityE2ETests.swift; sourceTree = "<group>"; };
 		FFFD68ECC300C1F19A04088A /* WeekSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekSummaryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -109,6 +111,7 @@
 				8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */,
 				1F489DB34CC9DA1ADFD6CA8E /* JournalE2ETests.swift */,
 				AF60D662053F395AF02DB2E0 /* OfflineE2ETests.swift */,
+				E5630254AAFC606792E68096 /* ParityE2ETests.swift */,
 				6C2BDA5AFA02F6F39E4126DB /* Support.swift */,
 			);
 			path = DaybookUITests;
@@ -331,6 +334,7 @@
 				3828EC167A607B0B1B023E52 /* AppFlowE2ETests.swift in Sources */,
 				4D3D396A24A15BD75A0818F8 /* JournalE2ETests.swift in Sources */,
 				007FE816B8F810659B95170B /* OfflineE2ETests.swift in Sources */,
+				FB5B50B5C5210F91311951EC /* ParityE2ETests.swift in Sources */,
 				457A8FE70087A00489C699A5 /* Support.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

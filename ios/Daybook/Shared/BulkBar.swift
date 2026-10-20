@@ -23,8 +23,11 @@ struct BulkBar: View {
             Spacer()
             Menu("Mark as") {
                 Button("Next", systemImage: "circle") { onStatus(.next) }
+                    .accessibilityIdentifier("bulk.status.next")
                 Button("Now", systemImage: "circle.inset.filled") { onStatus(.now) }
+                    .accessibilityIdentifier("bulk.status.now")
                 Button("Done", systemImage: "checkmark.circle") { onStatus(.done) }
+                    .accessibilityIdentifier("bulk.status.done")
             }
             .disabled(disabled)
             .accessibilityIdentifier("bulk.status")

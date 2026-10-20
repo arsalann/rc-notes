@@ -39,7 +39,7 @@ Update this file after every task, so work can resume from here if a session end
 | 7 | Task detail: Save as template; Quick add: create from template | ✅ done (AppModel `templates` + `tagOverrides`, cached in UserDefaults, refreshed by `refreshTemplatesAndTags()` after each sync; QuickAddSheet "From template" section (`onTemplate`); `TodayModel.addFromTemplate` (due on the page's day), `TasksModel.addFromTemplate`; `TaskDetailView` "Save as template" (`detail.saveTemplate`, online only)) |
 | 8 | Settings: Templates section (list, edit, delete, use) | ✅ done (`Features/Settings/TemplatesSettings.swift`: `TemplatesSection` + `TemplateEditor` (name, title, details, priority, workspace, tags, subtasks add/delete/reorder, Save, Delete, Create task); Settings refreshes templates/tags on open) |
 | 9 | Settings: Tags section (overrides, rename with warning, archive); apply overrides + hide archived in picker | ✅ done (`Features/Settings/TagsSettings.swift`: `TagsSection` → `TagsSettingsView` (active/archived, swipe archive/restore) → `TagEditSheet` (emoji, name; custom rename shows warning + confirm, built-in = display only + Reset). Overrides applied in `TagEmojis`, Tasks group-by-tag, detail Detected tags, QuickAdd capture summary; `TagPicker` uses `tagOverrides.pickerOptions`) |
-| 10 | Tests (swift test, ios/scripts/test.sh, api/sync smoke), docs (HANDOFF.md parity list, AGENTS/README), PR | ⏳ |
+| 10 | Tests (swift test, ios/scripts/test.sh, api/sync smoke), docs (HANDOFF.md parity list, AGENTS/README), PR | 🚧 `DaybookUITests/ParityE2ETests.swift` added, 4/4 pass (Today select/mark/archive/delete, save + use template, Today switch, tag rename warning). Left: full `ios/scripts/test.sh`, api/sync smoke, docs, PR |
 
 ## Log
 
@@ -54,3 +54,4 @@ Update this file after every task, so work can resume from here if a session end
 - Task 7: builds, `swift test` 78/78.
 - Task 8: builds after `xcodegen generate` (new file `TemplatesSettings.swift`).
 - Task 9: builds after `xcodegen generate` (new file `TagsSettings.swift`). Next: task 10 (UI test + full suite + docs + PR).
+- Task 10 (part): UI tests pass. Today now scrolls to the task list when select mode turns on. Gotchas: SwiftUI alert text fields drop their identifier (use `app.alerts.textFields.firstMatch`); a tap lands mid-text, so tests tap the field's right edge before deleting (`replaceText`).

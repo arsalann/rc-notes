@@ -93,6 +93,10 @@ private struct TodayScreen: View {
                 await model.reload()
             }
             .animation(.snappy, value: model.selectedDate)
+            // Select mode lists the day's tasks; bring them into view.
+            .onChange(of: model.selecting) { _, on in
+                if on { withAnimation { proxy.scrollTo("tasks", anchor: .top) } }
+            }
         }
         .navigationTitle(model.selectedDayLabel)
         .navigationBarTitleDisplayMode(.large)
