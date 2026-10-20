@@ -93,7 +93,7 @@ struct WeekSummaryView: View {
                 }
             }
             .navigationTitle("Week summary")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { await model.openWeekSummary() }
         }
@@ -132,7 +132,7 @@ struct SearchView: View {
             }
         }
         .navigationTitle("Search")
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Tasks and notes")
+        .searchable(text: $query, placement: .alwaysVisible, prompt: "Tasks and notes")
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)
             guard !q.isEmpty else {

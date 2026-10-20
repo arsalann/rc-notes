@@ -123,7 +123,7 @@ struct TagEditSheet: View {
                     TextField("Emoji", text: $emoji)
                         .accessibilityIdentifier("tagedit.emoji")
                     TextField(tag.builtin ? "Display name" : "Name", text: $name)
-                        .textInputAutocapitalization(.never)
+                        .noAutocapitalization()
                         .accessibilityIdentifier("tagedit.name")
                 } footer: {
                     if tag.builtin {
@@ -147,7 +147,7 @@ struct TagEditSheet: View {
                 }
             }
             .navigationTitle("Edit \(tag.label)")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

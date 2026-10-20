@@ -49,7 +49,17 @@ cd ios && xcodegen generate
 # Everything: unit tests + build + XCUITest E2E against an isolated local server
 ios/scripts/test.sh                       # ~6 min; screenshots → .context/ios-screenshots/
 ios/scripts/test.sh -only-testing:DaybookUITests/JournalE2ETests   # one suite
+
+# The Mac build of the same target (UI tests are iOS-only)
+xcodebuild build -project ios/Daybook.xcodeproj -scheme Daybook -destination 'platform=macOS'
 ```
+
+**macOS**: same target, same sources. Pick "My Mac" in Xcode and Run. Mac-specific code is the
+`#if os(macOS)` branches and `Daybook/Shared/PlatformCompat.swift`; the tabs show as a sidebar, File → New
+Task is ⌘N, Go → Today/Tasks/Notes/Settings is ⌘1–4, Go → Sync Now is ⌘R. The app is sandboxed with outgoing
+connections only (`Daybook/Daybook-macOS.entitlements`) and identifies as `daybook-macos/<version>`
+(`client_kind=macos`, `updated_by=user_in_macos_app`). For the App Store, add the macOS platform to the
+existing App Store Connect record (same bundle id, universal purchase).
 
 Run the app by hand: open `ios/Daybook.xcodeproj`, pick an iPhone simulator, Run. The production
 server (`AppModel.builtInServer`, `https://rc-notes-production-a50f.up.railway.app`) is built in.
@@ -240,6 +250,7 @@ Nothing is blocked. The backend is live on Railway and built into the app.
   → login screen with "Your session expired…"), but not covered by an E2E test (sealed cookies cannot be
   revoked server-side without restarting the server with a new secret).
 - iPad layouts are the phone layout scaled up (no priority board).
+- macOS: not covered by UI tests; the Mac app icon is the iOS artwork resized (no Mac-style rounded tile yet).
 - The web app is online only (it gets no local copy). Reminders (`reminder_at`) are unused on the web
   too, so no notifications were added.
 - Offline the phone shows a day page's tasks from its links plus tasks due that day; the server's rarer

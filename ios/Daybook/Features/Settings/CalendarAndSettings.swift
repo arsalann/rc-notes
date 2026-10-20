@@ -148,7 +148,7 @@ struct SettingsView: View {
                             }
                         }
                         TextField("New username", text: $newUsername)
-                            .textInputAutocapitalization(.never)
+                            .noAutocapitalization()
                             .autocorrectionDisabled()
                         SecureField("Password (8+ characters)", text: $newUserPassword)
                         Button("Add user") { Task { await addUser() } }

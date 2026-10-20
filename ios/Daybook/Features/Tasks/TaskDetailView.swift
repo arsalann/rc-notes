@@ -1,6 +1,5 @@
 import DaybookKit
 import SwiftUI
-import UIKit
 
 /// Port of `pages/tasks/[id].vue`.
 struct TaskDetailView: View {
@@ -43,7 +42,7 @@ struct TaskDetailView: View {
             }
         }
         .navigationTitle(task?.displayId ?? "Task")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .task { await load() }
         .onChange(of: app.store?.revision) { Task { await refresh() } }
         .navigationDestination(item: $openNoteId) { NoteDetailView(noteId: $0) }
@@ -109,13 +108,13 @@ struct TaskDetailView: View {
             tagsSection(task)
             noteSection
         }
-        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnScroll()
         .onChange(of: focus) { old, _ in
             if old == .title { Task { await saveTitle() } }
             if old == .description { Task { await saveDescription() } }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .trailingBar) {
                 Button { copyAsMarkdown() } label: { Image(systemName: "doc.on.doc") }
                     .accessibilityLabel("Copy as markdown")
                 Button {
@@ -262,7 +261,7 @@ struct TaskDetailView: View {
             }
             TagPicker(tags: Binding(get: { tags }, set: { next in Task { await saveTags(next) } }))
             TextField("Add a tag", text: $newTag)
-                .textInputAutocapitalization(.never)
+                .noAutocapitalization()
                 .focused($focus, equals: .tag)
                 .onSubmit { Task { await addTag() } }
                 .onChange(of: newTag) { _, value in if value.contains(",") { Task { await addTag() } } }
@@ -447,7 +446,7 @@ struct TaskDetailView: View {
             lines += task.description.components(separatedBy: "\n").map { "  \($0)" }
         }
         lines += subtasks.map { "  - [\(box($0.completed))] \($0.title)" }
-        UIPasteboard.general.string = lines.joined(separator: "\n")
+        Pasteboard.copy(lines.joined(separator: "\n"))
         app.showToast("Copied as markdown", style: .success)
     }
 }

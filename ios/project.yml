@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.arsalann.daybook
   deploymentTarget:
     iOS: "18.0"
+    macOS: "15.0"
   createIntermediateGroups: true
   developmentLanguage: en
 settings:
@@ -20,7 +21,9 @@ packages:
 targets:
   Daybook:
     type: application
-    platform: iOS
+    # One target for iPhone, iPad and Mac: one App Store record (universal purchase), one bundle id.
+    # Platform differences live in `#if os(macOS)` code and `[sdk=macosx*]` settings below.
+    supportedDestinations: [iOS, macOS]
     sources:
       - path: Daybook
     dependencies:
@@ -40,6 +43,9 @@ targets:
         INFOPLIST_FILE: Daybook/Info.plist
         INFOPLIST_PREPROCESS: YES
         ENABLE_PREVIEWS: YES
+        # Mac: sandboxed, outgoing network only (the API). Keychain needs no extra entitlement.
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Daybook/Daybook-macOS.entitlements
+        "ENABLE_HARDENED_RUNTIME[sdk=macosx*]": YES
       configs:
         Debug:
           INFOPLIST_PREPROCESSOR_DEFINITIONS: DAYBOOK_DEBUG=1

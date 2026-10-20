@@ -12,7 +12,13 @@ struct DaybookApp: App {
                 .environment(model)
                 .preferredColorScheme(model.prefs.appearance.colorScheme)
                 .task { await model.bootstrap() }
+                #if os(macOS)
+                .frame(minWidth: 900, minHeight: 600)
+                #endif
         }
+        #if os(macOS)
+        .commands { DaybookCommands(model: model) }
+        #endif
         .onChange(of: scenePhase) { _, phase in
             // Web parity: session heartbeat on focus / visibility change; then sync.
             if phase == .active, model.phase == .ready {
@@ -89,5 +95,37 @@ struct MainTabView: View {
                 SettingsView()
             }
         }
+        #if os(macOS)
+        // The same tabs as a sidebar: the Mac's navigation idiom.
+        .tabViewStyle(.sidebarAdaptable)
+        #endif
     }
 }
+
+#if os(macOS)
+/// Mac menu commands: new task, sync, and a shortcut per section.
+struct DaybookCommands: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Task") {
+                model.selectedTab = .tasks
+                model.requestedNewTask = true
+            }
+            .keyboardShortcut("n")
+            .disabled(model.phase != .ready)
+        }
+        CommandMenu("Go") {
+            Button("Today") { model.selectedTab = .today }.keyboardShortcut("1")
+            Button("Tasks") { model.selectedTab = .tasks }.keyboardShortcut("2")
+            Button("Notes") { model.selectedTab = .notes }.keyboardShortcut("3")
+            Button("Settings") { model.selectedTab = .settings }.keyboardShortcut("4")
+            Divider()
+            Button("Sync Now") { Task { await model.syncNow() } }
+                .keyboardShortcut("r")
+                .disabled(model.phase != .ready)
+        }
+    }
+}
+#endif

@@ -138,7 +138,7 @@ struct QuickAddSheet: View {
 
             }
             .navigationTitle("New task")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -251,7 +251,7 @@ struct FloatingCreateButton: View {
         Button(action: onTask) {
             Image(systemName: "plus")
                 .font(.title2.weight(.semibold))
-                .foregroundStyle(Color(uiColor: .systemBackground))
+                .foregroundStyle(Color.systemBackground)
                 .frame(width: 56, height: 56)
                 .background(Color.accentColor, in: Circle())
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 3)

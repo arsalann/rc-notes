@@ -92,11 +92,7 @@ struct TemplateEditor: View {
                         .disabled(newSubtask.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } header: {
-                HStack {
-                    Text("Subtasks")
-                    Spacer()
-                    EditButton().font(.caption)
-                }
+                Text("Subtasks").withEditButton()
             }
 
             Section {
@@ -107,7 +103,7 @@ struct TemplateEditor: View {
             }
         }
         .navigationTitle(draft.name.isEmpty ? "Template" : draft.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { Task { await save() } }

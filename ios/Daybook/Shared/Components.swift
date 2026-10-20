@@ -147,7 +147,7 @@ struct NewWorkspaceSheet: View {
                 }
             }
             .navigationTitle("New workspace")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
