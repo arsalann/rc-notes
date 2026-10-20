@@ -263,6 +263,13 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
   - If the checkout is in iCloud Drive (`~/Documents`), iCloud file events make the Nuxt dev watcher
     restart repeatedly, and iCloud must never sync a live PGlite directory (`data/pglite`). Run local
     servers from a checkout outside iCloud.
+- **macOS**: the `Daybook` target also builds for the Mac (`supportedDestinations: [iOS, macOS]`, one bundle id
+  → one App Store record). Run: pick "My Mac" in Xcode. iOS-only SwiftUI goes through the helpers in
+  `Daybook/Shared/PlatformCompat.swift` (`.inlineNavigationTitle()`, `.trailingBar`, `Pasteboard.copy`, …);
+  use them in new views rather than the iOS modifier, or the Mac build breaks. Everything else that differs
+  is `#if os(macOS)` (User-Agent, device id, app activity in `AppModel`; sidebar + menu commands in
+  `DaybookApp`). Sandboxed with outgoing network only (`Daybook/Daybook-macOS.entitlements`). UI tests are
+  iOS-only; build the Mac with `xcodebuild build -scheme Daybook -destination 'platform=macOS'`.
 
 ## User Preferences
 - Keep things simple — this is a personal tool
@@ -311,6 +318,7 @@ Gotchas:
 All content tables (`tasks`, `notes`, `diary_entries`, `workspaces`, `links`, `users`) and `event_log` have an `updated_by VARCHAR` column. Standard values (the sync trigger fills it from the request when the statement doesn't set it):
 - `user_in_app` — real user via the Nuxt UI in a browser
 - `user_in_ios_app` — real user via the native iOS app (`ios/`, User-Agent `daybook-ios/<version>`)
+- `user_in_macos_app` — real user via the same app built for the Mac (User-Agent `daybook-macos/<version>`)
 - `user_in_test` — real user behavior simulated via Playwright (rare; prefer `test_playwright`)
 - `test_playwright` — automated browser test
 - `agent_query` — agent or operator running raw SQL against the database
