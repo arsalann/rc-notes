@@ -1,4 +1,8 @@
-# App Store submission checklist
+# App Store launch preparation
+
+**Status: preparing for a future launch.** App Store submission is deferred. The checklist below
+is reference for when the user chooses to proceed; reviewer account creation, App Store Connect
+setup and a submission archive are not required for the current production isolation rollout.
 
 What App Store Connect asks for, with the answers that match what the app actually does. Keep this,
 `app/pages/privacy.vue` and `ios/Daybook/Resources/PrivacyInfo.xcprivacy` in step: if the app starts
@@ -58,7 +62,7 @@ Suggested note:
 
 `ITSAppUsesNonExemptEncryption` is `false` in `Info.plist` (HTTPS only), so no export documentation.
 
-## Before submitting
+## Future submission checklist (deferred)
 
 - [ ] Production deployed with per-user isolation; `v16_assign_owner` applied (DEPLOY.md "Launch")
 - [ ] `ALLOW_SIGNUP=true`, `NUXT_PUBLIC_CONTACT_EMAIL` set; `/privacy` and `/support` load signed out

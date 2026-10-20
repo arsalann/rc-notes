@@ -4,6 +4,9 @@ A mobile-first personal productivity app with **tasks**, **notes**, **diary**, a
 
 Daybook, the diary, is the default landing surface. It combines a dated journal page, incomplete-task carry-forward, workspace filtering, quick capture, and a weekly summary; task order can be adjusted directly and becomes a priority board on wide screens.
 
+The app is still in preparation for launch. App Store submission is deferred;
+[`docs/APP_STORE.md`](docs/APP_STORE.md) records the checklist for a future release.
+
 ## Tech Stack
 
 - **Frontend**: Nuxt 4 (SPA), Vue 3, Nuxt UI, Tailwind CSS

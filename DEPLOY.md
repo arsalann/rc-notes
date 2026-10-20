@@ -53,7 +53,7 @@ run `railway variables` without filtering: it prints secrets.
 | `DATABASE_CA_CERT` | Contents of Supabase's SSL certificate (PEM), so the database certificate is verified |
 | `SESSION_SECRET` | 64 random characters (`openssl rand -hex 32`). Changing it signs everyone out |
 | `PORT` | `3000`. Railway otherwise injects its own port (8080), and the generated domain targets 3000 |
-| `ALLOW_SIGNUP` | `true` once the per-user isolation release is live (App Store sign-up). Unset = off; admins add users in Settings |
+| `ALLOW_SIGNUP` | `true` when ready for public sign-up, after isolation is verified and contact details are configured. Leave off during preparation; admins add users in Settings |
 | `NUXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/support` (required for App Store review) |
 
 `NODE_ENV=production`, `TZ=UTC` and `HOST` come from the Dockerfile.
@@ -122,7 +122,11 @@ MotherDuck still holds the data exactly as it was at the 2026-10-17 copy. To go 
 server from before PR #44 (commit `2ecb3d5`) against MotherDuck. Anything written to Supabase after
 the switch would have to be copied back by hand, so decide within the first day.
 
-## Launch: per-user isolation (v16_assign_owner)
+## Launch preparation: per-user isolation (v16_assign_owner)
+
+We are preparing for launch; App Store submission is deferred. This production isolation rollout
+can be completed while public sign-up remains disabled. App Store setup and submission are future
+steps when the user chooses to proceed, not prerequisites for this rollout.
 
 Every request now runs as the `daybook_app` role under row level security (see AGENTS.md
 "Per-user isolation"). The first boot of this release creates the role and policies and runs the
@@ -146,8 +150,10 @@ Run maintenance commands from `app/`, using `npx tsx --env-file=.env`; they inte
 5. Run the read-only audit again: verify zero missing/invalid owners for content/sync tables,
    unchanged content row totals, the repair ledger entry, and expected visibility in the app.
    Audit counts may grow normally; anonymous audit rows may have NULL ownership by design.
-6. Set `ALLOW_SIGNUP=true` and `NUXT_PUBLIC_CONTACT_EMAIL`, redeploy. Check `/privacy` and `/support`
-   signed out, then follow `docs/APP_STORE.md` for submission. Automated tests stay on PGlite.
+6. Before a future public launch, set `NUXT_PUBLIC_CONTACT_EMAIL` and check `/privacy` and `/support`
+   signed out. Enable `ALLOW_SIGNUP=true` only when ready for public sign-up, after isolation is
+   verified. Keep sign-up disabled during preparation if desired. `docs/APP_STORE.md` records the
+   deferred App Store checklist; submit only when the user chooses to proceed. Automated tests stay on PGlite.
 
 **Rollback requires schema and data restoration, not just reverting the code.** Stop writes and
 sign-up, preserve any post-deployment data separately, and restore the pre-deploy schema and backup
