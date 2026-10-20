@@ -55,3 +55,4 @@ Update this file after every task, so work can resume from here if a session end
 - Task 8: builds after `xcodegen generate` (new file `TemplatesSettings.swift`).
 - Task 9: builds after `xcodegen generate` (new file `TagsSettings.swift`). Next: task 10 (UI test + full suite + docs + PR).
 - Task 10 (part): UI tests pass. Today now scrolls to the task list when select mode turns on. Gotchas: SwiftUI alert text fields drop their identifier (use `app.alerts.textFields.firstMatch`); a tap lands mid-text, so tests tap the field's right edge before deleting (`replaceText`).
+- Task 10 (part): docs updated (ios/HANDOFF.md, AGENTS.md, README.md, DEPLOY.md deploy order). api-smoke, sync-smoke, vitest 42 all pass. Waiting on full `ios/scripts/test.sh`, then PR.

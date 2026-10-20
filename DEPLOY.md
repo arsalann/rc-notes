@@ -103,6 +103,11 @@ deploy. Before merging one:
 2. Merge; watch `railway logs` for `[db] connection ready` and no `could not add` warnings.
 3. Check `https://<domain>/api/health`, then sign in and look at a page.
 
+**Deploy order for the iOS parity work**: the server change that accepts `POST /api/tasks/bulk` in
+`/api/sync/push` must be live before an iPhone build that queues bulk deletes; an older server answers
+those ops with 400, which the phone treats as final (the delete would be lost on the server side).
+No schema change, so no backup is required for that deploy (take one anyway if in doubt).
+
 For the templates/tags deploy (2026-10-20) every public table was snapshotted, since bulk delete and tag
 rename are new ways to change existing `tasks`/`notes`/`links` rows.
 

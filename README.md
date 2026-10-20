@@ -47,8 +47,8 @@ and Settings. It is **offline first**: it keeps a local copy of your data, saves
 phone at once and syncs with the deployed API (address built in) in the background, within seconds
 when online. Edits made offline merge by field (the newest edit wins); journal pages changed on two
 devices are never overwritten, the phone's version is offered as a draft.
-Templates, tag settings, the Today page section switches and multi-select on Today are web-only for
-now; tasks deleted or tags renamed on the web reach the phone through sync.
+Templates, tag settings, the Today page switches and multi-select (with delete) work on the phone too;
+templates and tag settings need a connection to edit, and using a template works offline.
 Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 
 - **Requirements**: Xcode 27+, iOS 18+, `brew install xcodegen`.

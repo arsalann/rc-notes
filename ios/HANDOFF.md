@@ -75,6 +75,7 @@ ios/
   DaybookKit/            Swift package: all non-UI logic (swift test on macOS)
     API/                 APIClient (URLSession + cookie session), JSONValue bodies, errors
     Models/              Codable models matching the JSON the server really returns
+                         (TemplatesAndTags.swift: templates, tag settings, TagOverrides, their API calls)
     Sync/                Rows (raw table rows), LocalData (+ LocalEffects: write rules, LocalQueries:
                          read endpoints), Mutation/PendingOp (the queue), SyncStore (push/pull,
                          conflicts, files), Repository (what screens call), SyncTransport
@@ -244,12 +245,11 @@ Nothing is blocked. The backend is live on Railway and built into the app.
 - Offline the phone shows a day page's tasks from its links plus tasks due that day; the server's rarer
   page repairs (re-carrying into an empty page) and display IDs (`#xyz001`) appear after the next sync.
 - Signing out keeps the local copy on the device (per account) so queued changes are not lost.
-- Web-only for now (2026-10-20): task templates, Settings → Tags (label/emoji overrides, archived tags),
-  the Today page journal/goals switches and multi-select on Today. What reaches the phone: tasks deleted
-  in bulk on the web arrive as tombstones and disappear; a renamed custom tag arrives as rewritten
-  `tasks.tags`; tasks created from a template are ordinary tasks. Built-in tag label/emoji overrides
-  do not show on the phone. `POST /api/tasks/bulk` is not in the push `ALLOWED` list (the app doesn't
-  use it). The web Today page hides archived tasks; the phone's day page still shows them.
+- Templates and tag settings (2026-10-20, web parity — see `WEB-PARITY-HANDOFF.md`) are online-only on the
+  phone: listed from `GET /api/templates` / `GET /api/tags` after every sync and cached in UserDefaults, edited
+  through `APIClient`. Creating tasks from a template is queued like any new task (works offline). Bulk delete
+  is a queued `deleteTasks` mutation → `POST /api/tasks/bulk` (in the push `ALLOWED` list). Built-in tag label /
+  emoji overrides are applied in every tag view; archived tags leave the picker. Today hides archived tasks.
 
 ## Next steps
 
@@ -305,3 +305,10 @@ worth a manual pass.
 **Settings**
 - ✅ Account info · ☑️ Change password · ☑️ Users (admin: list / add / delete) · ☑️ Workspaces (list / create)
 - ☑️ Default workspace, task grouping / ordering, show done · ☑️ Appearance
+- ✅ Today page switches (journal / weekly goals) · ✅ Tags (rename with overwrite warning) · ☑️ Tags (emoji, archive, built-in relabel / reset)
+- ☑️ Templates (edit name, title, priority, workspace, tags, subtasks; delete; create from template)
+
+**Web parity (2026-10-20)**
+- ✅ Today: select mode → Mark as / Archive / Delete · ☑️ Today: Priority from the bulk bar
+- ☑️ Tasks: Delete in the bulk bar, top-bar Select button
+- ✅ Save as template (task page) · ✅ New task → From template (Tasks) · ☑️ From template on Today (due that day)
