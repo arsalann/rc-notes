@@ -98,9 +98,11 @@ private struct TodayScreen: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar { toolbar }
         .sheet(isPresented: $showAddTask) {
-            QuickAddSheet(defaultStatus: .now, defaultDueDay: model.selectedDate) { result in
+            QuickAddSheet(defaultStatus: .now, defaultDueDay: model.selectedDate, onAdd: { result in
                 await model.addTask(result)
-            }
+            }, onTemplate: { template in
+                await model.addFromTemplate(template)
+            })
         }
         .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
             Task { await model.bulkDelete() }

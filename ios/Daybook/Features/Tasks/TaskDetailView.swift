@@ -18,6 +18,8 @@ struct TaskDetailView: View {
     @State private var links: [LinkItem] = []
     @State private var linkedNoteContent: String?
     @State private var confirmArchive = false
+    @State private var savingTemplate = false
+    @State private var templateName = ""
     @State private var pickDue = false
     @State private var dueDate = Date()
     @State private var subtaskCandidates: [MentionResult] = []
@@ -116,6 +118,12 @@ struct TaskDetailView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { copyAsMarkdown() } label: { Image(systemName: "doc.on.doc") }
                     .accessibilityLabel("Copy as markdown")
+                Button {
+                    templateName = task.title
+                    savingTemplate = true
+                } label: { Image(systemName: "square.on.square") }
+                    .accessibilityLabel("Save as template")
+                    .accessibilityIdentifier("detail.saveTemplate")
                 Button { Task { await togglePin() } } label: { Image(systemName: task.pinned ? "pin.fill" : "pin") }
                     .accessibilityLabel(task.pinned ? "Unpin" : "Pin")
                 Button(role: .destructive) { confirmArchive = true } label: { Image(systemName: "archivebox") }
@@ -129,6 +137,28 @@ struct TaskDetailView: View {
         }
         .confirmationDialog("Archive this task?", isPresented: $confirmArchive, titleVisibility: .visible) {
             Button("Archive task and subtasks", role: .destructive) { Task { await archive() } }
+        }
+        .alert("Save as template", isPresented: $savingTemplate) {
+            TextField("Template name", text: $templateName)
+                .accessibilityIdentifier("detail.templateName")
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { Task { await saveTemplate(task) } }
+                .disabled(templateName.trimmingCharacters(in: .whitespaces).isEmpty)
+        } message: {
+            Text(subtasks.isEmpty ? "Saves this task so you can create it again." :
+                 "Saves this task and its \(subtasks.count) subtask\(subtasks.count == 1 ? "" : "s") so you can create it again.")
+        }
+    }
+
+    /// Online only: templates are not part of the local copy.
+    private func saveTemplate(_ task: TaskItem) async {
+        guard let api = app.api else { return }
+        do {
+            let created = try await api.createTemplate(TaskTemplate.from(task: task, subtasks: subtasks, name: templateName))
+            app.templates = app.templates.filter { $0.id != created.id } + [created]
+            app.showToast("Template “\(created.name)” saved", detail: "Use it from New task, or edit it in Settings.", style: .success)
+        } catch {
+            app.showError("Template not saved (needs a connection)", error)
         }
     }
 

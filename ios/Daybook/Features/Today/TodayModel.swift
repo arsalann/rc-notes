@@ -493,6 +493,24 @@ final class TodayModel {
         }
     }
 
+    /// A template's task + subtasks, due on the page's day (linked to it like any task due that day).
+    func addFromTemplate(_ template: TaskTemplate) async {
+        do {
+            let task = try await repo.createTasks(from: template, workspaceId: workspaceId ?? template.workspaceId,
+                                                  dueAt: days.dueISO(selectedDate), status: .now)
+            taskCache[task.id] = task
+            if let entry = journal.entry {
+                try? await repo.createLink(sourceType: "diary", sourceId: entry.id, targetType: "task", targetId: task.id)
+                journal.appendLocalLink(LinkItem(targetType: "task", targetId: task.id, targetTitle: task.title))
+            }
+            entryDates.insert(selectedDate)
+            syncManualLists()
+            app.showToast("Added “\(task.title)” from template", style: .success)
+        } catch {
+            app.showError("Template could not be used", error)
+        }
+    }
+
     /// Per-priority-group rapid add with an optimistic row and a client-minted id.
     func quickAdd(title raw: String, priority: Int) async {
         let title = raw.trimmingCharacters(in: .whitespacesAndNewlines)

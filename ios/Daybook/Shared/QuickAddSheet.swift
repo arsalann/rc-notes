@@ -19,6 +19,8 @@ struct QuickAddSheet: View {
     /// Due day used when nothing is chosen (Today uses the selected page's day).
     var defaultDueDay: String?
     let onAdd: (QuickAddResult) async -> Void
+    /// Creating from a template (Settings → Templates); the section shows when there are templates.
+    var onTemplate: ((TaskTemplate) async -> Void)? = nil
 
     @State private var title = ""
     @State private var priority: Int = Priority.focus.rawValue
@@ -59,6 +61,32 @@ struct QuickAddSheet: View {
                     }
                 } footer: {
                     Text("Tip: #critical #focus #snack · #now #next · #today #tomorrow #nextweek · any #tag")
+                }
+
+                if let onTemplate, !model.templates.isEmpty {
+                    Section("From template") {
+                        ForEach(model.templates) { template in
+                            Button {
+                                submitting = true
+                                Task {
+                                    await onTemplate(template)
+                                    submitting = false
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack {
+                                    Label(template.name, systemImage: "square.on.square")
+                                    Spacer()
+                                    if !template.subtasks.isEmpty {
+                                        Text("\(template.subtasks.count) subtask\(template.subtasks.count == 1 ? "" : "s")")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .disabled(submitting)
+                            .accessibilityIdentifier("quickadd.template.\(template.name)")
+                        }
+                    }
                 }
 
                 Section("Subtasks") {

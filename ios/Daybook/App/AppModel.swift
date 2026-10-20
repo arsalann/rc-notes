@@ -83,6 +83,9 @@ final class AppModel {
         static let preferences = "preferences"
         /// The signed-in user, so the app opens offline with the local copy.
         static let sessionUser = "sessionUser"
+        /// Last templates / tag settings fetched (online-only data, kept for offline use).
+        static let templates = "templatesCache"
+        static let tagSettings = "tagSettingsCache"
     }
 
     var phase: Phase = .loading
@@ -108,6 +111,10 @@ final class AppModel {
             defaults.set(data, forKey: Keys.preferences)
         }
     }
+    /// Task templates (Settings → Templates; not synced, refreshed with every sync).
+    var templates: [TaskTemplate] = [] { didSet { cache(templates, Keys.templates) } }
+    /// Settings → Tags: label/emoji overrides and archived tags.
+    var tagOverrides = TagOverrides() { didSet { if oldValue != tagOverrides { cache(tagOverrides.tags, Keys.tagSettings) } } }
     var toast: ToastMessage?
     var selectedTab: AppTab = .today
     /// Set by other tabs (e.g. a diary note in Notes) to open a day on Today.
@@ -124,6 +131,8 @@ final class AppModel {
         if let data = defaults.data(forKey: Keys.preferences), let stored = try? JSONDecoder().decode(Preferences.self, from: data) {
             prefs = stored
         }
+        templates = cached(Keys.templates) ?? []
+        tagOverrides = TagOverrides(cached(Keys.tagSettings) ?? [])
         if let stored = defaults.string(forKey: Keys.workspace) {
             activeWorkspaceId = stored.isEmpty ? nil : stored
         } else {
@@ -205,7 +214,35 @@ final class AppModel {
             storeDirectory = directory
         }
         startSyncLoop()
-        Task { await store?.sync() }
+        Task {
+            await store?.sync()
+            await refreshTemplatesAndTags()
+        }
+    }
+
+    // MARK: Templates & tag settings (online only)
+
+    private static let cacheEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.keyEncodingStrategy = .convertToSnakeCase
+        return e
+    }()
+
+    private func cache<T: Encodable>(_ value: T, _ key: String) {
+        if let data = try? Self.cacheEncoder.encode(value) { defaults.set(data, forKey: key) }
+    }
+
+    private func cached<T: Decodable>(_ key: String) -> T? {
+        defaults.data(forKey: key).flatMap { try? APIClient.decoder.decode(T.self, from: $0) }
+    }
+
+    /// Fetches templates and tag settings; keeps the last copy when offline.
+    func refreshTemplatesAndTags() async {
+        guard phase == .ready, let api else { return }
+        async let t = try? api.templates()
+        async let g = try? api.tags()
+        if let list = await t { templates = list }
+        if let tags = await g { tagOverrides = TagOverrides(tags) }
     }
 
     private var storeDirectory: URL?
@@ -241,6 +278,7 @@ final class AppModel {
     func syncNow() async {
         guard phase == .ready else { return }
         await store?.sync()
+        await refreshTemplatesAndTags()
     }
 
     /// Going to the background: send queued changes while iOS gives the app a few seconds.

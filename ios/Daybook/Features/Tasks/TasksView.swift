@@ -156,6 +156,16 @@ final class TasksModel {
         }
     }
 
+    func addFromTemplate(_ template: TaskTemplate) async {
+        do {
+            let task = try await repo.createTasks(from: template, workspaceId: app.activeWorkspaceId ?? template.workspaceId)
+            await load()
+            app.showToast("Created “\(task.title)” from template", style: .success)
+        } catch {
+            app.showError("Template could not be used", error)
+        }
+    }
+
     func toggle(_ task: TaskItem) async {
         var optimistic = task
         optimistic.completed.toggle()
@@ -341,7 +351,8 @@ private struct TasksScreen: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            QuickAddSheet(defaultStatus: .next) { result in await model.add(result) }
+            QuickAddSheet(defaultStatus: .next, onAdd: { result in await model.add(result) },
+                          onTemplate: { template in await model.addFromTemplate(template) })
         }
     }
 

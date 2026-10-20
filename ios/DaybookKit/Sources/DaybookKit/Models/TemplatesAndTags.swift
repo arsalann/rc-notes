@@ -35,7 +35,7 @@ public struct TemplateSubtask: Codable, Hashable, Sendable {
 }
 
 /// A row of `GET /api/templates`.
-public struct TaskTemplate: Decodable, Identifiable, Hashable, Sendable {
+public struct TaskTemplate: Codable, Identifiable, Hashable, Sendable {
     public var id: String
     public var workspaceId: String?
     public var name: String
@@ -94,7 +94,7 @@ public struct TaskTemplate: Decodable, Identifiable, Hashable, Sendable {
 }
 
 /// A row of `GET /api/tags`.
-public struct TagSummary: Decodable, Identifiable, Hashable, Sendable {
+public struct TagSummary: Codable, Identifiable, Hashable, Sendable {
     public var key: String
     /// Shown name: the override, else the catalog label or the most used spelling.
     public var label: String
