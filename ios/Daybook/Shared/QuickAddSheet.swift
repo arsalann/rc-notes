@@ -19,6 +19,8 @@ struct QuickAddSheet: View {
     /// Due day used when nothing is chosen (Today uses the selected page's day).
     var defaultDueDay: String?
     let onAdd: (QuickAddResult) async -> Void
+    /// Creating from a template (Settings → Templates); the section shows when there are templates.
+    var onTemplate: ((TaskTemplate) async -> Void)? = nil
 
     @State private var title = ""
     @State private var priority: Int = Priority.focus.rawValue
@@ -39,7 +41,7 @@ struct QuickAddSheet: View {
         if let p = parsed.priority { summary.append(Priority(value: p).label) }
         if let s = parsed.status { summary.append(s.label) }
         if let d = parsed.dueDay { summary.append(model.days.shortLabel(d)) }
-        let preview = TaskTags.resolve(title: parsed.title, manualTags: Hashtags.mergeManualTags(parsed.tags, tags)).resolved
+        let preview = model.tagOverrides.present(TaskTags.resolve(title: parsed.title, manualTags: Hashtags.mergeManualTags(parsed.tags, tags)).resolved)
         summary += preview.map { tag in tag.emoji.map { "\($0) \(tag.label)" } ?? "#\(tag.label)" }
         return summary
     }
@@ -59,6 +61,32 @@ struct QuickAddSheet: View {
                     }
                 } footer: {
                     Text("Tip: #critical #focus #snack · #now #next · #today #tomorrow #nextweek · any #tag")
+                }
+
+                if let onTemplate, !model.templates.isEmpty {
+                    Section("From template") {
+                        ForEach(model.templates) { template in
+                            Button {
+                                submitting = true
+                                Task {
+                                    await onTemplate(template)
+                                    submitting = false
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack {
+                                    Label(template.name, systemImage: "square.on.square")
+                                    Spacer()
+                                    if !template.subtasks.isEmpty {
+                                        Text("\(template.subtasks.count) subtask\(template.subtasks.count == 1 ? "" : "s")")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .disabled(submitting)
+                            .accessibilityIdentifier("quickadd.template.\(template.name)")
+                        }
+                    }
                 }
 
                 Section("Subtasks") {
@@ -168,19 +196,21 @@ struct QuickAddSheet: View {
     }
 }
 
-/// Catalog tag multi-select (web `TaskTagPicker`).
+/// Tag multi-select (web `TaskTagPicker`): built-in tags, then custom tags in use, with Settings
+/// labels; archived tags are left out unless already on the item.
 struct TagPicker: View {
+    @Environment(AppModel.self) private var app
     @Binding var tags: [String]
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(TaskTags.catalog, id: \.key) { tag in
-                    let selected = TaskTags.isSelected(key: tag.key, in: tags)
+                ForEach(app.tagOverrides.pickerOptions(selected: tags)) { option in
+                    let selected = tags.contains { TaskTags.manualKey($0) == option.key }
                     Button {
-                        tags = TaskTags.toggle(key: tag.key, in: tags)
+                        tags = TaskTags.toggle(option, in: tags)
                     } label: {
-                        Text("\(tag.emoji) \(tag.label)")
+                        Text("\(option.emoji ?? "#") \(option.label)")
                             .font(.subheadline)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -189,6 +219,7 @@ struct TagPicker: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("tagpicker.\(option.label)")
                 }
             }
             .padding(.vertical, 2)

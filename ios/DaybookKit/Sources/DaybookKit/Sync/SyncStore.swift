@@ -312,6 +312,9 @@ public final class SyncStore {
                 guard case .saveDiary(let id, let d, let w, let content, let b) = outbox[i].mutation, id == entryId, b == base || b == nil else { continue }
                 outbox[i].mutation = .saveDiary(entryId: id, date: d, workspaceId: w, content: content, base: row.updatedAt)
             }
+        case .deleteTasks(let ids):
+            // Gone on the server: drop them from the server copy too (tombstones confirm on the next pull).
+            if result.status < 300 { server.deleteTasks(ids) }
         case .setTaskPositions, .tasksFromChecklist, .visitDiary:
             break
         }

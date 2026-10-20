@@ -61,7 +61,8 @@ All content tables include `user_id` and `user_name` for future multi-user suppo
   in `utils/taskTags.ts`), with display `label` / `emoji` overrides and `archived` (hidden from pickers). Overrides
   are display only and applied on the client (`useTagSettings().present`); renaming a custom tag rewrites
   `tasks.tags` / `notes.tags` (`POST /api/tags/rename`). Built-in tags cannot be renamed, only relabelled
-- Not synced: `task_templates` and `tag_settings` are web-only; the iOS app ignores them
+- Not synced: `task_templates` and `tag_settings` are online-only on iOS too (fetched after each sync, cached,
+  edited via `APIClient`); creating tasks from a template is queued like any new task
 - Today page section switches (`todayShowJournal`, `todayShowGoals`) are per-device preferences in localStorage
   (`usePreferences`), like the other view settings
 

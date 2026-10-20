@@ -117,6 +117,23 @@ struct LocalDataTests {
         #expect(data.tasks["t"]?.completedAt == nil)
     }
 
+    @Test func deleteTasksTakesSubtasksAndLinks() {
+        var data = base()
+        data.tasks["p"] = TaskRow(id: "p", title: "Parent", workspaceId: ws)
+        data.tasks["c"] = TaskRow(id: "c", title: "Child", workspaceId: ws, parentId: "p")
+        data.tasks["g"] = TaskRow(id: "g", title: "Grandchild", workspaceId: ws, parentId: "c")
+        data.tasks["keep"] = TaskRow(id: "keep", title: "Keep", workspaceId: ws)
+        data.links["l1"] = LinkRow(id: "l1", sourceType: "diary", sourceId: "d", targetType: "task", targetId: "p", createdAt: "x")
+        data.links["l2"] = LinkRow(id: "l2", sourceType: "task", sourceId: "g", targetType: "note", targetId: "n", createdAt: "x")
+        data.links["l3"] = LinkRow(id: "l3", sourceType: "diary", sourceId: "d", targetType: "task", targetId: "keep", createdAt: "x")
+        let op = PendingOp(clientTime: fixedNow, mutation: .deleteTasks(ids: ["p", "missing"]))
+        data.apply(op)
+        #expect(Set(data.tasks.keys) == ["keep"])
+        #expect(Set(data.links.keys) == ["l3"])
+        #expect(op.mutation.request.path == "/api/tasks/bulk")
+        #expect(op.mutation.request.body == .object(["ids": .strings(["p", "missing"]), "action": .string("delete")]))
+    }
+
     @Test func clearingDueRemovesDayLinks() {
         var data = base()
         data.apply(PendingOp(clientTime: fixedNow, mutation: .createTask(.init(id: "t", title: "T", dueAt: "2026-10-18T07:00:00Z"))))
