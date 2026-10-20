@@ -72,6 +72,44 @@ final class AppFlowE2ETests: DaybookUITestCase {
         XCTAssertNotNil(try server.task(titled: secret), "master_tester's data is untouched")
     }
 
+    func testTaskDefaultsPersistAndApply() throws {
+        launchSignedIn()
+        tab("Settings").tap()
+        let priority = element("settings.defaultPriority")
+        scrollTo(priority)
+        priority.tap()
+        app.buttons["None"].firstMatch.tap()
+        element("settings.defaultDue").tap()
+        app.buttons["Tomorrow"].firstMatch.tap()
+
+        app.terminate()
+        launch(reset: false)
+        waitFor(tab("Tasks")).tap()
+        waitFor(app.buttons["tasks.add"]).tap()
+        let title = "\(runTag) defaults"
+        waitFor(app.textFields["quickadd.title"]).typeText(title)
+        app.buttons["quickadd.submit"].tap()
+        eventually("persisted defaults used for new task") {
+            guard let task = try server.task(titled: title) else { return false }
+            return task["priority"] as? Int == 0
+                && (task["due_at"] as? String ?? "").hasPrefix(Day.string(1))
+        }
+    }
+
+    func testFloatingCreateMenu() throws {
+        launchSignedIn()
+        let add = waitFor(app.buttons["today.addTask"])
+        XCTAssertTrue(add.isHittable, "Create stays reachable without scrolling")
+        add.press(forDuration: 1)
+        waitFor(app.buttons["From template"]).tap()
+        waitFor(app.navigationBars["From template"])
+        app.buttons["Cancel"].tap()
+
+        add.press(forDuration: 1)
+        waitFor(app.buttons["New note"]).tap()
+        waitFor(app.textViews["note.editor"])
+    }
+
     func testTaskLifecycleFromTasksTab() throws {
         launchSignedIn()
         tab("Tasks").tap()

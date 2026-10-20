@@ -161,7 +161,16 @@ struct SettingsView: View {
                     Button("New workspace", systemImage: "plus") { creatingWorkspace = true }
                 }
 
-                Section("Default views") {
+                Section("Defaults") {
+                    Picker("Default priority", selection: $app.prefs.defaultPriority) {
+                        ForEach(Priority.options) { p in Label(p.label, systemImage: p.symbol).tag(p.rawValue) }
+                        Text("None").tag(0)
+                    }
+                    .accessibilityIdentifier("settings.defaultPriority")
+                    Picker("Default due", selection: $app.prefs.defaultDue) {
+                        ForEach(Preferences.DefaultDue.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .accessibilityIdentifier("settings.defaultDue")
                     Picker("Default workspace", selection: Binding(
                         get: { app.prefs.defaultWorkspace },
                         set: { app.prefs.defaultWorkspace = $0; app.activeWorkspaceId = $0 }
