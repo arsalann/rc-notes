@@ -1,10 +1,10 @@
 import { requireAdmin } from '~/server/utils/auth';
-import { execute } from '~/server/utils/db';
-import { VARCHAR } from '~/server/utils/sqlTypes';
+import { asSystem } from '~/server/utils/db';
+import { deleteUserAndData } from '~/server/utils/accounts';
 
 export default defineEventHandler(async (event) => {
   const admin = await requireAdmin(event);
-  const id = getRouterParam(event, 'id');
+  const id = String(getRouterParam(event, 'id') ?? '');
 
   if (!id) {
     throw createError({ statusCode: 400, statusMessage: 'User ID required' });
@@ -14,11 +14,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Cannot delete yourself' });
   }
 
-  await execute(
-    'DELETE FROM users WHERE id = $id',
-    { id },
-    { id: VARCHAR }
-  );
+  // Someone else's rows are outside the admin's row level security scope: delete as the owner.
+  await asSystem(() => deleteUserAndData(id));
 
   return { ok: true };
 });

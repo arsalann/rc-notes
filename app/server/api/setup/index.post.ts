@@ -1,6 +1,6 @@
 import { useSession } from 'h3';
 import { getSessionConfig, hashPassword, type SessionUser } from '~/server/utils/auth';
-import { queryAll, execute, useDB } from '~/server/utils/db';
+import { queryAll, execute, useDB, ensureUserWorkspaces } from '~/server/utils/db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
@@ -58,22 +58,6 @@ export default defineEventHandler(async (event) => {
       { id: userId, username, hash },
       { id: VARCHAR, username: VARCHAR, hash: VARCHAR }
     );
-
-    // Reassign any existing content rows (from old auth system) to new user
-    for (const table of ['workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'event_log']) {
-      await execute(
-        `UPDATE ${table} SET user_id = $uid WHERE user_id IS NOT NULL AND user_id != $uid`,
-        { uid: userId },
-        { uid: VARCHAR }
-      );
-    }
-    for (const table of ['workspaces', 'tasks', 'notes', 'diary_entries', 'event_log']) {
-      await execute(
-        `UPDATE ${table} SET user_name = $uname WHERE user_name IS NOT NULL AND user_name != $uname`,
-        { uname: username },
-        { uname: VARCHAR }
-      );
-    }
   }
 
   // Auto-login: create session
@@ -81,6 +65,11 @@ export default defineEventHandler(async (event) => {
   await session.update({
     user: { id: userId, username, is_admin: true },
   });
+
+  // Rows from before sign-in existed are assigned to the first admin by the `v16_assign_owner`
+  // repair (schema.ts); a new install just gets the default workspaces.
+  event.context.user = { id: userId, username, is_admin: true };
+  await ensureUserWorkspaces();
 
   return {
     ok: true,

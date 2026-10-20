@@ -103,6 +103,11 @@
           </template>
         </p>
       </template>
+      <p class="text-center text-xs text-(--ui-text-dimmed) mt-6">
+        <NuxtLink to="/privacy" class="underline">Privacy</NuxtLink>
+        ·
+        <NuxtLink to="/support" class="underline">Support</NuxtLink>
+      </p>
     </div>
   </div>
 </template>

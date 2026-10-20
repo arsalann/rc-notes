@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll } from '~/server/utils/db';
 import { normalizeTemplateInput, presentTemplate } from '~/server/utils/templates';
 import { listValue, LIST, VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
@@ -6,6 +7,7 @@ import { listValue, LIST, VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 export default defineEventHandler(async (event) => {
   const id = String(getRouterParam(event, 'id'));
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const input = normalizeTemplateInput(body);
 
   const sets: string[] = [];

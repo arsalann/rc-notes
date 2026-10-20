@@ -115,7 +115,7 @@ export default defineEventHandler(async (event) => {
     await queryAll(
       `INSERT INTO sync_ops (op_id, user_id, device_id, method, path, status, response, client_time)
        VALUES ($id, $user_id, $device_id, $method, $path, $status, $response, $client_time::TIMESTAMP)
-       ON CONFLICT (op_id) DO NOTHING`,
+       ON CONFLICT (user_id, op_id) DO NOTHING`,
       {
         id, user_id: user?.id ?? null, device_id: deviceId, method, path, status,
         response: keep.length > MAX_STORED_RESPONSE ? null : keep,

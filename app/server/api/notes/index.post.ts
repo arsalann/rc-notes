@@ -1,9 +1,11 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll } from '~/server/utils/db';
 import { generateNoteDisplayId, clientId } from '~/server/utils/ids';
 import { listValue, VARCHAR, LIST } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const title = body.title?.trim() || '';
   const content = body.content || '';
   const workspaceId = body.workspace_id || null;

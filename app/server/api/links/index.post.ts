@@ -1,9 +1,11 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll } from '~/server/utils/db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
 import { clientId } from '~/server/utils/ids';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const { source_type, source_id, target_type, target_id } = body;
 
   if (!['task', 'note', 'diary'].includes(source_type) || !['task', 'note', 'diary'].includes(target_type)) {

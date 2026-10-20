@@ -149,8 +149,12 @@ private struct TodayScreen: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        // Put visibility on the toolbar item itself. A conditional child view can leave a stale
+        // toolbar button mounted when sync completes while a different tab is selected.
+        if let status = app.store?.status, status.pendingCount > 0, status.lastError != nil || !app.isOnline {
+            ToolbarItem(placement: .topBarLeading) { SyncBadge() }
+        }
         ToolbarItemGroup(placement: .topBarLeading) {
-            SyncBadge()
             if model.selectedDate != model.todayDate {
                 Button("Today") { Task { await model.goToToday() } }
                     .accessibilityIdentifier("today.jump")

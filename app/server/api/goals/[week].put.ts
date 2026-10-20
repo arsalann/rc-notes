@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll } from '~/server/utils/db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
 
@@ -6,6 +7,7 @@ import { VARCHAR } from '~/server/utils/sqlTypes';
 export default defineEventHandler(async (event) => {
   const week = String(getRouterParam(event, 'week'));
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const content = body.content ?? '';
   const workspaceId = body.workspace_id || null;
 

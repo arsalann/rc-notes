@@ -430,6 +430,39 @@ final class AppModel {
         await signedIn(try await api.login(username: username, password: password))
     }
 
+    func signup(username: String, password: String) async throws {
+        guard let api else { throw APIError.invalidURL }
+        await signedIn(try await api.signup(username: username, password: password))
+    }
+
+    /// Deletes the account on the server, then everything this device holds for it: the local copy
+    /// and its queue (not sent: the data is going), journal drafts, cached templates and tags.
+    func deleteAccount(password: String) async throws {
+        guard let api, let userId = user?.id else { throw APIError.invalidURL }
+        syncLoop?.cancel()
+        do {
+            try await api.deleteAccount(password: password)
+        } catch {
+            startSyncLoop()
+            throw error
+        }
+        SessionCookieVault.clear(for: api.baseURL)
+        user = nil
+        cachedUser = nil
+        authNotice = nil
+        phase = .login
+        // Screens read `repo` until they disappear, so the store object stays; its files go, and
+        // the next sign-in opens a new store (`storeDirectory` no longer matches).
+        if let storeDirectory { try? FileManager.default.removeItem(at: storeDirectory) }
+        storeDirectory = nil
+        let prefix = DiaryDrafts.storageKeyPrefix(userId: userId)
+        for key in draftStore.allKeys() where key.hasPrefix(prefix) { draftStore.remove(forKey: key) }
+        templates = []
+        tagOverrides = TagOverrides()
+        defaults.removeObject(forKey: Keys.templates)
+        defaults.removeObject(forKey: Keys.tagSettings)
+    }
+
     func setup(username: String, password: String) async throws {
         guard let api else { throw APIError.invalidURL }
         await signedIn(try await api.setup(username: username, password: password))

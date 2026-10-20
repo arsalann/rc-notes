@@ -7,7 +7,8 @@ import { writeContextFor } from '~/server/utils/syncContext';
  */
 export default defineNitroPlugin(() => {
   setWriteContextProvider(() => {
-    const event = useEvent();
-    return event ? writeContextFor(event) : null;
+    let event;
+    try { event = useEvent(); } catch { return null; } // no request (boot/background work)
+    return event ? writeContextFor(event) : null; // parsing failures propagate; never bypass RLS
   });
 });

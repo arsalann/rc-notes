@@ -98,6 +98,9 @@ struct SettingsView: View {
     @State private var confirmSignOut = false
     @State private var confirmChangeServer = false
     @State private var userToDelete: AdminUser?
+    @State private var deletePassword = ""
+    @State private var confirmDeleteAccount = false
+    @State private var deletingAccount = false
 
     var body: some View {
         @Bindable var app = app
@@ -202,6 +205,21 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    SecureField("Password", text: $deletePassword)
+                        .textContentType(.password)
+                        .accessibilityIdentifier("settings.deletePassword")
+                    Button("Delete account", role: .destructive) { confirmDeleteAccount = true }
+                        .disabled(deletePassword.isEmpty || deletingAccount)
+                        .accessibilityIdentifier("settings.deleteAccount")
+                } header: {
+                    Text("Delete account")
+                } footer: {
+                    Text("Permanently deletes your account and everything in it (tasks, notes, journal, goals, workspaces, tags, templates) on the server and this device. This cannot be undone.")
+                }
+
+                LegalLinksSection()
+
+                Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
             }
@@ -215,6 +233,12 @@ struct SettingsView: View {
             .confirmationDialog("Sign out of daybook?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { Task { await app.logout() } }
             }
+            .confirmationDialog("Delete your account?", isPresented: $confirmDeleteAccount, titleVisibility: .visible) {
+                Button("Delete account and all data", role: .destructive) { Task { await deleteAccount() } }
+                    .accessibilityIdentifier("settings.deleteAccount.confirm")
+            } message: {
+                Text("Everything in \(app.user?.username ?? "this account") is deleted permanently.")
+            }
             .confirmationDialog("Change server?", isPresented: $confirmChangeServer, titleVisibility: .visible) {
                 Button("Sign out and change server", role: .destructive) { Task { await app.changeServer() } }
             }
@@ -227,6 +251,18 @@ struct SettingsView: View {
             } message: {
                 Text("Their account is removed permanently.")
             }
+        }
+    }
+
+    private func deleteAccount() async {
+        deletingAccount = true
+        defer { deletingAccount = false }
+        do {
+            try await app.deleteAccount(password: deletePassword)
+            deletePassword = ""
+            app.showToast("Account deleted", style: .success)
+        } catch {
+            app.showError("Could not delete account", error)
         }
     }
 

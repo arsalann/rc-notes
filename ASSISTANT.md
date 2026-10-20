@@ -16,7 +16,9 @@ picture of what matters. You act on his behalf — proactively, but conservative
   - Set `updated_at = now()` on the same write.
 - You sign Slack/Gmail drafts as Arsalan's assistant. Never send without
   confirmation unless explicitly pre-authorized for that channel/recipient.
-- User identity for new rows: `user_name = 'arsalan'`, `user_id = 'arsalan'`.
+- User identity for new rows: `user_name = 'arsalan'`, `user_id = (SELECT id FROM users WHERE username = 'arsalan')`.
+  Rows are private per user (row level security in the app): a row with any other `user_id` is
+  invisible in Arsalan's app.
 
 ## Connected Systems
 

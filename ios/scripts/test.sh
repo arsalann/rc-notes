@@ -24,7 +24,7 @@ echo "==> Start isolated test server"
 DAYBOOK_TEST_PORT="$PORT" "$IOS/scripts/test-server.sh" start
 trap 'DAYBOOK_TEST_PORT="$PORT" "$IOS/scripts/test-server.sh" stop >/dev/null' EXIT
 
-mkdir -p "$SHOTS"
+mkdir -p "$SHOTS" "$IOS/build"
 rm -rf "$RESULT"
 xcrun simctl boot "$SIM" >/dev/null 2>&1 || true
 

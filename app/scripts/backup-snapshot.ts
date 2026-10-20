@@ -31,42 +31,50 @@ const now = new Date();
 const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
 try {
-  const tables = (await db.run(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
-  )).map(r => String(r.table_name)).filter(t => !only || only.has(t));
-  if (only) {
-    const missing = [...only].filter(t => !tables.includes(t));
-    if (missing.length) throw new Error(`no such public table: ${missing.join(', ')}`);
-  }
-
-  const existing = new Set((await db.run(
-    `SELECT table_name FROM information_schema.tables WHERE table_schema = 'backup'`,
-  )).map(r => String(r.table_name)));
-
-  const plan = [];
-  for (const table of tables) {
-    let n = 1;
-    while (existing.has(`${table}_${day}_${n}`)) n++;
-    const [{ count }] = await db.run(`SELECT count(*)::bigint AS count FROM public.${table}`) as { count: number }[];
-    plan.push({ table, target: `${table}_${day}_${n}`, count: Number(count) });
-  }
-  console.table(plan);
-
-  if (!apply) {
-    console.log('dry run: nothing written. Re-run with --apply to take the snapshots.');
-  } else {
-    await db.run('CREATE SCHEMA IF NOT EXISTS backup');
-    for (const { table, target, count } of plan) {
-      await db.run(`CREATE TABLE backup.${target} AS TABLE public.${table}`);
-      await db.run(`ALTER TABLE backup.${target} ENABLE ROW LEVEL SECURITY`);
-      const [{ copied }] = await db.run(`SELECT count(*)::bigint AS copied FROM backup.${target}`) as { copied: number }[];
-      // The source can grow between the count and the copy (live writes); it can never shrink here.
-      if (Number(copied) < count) throw new Error(`backup.${target} has ${copied} rows, expected at least ${count}`);
-      console.log(`backup.${target}: ${copied} rows`);
+  const snapshot = async (run: typeof db.run) => {
+    if (apply) {
+      await run('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      await run('SELECT pg_advisory_xact_lock(77102764)');
     }
-    console.log(`done: ${plan.length} snapshot(s)`);
-  }
+    const tables = (await run(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
+    )).map(r => String(r.table_name)).filter(t => !only || only.has(t));
+    if (only) {
+      const missing = [...only].filter(t => !tables.includes(t));
+      if (missing.length) throw new Error(`no such public table: ${missing.join(', ')}`);
+    }
+
+    const existing = new Set((await run(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'backup'`,
+    )).map(r => String(r.table_name)));
+
+    const plan = [];
+    for (const table of tables) {
+      let n = 1;
+      while (existing.has(`${table}_${day}_${n}`)) n++;
+      const [{ count }] = await run(`SELECT count(*)::bigint AS count FROM public.${table}`) as { count: number }[];
+      plan.push({ table, target: `${table}_${day}_${n}`, count: Number(count) });
+    }
+    console.table(plan);
+
+    if (!apply) {
+      console.log('dry run: nothing written. Re-run with --apply to take the snapshots.');
+    } else {
+      await run('CREATE SCHEMA IF NOT EXISTS backup');
+      for (const { table, target, count } of plan) {
+        await run(`CREATE TABLE backup.${target} AS TABLE public.${table}`);
+        await run(`ALTER TABLE backup.${target} ENABLE ROW LEVEL SECURITY`);
+        const [{ copied }] = await run(`SELECT count(*)::bigint AS copied FROM backup.${target}`) as { copied: number }[];
+        // Count and copy use the same transaction snapshot, including on a live database.
+        if (Number(copied) !== count) throw new Error(`backup.${target} has ${copied} rows, expected ${count}`);
+        console.log(`backup.${target}: ${copied} rows`);
+      }
+      console.log(`done: ${plan.length} snapshot(s)`);
+    }
+  };
+  if (apply) await db.transaction(snapshot);
+  else await snapshot(db.run);
 } finally {
   await db.close();
 }

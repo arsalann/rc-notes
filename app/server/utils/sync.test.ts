@@ -26,6 +26,8 @@ beforeAll(async () => {
   db = await PGlite.create('memory://');
   run = async (sql, values = []) => (await db.query<Record<string, any>>(sql, values)).rows;
   await ensureSchema(run);
+  await run("INSERT INTO users (id, username) VALUES ('master_tester', 'master_tester')");
+  await run("SELECT set_config('daybook.user_id', 'master_tester', false)");
   await run(`INSERT INTO tasks (id, title, priority) VALUES ('t1', 'first', 2)`);
 });
 

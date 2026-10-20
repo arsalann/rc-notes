@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll, getDefaultWorkspaceId } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId, clientId } from '~/server/utils/ids';
 import { withDerivedTaskTags } from '~/server/utils/taskTagPresenter';
@@ -17,6 +18,7 @@ interface ChecklistItem {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const items: ChecklistItem[] = body.items;
   const sourceType: string = body.source_type; // 'note' or 'diary'
   const sourceId: string = body.source_id;

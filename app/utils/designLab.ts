@@ -12,3 +12,10 @@ export function isDesignLabPath(path: string): boolean {
     prefix => path === prefix || path.startsWith(`${prefix}/`)
   );
 }
+
+/** Pages anyone can read without signing in (the App Store links to them). Not stripped. */
+export const PUBLIC_ROUTES = ['/privacy', '/support'] as const;
+
+export function isPublicPath(path: string): boolean {
+  return (PUBLIC_ROUTES as readonly string[]).includes(path.replace(/\/$/, ''));
+}

@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll, getDefaultWorkspaceId, linkTaskToDiary } from '~/server/utils/db';
 import { generateTaskDisplayId, generateSubtaskDisplayId, clientId as parseClientId } from '~/server/utils/ids';
 import { isWithinNextDays } from '~/server/utils/dates';
@@ -6,6 +7,7 @@ import { listValue, VARCHAR, LIST, INTEGER } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const title = body.title?.trim() || '';
   const description = body.description?.trim() || '';
   const parentId = body.parent_id || null;

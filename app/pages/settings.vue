@@ -293,6 +293,39 @@
 
       <SettingsTags />
 
+      <!-- Delete account -->
+      <UCard>
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-trash-2" class="size-5 text-(--ui-error)" />
+            <span class="font-semibold">Delete Account</span>
+          </div>
+        </template>
+        <form class="space-y-4" @submit.prevent="deleteAccount">
+          <p class="text-sm text-(--ui-text-muted)">
+            Permanently deletes your account and everything in it: tasks, notes, journal, goals,
+            workspaces, tags and templates, on every device. This cannot be undone.
+          </p>
+          <UFormField label="Password">
+            <UInput v-model="del.password" type="password" placeholder="Your password" size="md" icon="i-lucide-key"
+              autocomplete="current-password" />
+          </UFormField>
+          <UFormField :label="`Type ${user?.username || 'your username'} to confirm`">
+            <UInput v-model="del.confirm" size="md" autocapitalize="off" autocomplete="off" />
+          </UFormField>
+          <UButton type="submit" color="error" size="md" icon="i-lucide-trash-2" :loading="del.busy"
+            :disabled="!del.password || del.confirm.trim().toLowerCase() !== user?.username">
+            Delete account
+          </UButton>
+        </form>
+      </UCard>
+
+      <p class="text-center text-xs text-(--ui-text-dimmed)">
+        <NuxtLink to="/privacy" class="underline">Privacy</NuxtLink>
+        ·
+        <NuxtLink to="/support" class="underline">Support</NuxtLink>
+      </p>
+
     </div>
   </div>
 </template>
@@ -311,6 +344,22 @@ onMounted(() => {
 // --- Logout ---
 async function handleLogout() {
   await logout();
+}
+
+// --- Delete account ---
+const del = reactive({ password: '', confirm: '', busy: false });
+
+async function deleteAccount() {
+  del.busy = true;
+  try {
+    await $fetch('/api/auth/account', { method: 'DELETE', body: { password: del.password } });
+    toast.add({ title: 'Account deleted', color: 'success' });
+    await logout();
+  } catch (err: any) {
+    toast.add({ title: 'Could not delete account', description: err?.data?.statusMessage || 'Try again', color: 'error' });
+  }
+  del.password = '';
+  del.busy = false;
 }
 
 // --- Change Password ---

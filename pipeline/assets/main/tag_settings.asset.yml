@@ -18,10 +18,12 @@ columns:
     description: UUID primary key.
   - name: user_id
     type: VARCHAR
-    description: Id of the user who last changed the setting. Not used for scoping yet.
+    checks:
+      - name: not_null
+    description: Required owner user id (FK to users.id; deletion restricted until content cleanup). Row level security (policy `daybook_owner`) limits every request to the signed-in user's rows; new rows default to the request's user (`daybook.user_id`).
   - name: tag_key
     type: VARCHAR
-    description: The tag this row configures (unique, index `idx_tag_settings_key`).
+    description: The tag this row configures (unique per user, index `idx_tag_settings_user_key`).
   - name: label
     type: VARCHAR
     description: Display name override; NULL = the catalog label or the most used spelling.

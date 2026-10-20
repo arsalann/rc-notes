@@ -74,7 +74,9 @@ columns:
     description: Short human-readable id `<3 title chars><2 tag chars><4 id chars>` — used for `@mention` links and URL slugs.
   - name: user_id
     type: VARCHAR
-    description: Owner user id. Multi-user not wired up yet — APIs do NOT filter by user_id (known cross-user leak documented in AGENTS.md).
+    checks:
+      - name: not_null
+    description: Required owner user id (FK to users.id; deletion restricted until content cleanup). Row level security (policy `daybook_owner`) limits every request to the signed-in user's rows; new rows default to the request's user (`daybook.user_id`).
   - name: user_name
     type: VARCHAR
     description: Denormalized owner username for cheap display.
