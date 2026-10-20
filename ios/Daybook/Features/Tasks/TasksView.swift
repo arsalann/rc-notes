@@ -103,7 +103,7 @@ final class TasksModel {
             var order: [String] = []
             var byKey: [String: Group] = [:]
             for task in list {
-                let tags = task.resolvedTags
+                let tags = app.tagOverrides.present(task.resolvedTags)
                 if tags.isEmpty {
                     if byKey["untagged"] == nil { order.append("untagged"); byKey["untagged"] = Group(id: "untagged", label: "Untagged", tasks: []) }
                     byKey["untagged"]!.tasks.append(task)

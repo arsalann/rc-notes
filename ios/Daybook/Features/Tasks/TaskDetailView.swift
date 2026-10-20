@@ -246,7 +246,7 @@ struct TaskDetailView: View {
     private func tagsSection(_ task: TaskItem) -> some View {
         Section("Tags") {
             if !task.detectedTags.isEmpty {
-                ForEach(task.detectedTags, id: \.key) { tag in
+                ForEach(app.tagOverrides.present(task.detectedTags), id: \.key) { tag in
                     LabeledContent {
                         Text(TaskTags.detectedReason(tag)).font(.caption)
                     } label: {

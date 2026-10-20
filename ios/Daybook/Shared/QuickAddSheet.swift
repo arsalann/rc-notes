@@ -41,7 +41,7 @@ struct QuickAddSheet: View {
         if let p = parsed.priority { summary.append(Priority(value: p).label) }
         if let s = parsed.status { summary.append(s.label) }
         if let d = parsed.dueDay { summary.append(model.days.shortLabel(d)) }
-        let preview = TaskTags.resolve(title: parsed.title, manualTags: Hashtags.mergeManualTags(parsed.tags, tags)).resolved
+        let preview = model.tagOverrides.present(TaskTags.resolve(title: parsed.title, manualTags: Hashtags.mergeManualTags(parsed.tags, tags)).resolved)
         summary += preview.map { tag in tag.emoji.map { "\($0) \(tag.label)" } ?? "#\(tag.label)" }
         return summary
     }
@@ -196,19 +196,21 @@ struct QuickAddSheet: View {
     }
 }
 
-/// Catalog tag multi-select (web `TaskTagPicker`).
+/// Tag multi-select (web `TaskTagPicker`): built-in tags, then custom tags in use, with Settings
+/// labels; archived tags are left out unless already on the item.
 struct TagPicker: View {
+    @Environment(AppModel.self) private var app
     @Binding var tags: [String]
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(TaskTags.catalog, id: \.key) { tag in
-                    let selected = TaskTags.isSelected(key: tag.key, in: tags)
+                ForEach(app.tagOverrides.pickerOptions(selected: tags)) { option in
+                    let selected = tags.contains { TaskTags.manualKey($0) == option.key }
                     Button {
-                        tags = TaskTags.toggle(key: tag.key, in: tags)
+                        tags = TaskTags.toggle(option, in: tags)
                     } label: {
-                        Text("\(tag.emoji) \(tag.label)")
+                        Text("\(option.emoji ?? "#") \(option.label)")
                             .font(.subheadline)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -217,6 +219,7 @@ struct TagPicker: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("tagpicker.\(option.label)")
                 }
             }
             .padding(.vertical, 2)

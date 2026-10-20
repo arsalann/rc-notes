@@ -192,6 +192,8 @@ struct SettingsView: View {
 
                 TemplatesSection()
 
+                TagsSection()
+
                 Section("Appearance") {
                     Picker("Theme", selection: $app.prefs.appearance) {
                         ForEach(Preferences.Appearance.allCases, id: \.self) { Text($0.label).tag($0) }

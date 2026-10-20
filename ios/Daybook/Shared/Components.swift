@@ -202,11 +202,13 @@ struct PriorityIcon: View {
 }
 
 struct TagEmojis: View {
+    @Environment(AppModel.self) private var app
     let tags: [ResolvedTag]
     var limit = 2
 
     var body: some View {
-        let emoji = tags.filter { $0.emoji != nil }
+        // Settings → Tags can relabel a tag or give a custom tag an emoji.
+        let emoji = app.tagOverrides.present(tags).filter { $0.emoji != nil }
         if !emoji.isEmpty {
             HStack(spacing: 1) {
                 ForEach(emoji.prefix(limit), id: \.key) { tag in
