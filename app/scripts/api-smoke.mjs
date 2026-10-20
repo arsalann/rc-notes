@@ -226,11 +226,11 @@ await call('DELETE', `/api/notes/${note.id}`);
 
 // Users + password
 const users = await call('GET', '/api/users');
-await call('POST', '/api/users', { username: `smoke${Date.now() % 100000}`, password: 'password123' });
-const extra = (await call('GET', '/api/users')).find(u => u.username.startsWith('smoke'));
-if (extra) await call('DELETE', `/api/users/${extra.id}`);
+const extra = await call('POST', '/api/users', { username: `master_tester_2_smoke_${Date.now() % 100000}`, password: 'password123' });
+await call('DELETE', `/api/users/${extra.id}`);
 await call('PUT', '/api/auth/password', { current_password: 'password123', new_password: 'password123' });
-await call('POST', '/api/auth/signup', { username: `signup${Date.now() % 100000}`, password: 'password123' }, { expect: [200, 403] });
+const signup = await call('POST', '/api/auth/signup', { username: `master_tester_2_signup_${Date.now() % 100000}`, password: 'password123' }, { expect: [200, 403], raw: true });
+if (signup.status === 200) await call('DELETE', '/api/auth/account', { password: 'password123' });
 await call('POST', '/api/auth/login', { username: 'master_tester', password: 'password123' });
 
 // Isolation: a second user sees none of master_tester's data and cannot touch it by id.
