@@ -26,7 +26,9 @@ columns:
     description: Insert timestamp (server clock).
   - name: user_id
     type: VARCHAR
-    description: Owner user id. Multi-user is not wired up yet — currently NULL or the single seeded user.
+    checks:
+      - name: not_null
+    description: Required owner user id (FK to users.id; deletion restricted until content cleanup). Row level security (policy `daybook_owner`) limits every request to the signed-in user's rows; new rows default to the request's user (`daybook.user_id`).
   - name: user_name
     type: VARCHAR
     description: Denormalized owner username for cheap display without joining users.

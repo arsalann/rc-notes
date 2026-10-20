@@ -24,6 +24,8 @@ beforeAll(async () => {
   db = await PGlite.create('memory://');
   run = async (sql, values = []) => (await db.query<Record<string, any>>(sql, values)).rows;
   await ensureSchema(run);
+  await run("INSERT INTO users (id, username) VALUES ('master_tester', 'master_tester')");
+  await run("SELECT set_config('daybook.user_id', 'master_tester', false)");
   // Roll back to the previous shape.
   await run('DROP TABLE task_templates');
   await run('DROP TABLE tag_settings');
@@ -63,8 +65,10 @@ describe('schema upgrade', () => {
     expect(rows.every(r => r.relrowsecurity)).toBe(true);
   });
 
-  it('keeps one settings row per tag', async () => {
-    await run(`INSERT INTO tag_settings (tag_key, label) VALUES ('growth', 'Growth!')`);
-    await expect(run(`INSERT INTO tag_settings (tag_key) VALUES ('growth')`)).rejects.toThrow();
+  it('keeps one settings row per tag and user', async () => {
+    await run("INSERT INTO users (id, username) VALUES ('u1', 'master_tester_2_u1'), ('u2', 'master_tester_2_u2')");
+    await run(`INSERT INTO tag_settings (user_id, tag_key, label) VALUES ('u1', 'growth', 'Growth!')`);
+    await expect(run(`INSERT INTO tag_settings (user_id, tag_key) VALUES ('u1', 'growth')`)).rejects.toThrow();
+    await run(`INSERT INTO tag_settings (user_id, tag_key) VALUES ('u2', 'growth')`);
   });
 });

@@ -76,6 +76,11 @@ public enum DiaryDrafts {
         return "\(DiaryDraftFormat.keyPrefix):\(parts.joined(separator: ":"))"
     }
 
+    /// Every draft key of one user starts with this (used to erase them when the account is deleted).
+    public static func storageKeyPrefix(userId: String) -> String {
+        "\(DiaryDraftFormat.keyPrefix):\(encodeComponent(userId)):"
+    }
+
     public static func isLegacyKey(_ key: String) -> Bool {
         key.hasPrefix(DiaryDraftFormat.legacyKeyPrefix) && !key.hasPrefix("\(DiaryDraftFormat.keyPrefix):")
     }

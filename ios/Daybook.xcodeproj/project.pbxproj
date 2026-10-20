@@ -27,6 +27,7 @@
 		6198C6752F921D587A867312 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2BB02A324C9C7639F7DA250 /* Components.swift */; };
 		728BBFF437B07C30E87207D4 /* DaybookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335602435D33DC840F756BE5 /* DaybookApp.swift */; };
 		7C42CC8ABA178B40E5AB013A /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645EB2E613C7049FBFA51B35 /* TasksView.swift */; };
+		9C911CA1F9DCFD04B7B8726F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 74F73BA3EFFF747EA1F2A9A4 /* PrivacyInfo.xcprivacy */; };
 		BA687AFC2E738D3F0D663879 /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 289011B4A0A5E7E279E977F4 /* AuthViews.swift */; };
 		CD82651871EECB5D6E8512C0 /* MentionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6852E2B040AE181D9A66B57 /* MentionEditor.swift */; };
 		D6DC745D654A8F5388CAE77F /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BBDCAF0B5AA0B1EF4E3FF3 /* TaskDetailView.swift */; };
@@ -63,6 +64,7 @@
 		6BC8462B198EB1D1DED3E35D /* TemplatesSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatesSettings.swift; sourceTree = "<group>"; };
 		6C2BDA5AFA02F6F39E4126DB /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
 		6DAEF051B93D6A8F1142C8FC /* BulkBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkBar.swift; sourceTree = "<group>"; };
+		74F73BA3EFFF747EA1F2A9A4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowE2ETests.swift; sourceTree = "<group>"; };
 		94CC93E29E0CB4DA71EAE001 /* DaybookUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaybookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -139,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				41D360D382C3BD4F5CF56A64 /* Assets.xcassets */,
+				74F73BA3EFFF747EA1F2A9A4 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -321,6 +324,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1CFB8EC0603100A3A396974A /* Assets.xcassets in Resources */,
+				9C911CA1F9DCFD04B7B8726F /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

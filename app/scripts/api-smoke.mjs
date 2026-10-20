@@ -77,8 +77,9 @@ const plus = n => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); retu
 
 await call('GET', '/api/health');
 await call('GET', '/api/setup/status');
-await call('GET', '/api/setup/test');
+await call('GET', '/api/setup/test', undefined, { expect: [401] });
 await call('POST', '/api/auth/login', { username: 'master_tester', password: 'password123' });
+await call('GET', '/api/setup/test');
 sameShape('auth_check', await call('GET', '/api/auth/check'), fixtures.auth_check);
 
 const workspaces = await call('GET', '/api/workspaces');
@@ -231,6 +232,61 @@ if (extra) await call('DELETE', `/api/users/${extra.id}`);
 await call('PUT', '/api/auth/password', { current_password: 'password123', new_password: 'password123' });
 await call('POST', '/api/auth/signup', { username: `signup${Date.now() % 100000}`, password: 'password123' }, { expect: [200, 403] });
 await call('POST', '/api/auth/login', { username: 'master_tester', password: 'password123' });
+
+// Isolation: a second user sees none of master_tester's data and cannot touch it by id.
+const secret = await call('POST', '/api/tasks', { title: `${tag} private`, workspace_id: work.id });
+const secretNote = await call('POST', '/api/notes', { title: `${tag} private note`, content: 'x' });
+const privateDiary = await call('POST', '/api/diary', { entry_date: '2035-03-04' });
+const otherName = `master_tester_2_${Date.now() % 100000}`;
+await call('POST', '/api/users', { username: otherName, password: 'password123' });
+await call('POST', '/api/auth/logout');
+await call('POST', '/api/auth/login', { username: otherName, password: 'password123' });
+const theirWorkspaces = await call('GET', '/api/workspaces');
+check('second user gets own default workspaces', theirWorkspaces.length === 2 && !theirWorkspaces.some(w => w.id === work.id));
+const leaks = JSON.stringify([
+  await call('GET', '/api/tasks'), await call('GET', '/api/tasks?archived=true'), await call('GET', '/api/notes'),
+  await call('GET', '/api/calendar'), await call('GET', `/api/search?q=${encodeURIComponent(tag)}`),
+  await call('GET', '/api/sync/pull?since=0'), await call('GET', '/api/tags'), await call('GET', '/api/templates'),
+  await call('GET', '/api/events'), await call('GET', `/api/diary/${today}`, undefined, { expect: [200, 404] }),
+]);
+check('second user sees none of master_tester\'s rows', !leaks.includes(tag) && !leaks.includes(work.id) && !leaks.includes(secret.id));
+await call('GET', `/api/tasks/${secret.id}`, undefined, { expect: [404] });
+await call('GET', `/api/notes/${secretNote.id}`, undefined, { expect: [404] });
+await call('PUT', `/api/tasks/${secret.id}`, { title: 'hijacked' }, { expect: [404] });
+await call('DELETE', `/api/tasks/${secret.id}`, undefined, { expect: [404] });
+await call('DELETE', `/api/notes/${secretNote.id}`, undefined, { expect: [404] });
+// Foreign references must be rejected, even when creating a row owned by the caller.
+await call('POST', '/api/tasks', { title: `${otherName} foreign workspace`, workspace_id: work.id }, { expect: [404] });
+await call('POST', '/api/tasks', { title: `${otherName} foreign parent`, parent_id: secret.id }, { expect: [404] });
+await call('POST', '/api/notes', { title: `${otherName} foreign workspace`, workspace_id: work.id }, { expect: [404] });
+await call('POST', '/api/links', { source_type: 'task', source_id: secret.id, target_type: 'note', target_id: secretNote.id }, { expect: [404] });
+const theirDiary = await call('POST', '/api/diary', { entry_date: '2035-03-04' });
+check('default diary identities are distinct across users', theirDiary.id !== privateDiary.id && theirDiary.workspace_id !== privateDiary.workspace_id);
+await call('GET', '/api/setup/test', undefined, { expect: [403] });
+const mine = await call('POST', '/api/tasks', { title: `${otherName} own task` });
+
+// Account deletion: wrong password refused, then everything of theirs is gone and login fails.
+await call('DELETE', '/api/auth/account', { password: 'wrong-password' }, { expect: [401] });
+const staleCookie = cookie;
+await call('DELETE', '/api/auth/account', { password: 'password123' });
+const clearedCookie = cookie;
+cookie = staleCookie;
+await call('GET', '/api/tasks', undefined, { expect: [401] });
+cookie = staleCookie;
+await call('POST', '/api/tasks', { title: `${otherName} stale session` }, { expect: [401] });
+cookie = staleCookie;
+const revoked = await call('GET', '/api/auth/check');
+check('deleted account cannot renew its session on another device', revoked.user === null);
+cookie = clearedCookie;
+await call('GET', '/api/tasks', undefined, { expect: [401] });
+await call('POST', '/api/auth/login', { username: otherName, password: 'password123' }, { expect: [401] });
+
+await call('POST', '/api/auth/login', { username: 'master_tester', password: 'password123' });
+const after = await call('GET', `/api/tasks/${secret.id}`);
+check('master_tester\'s task untouched by the other user', after?.title === `${tag} private`);
+await call('GET', `/api/notes/${secretNote.id}`);
+await call('GET', `/api/tasks/${mine.id}`, undefined, { expect: [404] });
+await call('DELETE', '/api/auth/account', { password: 'password123' }, { expect: [409] }); // only admin
 await call('POST', '/api/auth/logout');
 await call('GET', '/api/tasks', undefined, { expect: [401] });
 

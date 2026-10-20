@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll, linkTaskToDiary } from '~/server/utils/db';
 import { isWithinNextDays } from '~/server/utils/dates';
 import { withStoredTaskTags } from '~/server/utils/taskTagPresenter';
@@ -6,6 +7,7 @@ import { listValue, VARCHAR, LIST, BOOLEAN, INTEGER } from '~/server/utils/sqlTy
 export default defineEventHandler(async (event) => {
   const id = String(getRouterParam(event, 'id'));
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
 
   const sets: string[] = [];
   const params: Record<string, any> = { id };

@@ -13,7 +13,7 @@ export const TABLE_DDL: Record<string, string> = {
   workspaces: `
     CREATE TABLE workspaces (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       name VARCHAR NOT NULL,
       description TEXT NOT NULL DEFAULT '',
@@ -37,7 +37,7 @@ export const TABLE_DDL: Record<string, string> = {
     CREATE TABLE tasks (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
       display_id VARCHAR NOT NULL DEFAULT '',
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       workspace_id VARCHAR DEFAULT NULL,
       parent_id VARCHAR DEFAULT NULL,
@@ -70,7 +70,7 @@ export const TABLE_DDL: Record<string, string> = {
     CREATE TABLE notes (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
       display_id VARCHAR NOT NULL DEFAULT '',
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       workspace_id VARCHAR DEFAULT NULL,
       title VARCHAR NOT NULL DEFAULT '',
@@ -94,7 +94,7 @@ export const TABLE_DDL: Record<string, string> = {
   links: `
     CREATE TABLE links (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       source_type VARCHAR NOT NULL,
       source_id VARCHAR NOT NULL,
       target_type VARCHAR NOT NULL,
@@ -113,7 +113,7 @@ export const TABLE_DDL: Record<string, string> = {
   diary_entries: `
     CREATE TABLE diary_entries (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       workspace_id VARCHAR DEFAULT NULL,
       entry_date DATE NOT NULL,
@@ -134,7 +134,7 @@ export const TABLE_DDL: Record<string, string> = {
   goals_weekly: `
     CREATE TABLE goals_weekly (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       workspace_id VARCHAR DEFAULT NULL,
       week_start DATE NOT NULL,
@@ -155,7 +155,7 @@ export const TABLE_DDL: Record<string, string> = {
   event_log: `
     CREATE TABLE event_log (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       event_type VARCHAR NOT NULL,
       method VARCHAR NOT NULL,
@@ -194,6 +194,7 @@ export const TABLE_DDL: Record<string, string> = {
   sync_tombstones: `
     CREATE TABLE sync_tombstones (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       table_name VARCHAR NOT NULL,
       row_id VARCHAR NOT NULL,
       updated_device_kind VARCHAR DEFAULT NULL,
@@ -205,20 +206,21 @@ export const TABLE_DDL: Record<string, string> = {
     )`,
   sync_ops: `
     CREATE TABLE sync_ops (
-      op_id VARCHAR PRIMARY KEY,
-      user_id VARCHAR DEFAULT NULL,
+      op_id VARCHAR NOT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       device_id VARCHAR DEFAULT NULL,
       method VARCHAR NOT NULL,
       path VARCHAR NOT NULL,
       status INTEGER NOT NULL,
       response TEXT DEFAULT NULL,
       client_time TIMESTAMP DEFAULT NULL,
-      received_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+      received_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+      PRIMARY KEY (user_id, op_id)
     )`,
   task_templates: `
     CREATE TABLE task_templates (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       user_name VARCHAR DEFAULT NULL,
       workspace_id VARCHAR DEFAULT NULL,
       name VARCHAR NOT NULL,
@@ -236,7 +238,7 @@ export const TABLE_DDL: Record<string, string> = {
   tag_settings: `
     CREATE TABLE tag_settings (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      user_id VARCHAR DEFAULT NULL,
+      user_id VARCHAR NOT NULL DEFAULT NULLIF(current_setting('daybook.user_id', true), ''),
       tag_key VARCHAR NOT NULL,
       label VARCHAR DEFAULT NULL,
       emoji VARCHAR DEFAULT NULL,
@@ -291,7 +293,30 @@ const COLUMN_MIGRATIONS: { table: string; column: string; type: string }[] = [
   { table: 'event_log', column: 'sync_op_id', type: 'VARCHAR DEFAULT NULL' },
   { table: 'event_log', column: 'client_time', type: 'TIMESTAMP DEFAULT NULL' },
   { table: 'sync_tombstones', column: 'row_data', type: 'JSONB DEFAULT NULL' },
+  { table: 'sync_tombstones', column: 'user_id', type: `VARCHAR DEFAULT NULLIF(current_setting('daybook.user_id', true), '')` },
 ];
+
+/**
+ * The role every statement made inside a request runs as (`db.ts` switches to it). It cannot
+ * bypass row level security, unlike the owner the server connects as (Supabase's `postgres` has
+ * BYPASSRLS; PGlite's is a superuser).
+ */
+export const APP_ROLE = 'daybook_app';
+
+/** The default that stamps a new row with the signed-in user (`daybook.user_id`, set by `db.ts`). */
+const OWNER_DEFAULT = "NULLIF(current_setting('daybook.user_id', true), '')";
+
+/**
+ * Tables whose rows belong to one user (`user_id`). The policy below lets `APP_ROLE` see and write
+ * only the signed-in user's rows: one user can never read another's data, whatever an endpoint's
+ * SQL forgets to filter. `users` is readable by `APP_ROLE` (sign-in looks people up by name).
+ */
+export const OWNED_TABLES = [
+  'workspaces', 'tasks', 'notes', 'links', 'diary_entries', 'goals_weekly', 'event_log',
+  'sync_tombstones', 'sync_ops', 'task_templates', 'tag_settings',
+] as const;
+
+const OWNER_CHECK = "user_id = current_setting('daybook.user_id', true)";
 
 /**
  * Columns the per-field clock ignores: identity, bookkeeping, and server-generated values.
@@ -391,8 +416,8 @@ $fn$`;
 const SYNC_TOMBSTONE_FUNCTION = `
 CREATE OR REPLACE FUNCTION daybook_sync_tombstone() RETURNS trigger LANGUAGE plpgsql AS $fn$
 BEGIN
-  INSERT INTO sync_tombstones (table_name, row_id, updated_device_kind, updated_device_id, sync_op_id, row_data)
-  VALUES (TG_TABLE_NAME, OLD.id,
+  INSERT INTO sync_tombstones (user_id, table_name, row_id, updated_device_kind, updated_device_id, sync_op_id, row_data)
+  VALUES (OLD.user_id, TG_TABLE_NAME, OLD.id,
     NULLIF(current_setting('daybook.device_kind', true), ''),
     NULLIF(current_setting('daybook.device_id', true), ''),
     NULLIF(current_setting('daybook.op_id', true), ''),
@@ -426,7 +451,14 @@ const INDEX_MIGRATIONS: { name: string; ddl: string }[] = [
   ...SYNCED_TABLES.map(t => ({ name: `idx_${t}_sync_seq`, ddl: `CREATE INDEX idx_${t}_sync_seq ON ${t} (sync_seq)` })),
   { name: 'idx_sync_tombstones_seq', ddl: 'CREATE INDEX idx_sync_tombstones_seq ON sync_tombstones (sync_seq)' },
   { name: 'idx_sync_ops_received', ddl: 'CREATE INDEX idx_sync_ops_received ON sync_ops (received_at)' },
-  { name: 'idx_tag_settings_key', ddl: 'CREATE UNIQUE INDEX idx_tag_settings_key ON tag_settings (tag_key)' },
+  { name: 'idx_tag_settings_user_key', ddl: 'CREATE UNIQUE INDEX idx_tag_settings_user_key ON tag_settings (user_id, tag_key)' },
+  ...OWNED_TABLES.map(t => ({ name: `idx_${t}_user`, ddl: `CREATE INDEX idx_${t}_user ON ${t} (user_id)` })),
+];
+
+/** Indexes replaced by others above; dropped when present. */
+const DROPPED_INDEXES = [
+  // Tag settings are per user now: `idx_tag_settings_user_key`.
+  'idx_tag_settings_key',
 ];
 
 /**
@@ -447,12 +479,73 @@ const HISTORICAL_REPAIRS = [
  * See AGENTS.md "Retroactive data fixes" for the procedure (backups, fixture test, provenance).
  * A fresh database records these as applied without running them.
  */
-const DATA_REPAIRS: { name: string; statements: string[] }[] = [];
+const DATA_REPAIRS: { name: string; statements: string[] }[] = [
+  {
+    // Before per-user isolation, rows were written without (or with a stale) `user_id`. They all
+    // belong to the app's original owner: `arsalan`, else the first admin. With no such user the
+    // first statement fails (division by zero), so the repair retries next boot instead of being
+    // recorded as done. Only unowned rows match, so a second run changes nothing.
+    name: 'v16_assign_owner',
+    statements: [
+      `SELECT 1 / (SELECT count(*) FROM users WHERE username = 'arsalan' OR is_admin)::int`,
+      ...OWNED_TABLES.map(t => `UPDATE ${t} SET user_id = (
+          SELECT id FROM users WHERE username = 'arsalan' OR is_admin
+          ORDER BY (username = 'arsalan') DESC, created_at LIMIT 1)${
+          ['sync_tombstones', 'sync_ops'].includes(t) ? '' : `, updated_by = 'migration_v16_assign_owner'${['event_log', 'links'].includes(t) ? '' : ', updated_at = current_timestamp'}`}
+        WHERE user_id IS NULL OR user_id NOT IN (SELECT id FROM users)`),
+    ],
+  },
+];
 
 export const RLS_TABLES = Object.keys(TABLE_DDL);
 
-export async function ensureSchema(run: Run, opts: { seed?: boolean } = {}) {
-  const seed = opts.seed ?? true;
+/**
+ * The `APP_ROLE` role, its grants, the owner policy on every `OWNED_TABLES` table, and the
+ * `user_id` default that stamps new rows. Steady state: only the (idempotent) grants run.
+ */
+async function ensureIsolation(run: Run) {
+  const role = await run('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1', [APP_ROLE]);
+  if (!role.length) await run(`CREATE ROLE ${APP_ROLE} NOLOGIN NOBYPASSRLS`);
+  else if (role[0]!.rolsuper || role[0]!.rolbypassrls) throw new Error(`${APP_ROLE} must not bypass row level security`);
+  const member = await run(
+    `SELECT pg_has_role(current_user, $1, 'MEMBER') AS ok`, [APP_ROLE]
+  );
+  if (!member[0]?.ok) await run(`GRANT ${APP_ROLE} TO current_user`);
+  await run(`GRANT USAGE ON SCHEMA ${await schemaName(run)} TO ${APP_ROLE}`);
+  await run(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${[...OWNED_TABLES, 'users'].join(', ')} TO ${APP_ROLE}`);
+  await run(`GRANT USAGE, SELECT ON SEQUENCE sync_seq TO ${APP_ROLE}`);
+
+  const policies = new Set((await run(
+    `SELECT tablename, policyname FROM pg_policies WHERE schemaname = current_schema()`
+  )).map(r => `${r.tablename}.${r.policyname}`));
+  for (const t of OWNED_TABLES) {
+    if (!policies.has(`${t}.daybook_owner`)) {
+      await run(`CREATE POLICY daybook_owner ON ${t} FOR ALL TO ${APP_ROLE}
+                 USING (${OWNER_CHECK}) WITH CHECK (${OWNER_CHECK})`);
+    }
+  }
+  if (!policies.has('users.daybook_app')) {
+    await run(`CREATE POLICY daybook_app ON users FOR ALL TO ${APP_ROLE} USING (true) WITH CHECK (true)`);
+  }
+
+  const defaults = await run(
+    `SELECT table_name, column_default FROM information_schema.columns
+     WHERE table_schema = current_schema() AND column_name = 'user_id'`
+  );
+  for (const r of defaults) {
+    const t = String(r.table_name);
+    if ((OWNED_TABLES as readonly string[]).includes(t) && !String(r.column_default ?? '').includes('daybook.user_id')) {
+      await run(`ALTER TABLE ${t} ALTER COLUMN user_id SET DEFAULT ${OWNER_DEFAULT}`);
+    }
+  }
+}
+
+async function schemaName(run: Run): Promise<string> {
+  return String((await run('SELECT current_schema() AS s'))[0]!.s);
+}
+
+/** `opts.seed` is accepted for old callers; default workspaces are per user now (`ensureUserWorkspaces`). */
+export async function ensureSchema(run: Run, opts: { seed?: boolean; transaction?: <T>(fn: (run: Run) => Promise<T>) => Promise<T> } = {}) {
   const columnsByTable = async () => {
     const rows = await run(
       `SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema()`
@@ -519,6 +612,7 @@ export async function ensureSchema(run: Run, opts: { seed?: boolean } = {}) {
     try {
       await run(i.ddl);
     } catch (e) {
+      if (i.name === 'idx_tag_settings_user_key') throw e;
       console.warn(`[db] could not create ${i.name}:`, (e as Error)?.message);
     }
   }
@@ -534,10 +628,14 @@ export async function ensureSchema(run: Run, opts: { seed?: boolean } = {}) {
     if (RLS_TABLES.includes(table)) await run(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
   }
 
-  // --- 6. Seed default workspaces, but only when the table was just created.
-  if (seed && missingTables.includes('workspaces')) {
-    await run("INSERT INTO workspaces (name, emoji, position) VALUES ('Personal', '🏠', 0), ('Work', '💼', 1)");
+  for (const name of DROPPED_INDEXES) {
+    if (indexNames.has(name)) await run(`DROP INDEX IF EXISTS ${name}`);
   }
+
+  // --- 5b. Per-user isolation. Not wrapped in try/catch on purpose: without the role, requests
+  // cannot switch to it and fail, rather than run unisolated.
+  await ensureIsolation(run);
+
 
   // --- 7. Data repairs, gated on the ledger.
   let applied: Set<string>;
@@ -555,12 +653,45 @@ export async function ensureSchema(run: Run, opts: { seed?: boolean } = {}) {
   for (const repair of DATA_REPAIRS) {
     if (applied.has(repair.name)) continue;
     try {
-      for (const sql of repair.statements) await run(sql);
-      await run('INSERT INTO applied_migrations (name) VALUES ($1)', [repair.name]);
+      const apply = async (tx: Run) => {
+        for (const sql of repair.statements) await tx(sql);
+        await tx('INSERT INTO applied_migrations (name) VALUES ($1)', [repair.name]);
+      };
+      if (!opts.transaction) throw new Error('A transaction runner is required to apply data repairs');
+      await opts.transaction(apply);
       console.log(`[db] applied one-time repair ${repair.name}`);
     } catch (e) {
-      console.warn(`[db] repair ${repair.name} failed, will retry next boot:`, (e as Error)?.message);
+      throw new Error(`Repair ${repair.name} failed; refusing to start`, { cause: e });
     }
+  }
+
+  // User content and sync records must never become invisible, ownerless rows. Audit records
+  // intentionally permit NULL for requests made before sign-in. Run only after the owner repair.
+  const nullableOwners = await run(`SELECT table_name FROM information_schema.columns
+    WHERE table_schema = current_schema() AND column_name = 'user_id' AND is_nullable = 'YES'`);
+  for (const { table_name: table } of nullableOwners) {
+    if ((OWNED_TABLES as readonly string[]).includes(table) && table !== 'event_log') {
+      await run(`ALTER TABLE ${table} ALTER COLUMN user_id SET NOT NULL`);
+    }
+  }
+
+  // A request already in flight during account deletion must not recreate orphaned content.
+  // FK locks serialize the insert against deletion of the owning user, even across connections.
+  const ownerConstraints = new Set((await run(`SELECT conname FROM pg_constraint
+    WHERE connamespace = current_schema()::regnamespace`)).map(r => r.conname));
+  for (const table of OWNED_TABLES) {
+    if (table === 'event_log' || ownerConstraints.has(`${table}_owner_fk`)) continue;
+    await run(`ALTER TABLE ${table} ADD CONSTRAINT ${table}_owner_fk
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT`);
+  }
+
+  // Operation ids are device-chosen. Different users can reuse an id without losing their own
+  // exactly-once ledger entry. Replace the old global primary key in one atomic ALTER statement.
+  const opPrimary = (await run(`SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint WHERE conrelid = 'sync_ops'::regclass AND contype = 'p'`))[0];
+  if (opPrimary && opPrimary.definition !== 'PRIMARY KEY (user_id, op_id)') {
+    const constraint = String(opPrimary.conname).replaceAll('"', '""');
+    await run(`ALTER TABLE sync_ops DROP CONSTRAINT "${constraint}", ADD PRIMARY KEY (user_id, op_id)`);
   }
 
   // --- 8. display_id backfill. Un-gated on purpose: an idempotent self-healing check that normally

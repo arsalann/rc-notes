@@ -1,6 +1,6 @@
 import { useSession } from 'h3';
 import { getSessionConfig, verifyPassword, type SessionUser } from '~/server/utils/auth';
-import { queryAll } from '~/server/utils/db';
+import { queryAll, ensureUserWorkspaces } from '~/server/utils/db';
 import { VARCHAR } from '~/server/utils/sqlTypes';
 import { clientIp } from '~/server/utils/requestPolicy';
 
@@ -68,6 +68,9 @@ export default defineEventHandler(async (event) => {
       is_admin: !!user.is_admin,
     },
   });
+
+  event.context.user = { id: String(user.id), username: String(user.username), is_admin: !!user.is_admin };
+  await ensureUserWorkspaces();
 
   return {
     ok: true,

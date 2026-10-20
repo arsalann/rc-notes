@@ -1,7 +1,7 @@
 <template>
   <UApp>
-    <!-- The design lab is deliberately public and local-only: it has no data dependency. -->
-    <div v-if="isDesignLab" class="app-shell min-h-screen">
+    <!-- The design lab (local-only) and the legal pages are public: no data dependency. -->
+    <div v-if="isPublicPage" class="app-shell min-h-screen">
       <NuxtPage />
     </div>
 
@@ -55,10 +55,10 @@ useHead({
 });
 // Shared with the `pages:extend` hook in nuxt.config.ts that strips these routes from production,
 // so the auth bypass and the route removal cannot drift apart.
-const isDesignLab = computed(() => isDesignLabPath(route.path));
+const isPublicPage = computed(() => isDesignLabPath(route.path) || isPublicPath(route.path));
 
 onMounted(async () => {
-  if (isDesignLab.value) return;
+  if (isPublicPage.value) return;
   await checkAuth();
   if (appState.value === 'ready') {
     await fetchWorkspaces();
@@ -77,7 +77,7 @@ onBeforeUnmount(() => {
 });
 
 watch(appState, async (state) => {
-  if (state === 'ready' && !isDesignLab.value) {
+  if (state === 'ready' && !isPublicPage.value) {
     await fetchWorkspaces();
   }
 });

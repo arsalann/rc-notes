@@ -49,7 +49,7 @@ columns:
     description: Server timestamp when the event was logged.
   - name: user_id
     type: VARCHAR
-    description: Acting user id, if known.
+    description: Acting user id, if known. Requests see only their own rows (row level security); the log itself is written as the owner role.
   - name: user_name
     type: VARCHAR
     description: Denormalized acting username.

@@ -79,6 +79,8 @@ final class OfflineE2ETests: DaybookUITestCase {
         XCTAssertEqual(full["created_device_kind"] as? String, "ios")
         XCTAssertEqual(full["updated_by"] as? String, "user_in_ios_app")
         XCTAssertNotNil(full["created_device_id"] as? String)
-        XCTAssertFalse(app.buttons["sync.offline"].exists)
+        eventually("sync badge clears after the acknowledged changes", timeout: 20) {
+            !app.buttons["sync.offline"].exists
+        }
     }
 }

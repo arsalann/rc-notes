@@ -1,4 +1,4 @@
-import { queryAll } from './db';
+import { asSystem, queryAll } from './db';
 import { VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
 
 /**
@@ -215,12 +215,14 @@ async function insertRows(rows: Record<string, any>[]) {
     return `(gen_random_uuid()::text, ${placeholders.join(', ')})`;
   });
 
-  await queryAll(
+  // Written as the owner: a batch mixes users (and requests from before sign-in).
+  await asSystem(() => queryAll(
     `INSERT INTO event_log (id, ${[...FIELDS, 'created_at'].join(', ')})
-     VALUES ${tuples.join(', ')}`,
+     SELECT v.* FROM (VALUES ${tuples.join(', ')}) AS v(id, ${[...FIELDS, 'created_at'].join(', ')})
+     WHERE v.user_id IS NULL OR EXISTS (SELECT 1 FROM users WHERE users.id = v.user_id)`,
     params,
     types
-  );
+  ));
 }
 
 /**

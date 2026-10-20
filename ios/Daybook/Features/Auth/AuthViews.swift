@@ -149,14 +149,20 @@ private struct CredentialsForm: View {
 
 /// Sign in or create an account (web `/login`).
 struct LoginView: View {
+    enum Mode { case signIn, signUp }
+
     @Environment(AppModel.self) private var model
+    @State private var mode: Mode = .signIn
     @State private var username = ""
     @State private var password = ""
     @State private var confirm = ""
     @State private var submitting = false
     @State private var error: String?
 
-    private var canSubmit: Bool { !username.isEmpty && !password.isEmpty }
+    private var canSubmit: Bool {
+        if mode == .signIn { return !username.isEmpty && !password.isEmpty }
+        return username.count >= 2 && password.count >= 8 && password == confirm
+    }
 
     var body: some View {
         NavigationStack {
@@ -166,17 +172,27 @@ struct LoginView: View {
                     Section { Label(notice, systemImage: "clock.badge.exclamationmark").foregroundStyle(Color("Warm")) }
                         .accessibilityIdentifier("auth.notice")
                 }
-                CredentialsForm(username: $username, password: $password, confirm: $confirm, needsConfirm: false)
+                Picker("Mode", selection: $mode) {
+                    Text("Sign in").tag(Mode.signIn)
+                    Text("Create account").tag(Mode.signUp)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .accessibilityIdentifier("auth.mode")
+                CredentialsForm(username: $username, password: $password, confirm: $confirm, needsConfirm: mode == .signUp)
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }.accessibilityIdentifier("auth.error")
                 }
                 Section {
-                    Button("Sign in", action: submit)
+                    Button(mode == .signIn ? "Sign in" : "Create account", action: submit)
                         .disabled(!canSubmit || submitting)
                         .accessibilityIdentifier("auth.submit")
                 } footer: {
-                    Text("Need an account? Ask an admin to add you in Settings.")
+                    if mode == .signUp {
+                        Text("By creating an account you agree to the privacy policy below.")
+                    }
                 }
+                LegalLinksSection()
                 if AppModel.allowsServerOverride {
                     Section {
                         LabeledContent("Server", value: model.serverURLString)
@@ -184,6 +200,7 @@ struct LoginView: View {
                     }
                 }
             }
+            .onChange(of: mode) { error = nil; confirm = "" }
         }
     }
 
@@ -194,9 +211,28 @@ struct LoginView: View {
         Task {
             defer { submitting = false }
             do {
-                try await model.login(username: username, password: password)
+                if mode == .signUp {
+                    try await model.signup(username: username, password: password)
+                } else {
+                    try await model.login(username: username, password: password)
+                }
             } catch {
                 self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// Privacy policy and support pages, served by the app's server (public, no sign-in).
+struct LegalLinksSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let base = URL(string: model.serverURLString), !model.serverURLString.isEmpty {
+            Section {
+                Link("Privacy policy", destination: base.appendingPathComponent("privacy"))
+                    .accessibilityIdentifier("legal.privacy")
+                Link("Support", destination: base.appendingPathComponent("support"))
             }
         }
     }

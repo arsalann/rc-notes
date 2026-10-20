@@ -151,6 +151,11 @@ extension APIClient {
 
     public func logout() async throws { try await sendIgnoringResult("POST", "/api/auth/logout") }
 
+    /// Deletes the signed-in account and all of its data on the server (needs the password).
+    public func deleteAccount(password: String) async throws {
+        try await sendIgnoringResult("DELETE", "/api/auth/account", body: ["password": .string(password)])
+    }
+
     public func changePassword(current: String, new: String) async throws {
         try await sendIgnoringResult("PUT", "/api/auth/password", body: ["current_password": .string(current), "new_password": .string(new)])
     }

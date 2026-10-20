@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
   const rows = await queryAll(
     `INSERT INTO tag_settings (tag_key, user_id, ${cols.join(', ')})
      VALUES ($key, $user_id, ${cols.map(c => `$${c}`).join(', ')})
-     ON CONFLICT (tag_key) DO UPDATE SET ${cols.map(c => `${c} = EXCLUDED.${c}`).join(', ')}, updated_at = current_timestamp
+     ON CONFLICT (user_id, tag_key) DO UPDATE SET ${cols.map(c => `${c} = EXCLUDED.${c}`).join(', ')}, updated_at = current_timestamp
      RETURNING *`,
     params, types,
   );

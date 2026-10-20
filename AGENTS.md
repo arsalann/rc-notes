@@ -17,7 +17,7 @@
   task templates, tag settings, multi-select bulk actions
 - Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + Postgres (Supabase) + Bruin CLI, plus a native iOS app in `ios/`
   that works offline on a local copy and syncs (see "Offline sync" below)
-- Deployed on Railway (see `DEPLOY.md`); it includes setup and login flows, but data endpoints are not yet consistently scoped by `user_id`
+- Deployed on Railway (see `DEPLOY.md`); open sign-up, data private per user (see "Per-user isolation")
 - Primary use: phone browser
 
 ## Key File Locations
@@ -46,7 +46,7 @@
 - `app/assets/css/main.css` — theme, all CSS utility classes defined here
 
 ## Data Model
-All content tables include `user_id` and `user_name` for future multi-user support.
+All content tables include `user_id` (the owner; see "Per-user isolation") and `user_name`.
 
 - **workspaces**: filter-based labels (Personal, Work seeded by default), with description, color, archived, updated_at
 - **tasks**: parent_id for subtasks, workspace_id, display_id, status, priority, completed/completed_at, due_at, reminder_at, deleted_at, position, tags[]
@@ -123,6 +123,39 @@ The iOS app keeps a local copy of the data and a queue of changes; the web app s
   the column, add it to `Rows.swift` (and the local effect/query that uses it).
 - **Tests**: `app/server/utils/sync.test.ts` (triggers), `app/scripts/sync-smoke.mjs` (endpoints, against the
   test server), `ios/DaybookKit/Tests/DaybookKitTests/SyncTests.swift` (queue, conflicts, local queries).
+
+## Per-user isolation
+- Every statement made inside a request runs as the `daybook_app` role (`APP_ROLE` in `schema.ts`) with
+  `daybook.user_id` = the signed-in user, set by `db.ts` alongside the write context (session settings
+  cached per pooled client; a local transaction on PGlite). The `daybook_owner` policy on every
+  `OWNED_TABLES` table lets it see and write only that user's rows; before sign-in it sees none.
+  `users` is readable (sign-in looks people up). Endpoints don't need `WHERE user_id = …`: a forgotten
+  filter cannot leak, a foreign id just finds nothing (404).
+- New rows get `user_id` from the column default (`daybook.user_id`); don't pass it. Deleted synced rows
+  leave tombstones owned by the row's owner.
+- Content/sync ownership is NOT NULL and references `users.id`; anonymous `event_log` records remain
+  nullable. This prevents in-flight requests from recreating orphaned rows after account deletion.
+  Validate workspace/parent/link references with `validateOwnedReferences` before accepting them.
+- Multi-statement request writes use `withTransaction()` from `db.ts` so queries share one connection.
+  Never send BEGIN/COMMIT through separate `queryAll()` / `db.run()` calls: the Postgres pool may
+  choose different connections. Maintenance scripts use `db.transaction(run => …)` directly.
+- Data repairs and their ledger entry run together via `ensureSchema`'s transaction runner; repair
+  failure aborts startup. `sync_ops` is keyed by `(user_id, op_id)` so users' receipts are independent.
+- Auth validates the live account on each request; deleted accounts cannot keep using old cookies.
+  Account deletion serializes the last-admin check and cleanup in one transaction; delayed audit
+  writes for deleted users are discarded.
+- Outside a request (boot, `ensureSchema`, scripts, `openDatabase()` tools) the connection stays the owner
+  role and sees everything. Inside a request, `asSystem(fn)` (db.ts) runs as the owner: only for writes
+  that are not one user's data — the event log flush (timers inherit the request's context!) and an
+  admin deleting another account. Never use it to read data for a response.
+- A new table holding user data: add `user_id` with `OWNER_DEFAULT`, and add it to `OWNED_TABLES`.
+  Per-user uniqueness goes in the index (`tag_settings` is unique on `(user_id, tag_key)`).
+- New users get their own Personal/Work workspaces (`ensureUserWorkspaces`, at sign-up, sign-in, setup).
+- Account deletion: `DELETE /api/auth/account` (password) → `deleteUserAndData` (`utils/accounts.ts`).
+  Snapshots in `backup.*` are not touched: drop them after 30 days (privacy policy promise).
+- Tests: `server/utils/isolation.test.ts` (policies, repair), the isolation block of `api-smoke.mjs`
+  (every list route, by-id 404s, deletion), `testSignUpIsolatedThenDeleteAccount` (iOS).
+- App Store: `docs/APP_STORE.md` (privacy answers, URLs, review account).
 
 ## SQL conventions
 - Use `$name` placeholders; `queryAll()` rewrites them to positional `$1…` (`server/utils/sql.ts`).
@@ -243,8 +276,10 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
 
 ### Tests must use `master_tester` only
 - The deployed server and any dev server with `DATABASE_URL` set hit **Supabase**, which holds the user's real data. Automated suites (`ios/scripts/test.sh`, `app/scripts/api-smoke.mjs`) only run against the throwaway PGlite test server.
-- `/api/tasks` and other endpoints **do not filter by `user_id`** (known cross-user leak). A test that signs up a fresh user and then runs `selectAll()` will grab the user's real tasks too.
-- **Going forward, tests run as user `master_tester` (password `password123`).** Never sign up new test users; never operate against other users' data.
+- Data is private per user (row level security), but tests still never run against Supabase.
+- **Tests run as user `master_tester` (password `password123`).** Only the throwaway test server may get extra
+  users (the isolation and account-deletion tests create `master_tester_2_*` / `mtdel*` and delete them).
+  Never sign up test users on production; never operate against other users' data.
 - Never run "select all" + bulk-modify in browser tests. Select tasks individually by id/title prefix that you created in the same test.
 - Tag every test task title with a unique prefix (e.g. `MasterTester_<feature>_<n>`) so it can be filtered out of any cleanup query.
 - If a test would touch the user's data on failure, do not run it.

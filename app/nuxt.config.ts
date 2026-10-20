@@ -25,6 +25,11 @@ export default defineNuxtConfig({
     },
   },
 
+  runtimeConfig: {
+    // Shown on /privacy and /support. Set NUXT_PUBLIC_CONTACT_EMAIL in the deployment.
+    public: { contactEmail: '' },
+  },
+
   app: {
     head: {
       title: 'daybook',

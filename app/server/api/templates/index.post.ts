@@ -1,3 +1,4 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll } from '~/server/utils/db';
 import { clientId } from '~/server/utils/ids';
 import { normalizeTemplateInput, presentTemplate } from '~/server/utils/templates';
@@ -11,6 +12,7 @@ import { listValue, LIST, VARCHAR, INTEGER } from '~/server/utils/sqlTypes';
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const input = normalizeTemplateInput(body);
   const title = input.title || input.name || '';
   const name = input.name || title;

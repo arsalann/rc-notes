@@ -90,6 +90,7 @@ Build, test and architecture notes: [`ios/HANDOFF.md`](ios/HANDOFF.md).
 - **PGlite** embedded Postgres in `data/pglite` when `DATABASE_URL` is unset (local dev, tests)
 - **MotherDuck** `rc_notes` is the read-only archive from before the move to Postgres
 - **Bruin** keeps the versioned schema dictionary in `pipeline/`
-- Schema includes `user_id`/`user_name` columns on all tables for future multi-user support
+- Multi-user: every row has an owner (`user_id`) and row level security keeps each account's data
+  private; accounts can be deleted in Settings. Privacy policy at `/privacy`, support at `/support`
 - Every content row records which device last wrote it and when (`updated_device_kind/id`,
   `client_updated_at`), and a per-field clock for offline sync (see `AGENTS.md` "Offline sync")

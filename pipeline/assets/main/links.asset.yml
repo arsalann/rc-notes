@@ -36,7 +36,9 @@ columns:
     description: Insert timestamp.
   - name: user_id
     type: VARCHAR
-    description: Creator user id. Multi-user not wired up yet.
+    checks:
+      - name: not_null
+    description: Required owner user id (FK to users.id; deletion restricted until content cleanup). Row level security (policy `daybook_owner`) limits every request to the signed-in user's rows; new rows default to the request's user (`daybook.user_id`).
   - name: updated_by
     type: VARCHAR
     description: Provenance for the last write (see `tasks.updated_by` for the standard vocabulary).

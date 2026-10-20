@@ -34,6 +34,44 @@ final class AppFlowE2ETests: DaybookUITestCase {
         XCTAssertTrue(tab("Today").waitForExistence(timeout: 20))
     }
 
+    /// A new account sees none of master_tester's data, and deleting it signs out and removes it
+    /// from the server. Only on the throwaway test server (sign-up is on there).
+    func testSignUpIsolatedThenDeleteAccount() throws {
+        let secret = "\(runTag) private"
+        _ = try server.request("POST", "/api/tasks", body: ["title": secret])
+        let username = "mtdel\(Int(Date().timeIntervalSince1970) % 1_000_000)"
+
+        launch()
+        waitFor(app.segmentedControls["auth.mode"]).buttons["Create account"].tap()
+        let field = app.textFields["auth.username"]
+        field.tap()
+        field.typeText(username)
+        app.secureTextFields["auth.password"].tap()
+        app.secureTextFields["auth.password"].typeText("password123")
+        app.secureTextFields["auth.confirm"].tap()
+        app.secureTextFields["auth.confirm"].typeText("password123")
+        app.buttons["auth.submit"].tap()
+        XCTAssertTrue(tab("Tasks").waitForExistence(timeout: 20), "did not reach the tab bar")
+
+        tab("Tasks").tap()
+        sleep(3) // let the first pull land
+        XCTAssertFalse(element("task.row.\(secret)").exists, "a new account must not see another user's task")
+
+        tab("Settings").tap()
+        let password = app.secureTextFields["settings.deletePassword"]
+        scrollTo(password)
+        password.tap()
+        password.typeText("password123")
+        app.buttons["settings.deleteAccount"].tap()
+        waitFor(app.buttons["settings.deleteAccount.confirm"].firstMatch).tap()
+        waitFor(app.textFields["auth.username"], timeout: 20)
+        snapshot("09-account-deleted")
+
+        let other = TestServer()
+        XCTAssertThrowsError(try other.request("POST", "/api/auth/login", body: ["username": username, "password": "password123"]))
+        XCTAssertNotNil(try server.task(titled: secret), "master_tester's data is untouched")
+    }
+
     func testTaskLifecycleFromTasksTab() throws {
         launchSignedIn()
         tab("Tasks").tap()

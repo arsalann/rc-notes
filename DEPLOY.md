@@ -53,7 +53,8 @@ run `railway variables` without filtering: it prints secrets.
 | `DATABASE_CA_CERT` | Contents of Supabase's SSL certificate (PEM), so the database certificate is verified |
 | `SESSION_SECRET` | 64 random characters (`openssl rand -hex 32`). Changing it signs everyone out |
 | `PORT` | `3000`. Railway otherwise injects its own port (8080), and the generated domain targets 3000 |
-| `ALLOW_SIGNUP` | Leave unset. Sign-up is off in production; admins add users in Settings |
+| `ALLOW_SIGNUP` | `true` once the per-user isolation release is live (App Store sign-up). Unset = off; admins add users in Settings |
+| `NUXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/support` (required for App Store review) |
 
 `NODE_ENV=production`, `TZ=UTC` and `HOST` come from the Dockerfile.
 
@@ -121,11 +122,45 @@ MotherDuck still holds the data exactly as it was at the 2026-10-17 copy. To go 
 server from before PR #44 (commit `2ecb3d5`) against MotherDuck. Anything written to Supabase after
 the switch would have to be copied back by hand, so decide within the first day.
 
+## Launch: per-user isolation (v16_assign_owner)
+
+Every request now runs as the `daybook_app` role under row level security (see AGENTS.md
+"Per-user isolation"). The first boot of this release creates the role and policies and runs the
+`v16_assign_owner` repair, which gives every row without a valid owner to `arsalan`. Order:
+
+Run maintenance commands from `app/`, using `npx tsx --env-file=.env`; they intentionally use
+`openDatabase()` without `ensureSchema()`. Verify the TLS CA file exists before connecting.
+
+1. Read-only preflight: `scripts/launch-audit.ts` reports per-table totals, missing/invalid owners,
+   the repair ledger and existing snapshot names. Present the affected counts for approval before
+   applying the repair. Production sign-up stays disabled until isolation is verified.
+2. Capture the pre-deploy schema (including policies, constraints and indexes) as well as table
+   snapshots. Run `scripts/backup-snapshot.ts --apply` for backup #1. Its default invocation is a
+   dry run. All public tables are copied atomically with RLS and count verification.
+3. Verify the exact repair on an isolated PGlite fixture, then take backup #2 immediately before
+   the approved deployment. Suffixes increment automatically; never assume `_1` / `_2` are free.
+4. Deploy. Boot applies `v16_assign_owner` with its ledger entry in one transaction, then enforces
+   required ownership/FKs and the per-user sync receipt key. A repair failure aborts startup.
+5. Run the read-only audit again: verify zero missing/invalid owners for content/sync tables,
+   unchanged content row totals, the repair ledger entry, and expected visibility in the app.
+   Audit counts may grow normally; anonymous audit rows may have NULL ownership by design.
+6. Set `ALLOW_SIGNUP=true` and `NUXT_PUBLIC_CONTACT_EMAIL`, redeploy. Check `/privacy` and `/support`
+   signed out, then follow `docs/APP_STORE.md` for submission. Automated tests stay on PGlite.
+
+**Rollback requires schema and data restoration, not just reverting the code.** Stop writes and
+sign-up, preserve any post-deployment data separately, and restore the pre-deploy schema and backup
+#2 under an explicitly reviewed rollback procedure. The new NOT NULL/FK constraints, tag uniqueness
+and sync receipt key are incompatible with the previous application's write behavior. Deleting the
+repair ledger row alone does not undo them. Test the rollback against a restored isolated database
+before applying it to production.
+
 ## Backups
 
 - Supabase takes daily backups (7 days on the free plan, more on paid).
 - Before any risky write, snapshot into a `backup` schema in the same database:
   `CREATE TABLE backup.<table>_<YYYYMMDD>_<N> AS TABLE public.<table>;` (see AGENTS.md).
+- The privacy policy promises deleted accounts leave backups within 30 days: drop `backup.*`
+  snapshots older than 30 days (and keep Supabase's backup retention at or below 30 days).
 - Tasks deleted from the multi-select bar (and deleted links) are kept as JSON in
   `sync_tombstones.row_data`. To restore one:
   `INSERT INTO tasks SELECT * FROM jsonb_populate_record(NULL::tasks, (SELECT row_data FROM sync_tombstones WHERE table_name = 'tasks' AND row_id = '<id>' ORDER BY sync_seq DESC LIMIT 1));`

@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { resolve } from 'path';
 import { mkdirSync, readFileSync } from 'fs';
 import { getDatabaseUrl } from './config';
-import { ensureSchema, type Run } from './schema';
+import { APP_ROLE, ensureSchema, type Run } from './schema';
 import { toPositional } from './sql';
 import { VARCHAR, type SqlType } from './sqlTypes';
 
@@ -20,14 +21,22 @@ const asText = (v: string) => v;
 
 export interface Database {
   run: Run;
+  transaction<T>(fn: (run: Run) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
 /**
- * Who is writing and when, handed to the sync triggers (see `SYNC_ROW_FUNCTION` in `schema.ts`)
- * through per-connection settings. `opTime` is naive UTC (`2026-10-17 09:30:00.123`).
+ * Who is asking and when, handed to the database through per-connection settings: the sync
+ * triggers read the device fields (see `SYNC_ROW_FUNCTION` in `schema.ts`), and row level security
+ * reads `daybook.user_id`. `opTime` is naive UTC (`2026-10-17 09:30:00.123`).
+ *
+ * Every statement made inside a request runs as the `APP_ROLE` role, which row level security
+ * applies to: it sees and writes only rows whose `user_id` is the signed-in user (`userId`; null
+ * before sign-in = no rows). Statements outside a request (boot, schema check, scripts, the event
+ * log flush) run as the connecting owner role and see everything.
  */
 export interface WriteContext {
+  userId: string | null;
   deviceKind: string | null;
   deviceId: string | null;
   opId: string | null;
@@ -42,23 +51,35 @@ export function setWriteContextProvider(provider: () => WriteContext | null) {
   writeContextProvider = provider;
 }
 
-function currentWriteContext(): WriteContext | null {
-  try {
-    return writeContextProvider();
-  } catch {
-    return null;
-  }
+const system = new AsyncLocalStorage<true>();
+const transactionRun = new AsyncLocalStorage<Run>();
+
+/**
+ * Run `fn` as the owner role, outside row level security, even inside a request. Only for writes
+ * that are not one user's data: the audit log (it records requests before sign-in too) and
+ * account deletion's own cleanup. Timers started inside a request inherit its context, so
+ * anything they write that is not the user's own must go through here.
+ */
+export function asSystem<T>(fn: () => Promise<T>): Promise<T> {
+  return system.run(true, fn);
 }
 
-const READ_ONLY = /^\s*(SELECT|SHOW|SET|BEGIN|COMMIT|ROLLBACK)\b/i;
+function currentWriteContext(): WriteContext | null {
+  if (system.getStore()) return null;
+  // A malformed request context must fail the query, never silently elevate it to the owner.
+  return writeContextProvider();
+}
 
 function contextValues(ctx: WriteContext | null): string[] {
-  return ctx ? [ctx.deviceKind, ctx.deviceId, ctx.opId, ctx.opTime, ctx.updatedBy].map(v => v ?? '') : ['', '', '', '', ''];
+  if (!ctx) return ['none', '', '', '', '', '', ''];
+  return [APP_ROLE, ...[ctx.userId, ctx.deviceKind, ctx.deviceId, ctx.opId, ctx.opTime, ctx.updatedBy].map(v => v ?? '')];
 }
 
+/** `role` is the setting behind `SET ROLE`; `none` switches back to the connecting role. */
 function contextSql(local: boolean): string {
-  const names = ['device_kind', 'device_id', 'op_id', 'op_time', 'updated_by'];
-  return `SELECT ${names.map((n, i) => `set_config('daybook.${n}', $${i + 1}, ${local})`).join(', ')}`;
+  const names = ['role', 'daybook.user_id', 'daybook.device_kind', 'daybook.device_id', 'daybook.op_id',
+    'daybook.op_time', 'daybook.updated_by'];
+  return `SELECT ${names.map((n, i) => `set_config('${n}', $${i + 1}, ${local})`).join(', ')}`;
 }
 
 /**
@@ -102,30 +123,49 @@ async function connectPostgres(url: string): Promise<Database> {
   // Pin each pooled connection to UTC before its first query, so `now()` / `current_timestamp`
   // always write UTC whatever the database's default time zone is.
   const utc = new WeakSet<object>();
-  // The write context last set on each pooled connection. A write whose context differs updates it
-  // first (one extra round trip); reads ignore it.
+  // The context last set on each pooled connection. A statement whose context differs updates it
+  // first (one extra round trip). New connections start as the owner role with no context.
   const contextKey = new WeakMap<object, string>();
   const setContext = contextSql(false);
+  async function acquire() {
+    const client = await pool.connect();
+    try {
+      if (!utc.has(client)) {
+        await client.query("SET TIME ZONE 'UTC'");
+        utc.add(client);
+      }
+      const ctxValues = contextValues(currentWriteContext());
+      const key = ctxValues.join('\u0000');
+      if (contextKey.get(client) !== key) {
+        contextKey.delete(client);
+        await client.query(setContext, ctxValues);
+        contextKey.set(client, key);
+      }
+      return client;
+    } catch (error) {
+      // A failed settings update must never leave a reusable, ambiguously scoped client.
+      client.release(true);
+      throw error;
+    }
+  }
   return {
     run: async (sql, values = []) => {
-      const client = await pool.connect();
+      const client = await acquire();
+      try { return (await client.query(sql, values)).rows; }
+      finally { client.release(); }
+    },
+    transaction: async (fn) => {
+      const client = await acquire();
+      let broken = false;
       try {
-        if (!utc.has(client)) {
-          await client.query("SET TIME ZONE 'UTC'");
-          utc.add(client);
-        }
-        if (!READ_ONLY.test(sql)) {
-          const ctxValues = contextValues(currentWriteContext());
-          const key = ctxValues.join('\u0000');
-          if ((contextKey.get(client) ?? '\u0000\u0000\u0000\u0000') !== key) {
-            await client.query(setContext, ctxValues);
-            contextKey.set(client, key);
-          }
-        }
-        return (await client.query(sql, values)).rows;
-      } finally {
-        client.release();
-      }
+        await client.query('BEGIN');
+        const result = await fn(async (sql, values = []) => (await client.query(sql, values)).rows);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        try { await client.query('ROLLBACK'); } catch { broken = true; }
+        throw error;
+      } finally { client.release(broken); }
     },
     close: () => pool.end(),
   };
@@ -141,18 +181,22 @@ async function connectPglite(dir: string): Promise<Database> {
     },
   });
   await db.exec("SET TIME ZONE 'UTC'");
-  // One connection shared by every request: a write with a context runs in a transaction that sets
-  // it locally, so it can never leak into another request's statement.
+  // One connection shared by every request: a statement with a context runs in a transaction that
+  // sets it locally, so it can never leak into another request's statement.
   const setContext = contextSql(true);
   return {
     run: async (sql, values = []) => {
-      const ctx = READ_ONLY.test(sql) ? null : currentWriteContext();
+      const ctx = currentWriteContext();
       if (!ctx) return (await db.query<Record<string, any>>(sql, values)).rows;
       return db.transaction(async (tx) => {
         await tx.query(setContext, contextValues(ctx));
         return (await tx.query<Record<string, any>>(sql, values)).rows;
       });
     },
+    transaction: async (fn) => db.transaction(async (tx) => {
+      await tx.query(setContext, contextValues(currentWriteContext()));
+      return fn(async (sql, values = []) => (await tx.query<Record<string, any>>(sql, values)).rows);
+    }),
     close: () => db.close(),
   };
 }
@@ -184,8 +228,13 @@ export function useDB(): Promise<Database> {
   if (!connectionPromise) {
     connectionPromise = (async () => {
       const db = await openDatabase();
-      await ensureSchema(db.run);
-      return db;
+      try {
+        await asSystem(() => ensureSchema(db.run, { transaction: db.transaction }));
+        return db;
+      } catch (error) {
+        await db.close();
+        throw error;
+      }
     })().catch((err) => {
       // Never memoize a rejected promise: a transient failure must not brick the process.
       connectionPromise = null;
@@ -202,7 +251,16 @@ export async function queryAll(
 ): Promise<Record<string, any>[]> {
   const db = await useDB();
   const { text, values } = toPositional(sql, params, types);
-  return db.run(text, values);
+  return (transactionRun.getStore() ?? db.run)(text, values);
+}
+
+/** Pin all queryAll/execute calls in fn to one connection and commit or roll back together.
+ * The caller's user/system scope is fixed for the transaction; do not switch it inside fn.
+ */
+export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  if (transactionRun.getStore()) return fn();
+  const db = await useDB();
+  return db.transaction(run => transactionRun.run(run, fn));
 }
 
 export async function execute(sql: string, params: Record<string, any> = {}, types?: Record<string, SqlType>) {
@@ -218,10 +276,29 @@ export function diaryIdSql(dateParam: string, workspaceParam: string): string {
   return `md5('daybook-diary:' || ${dateParam} || ':' || COALESCE(${workspaceParam}, ''))::uuid::text`;
 }
 
-export async function getDefaultWorkspaceId(): Promise<string | null> {
-  const rows = await queryAll(
-    "SELECT id FROM workspaces WHERE name = 'Work' ORDER BY position LIMIT 1"
+/**
+ * Give a user the default Personal and Work workspaces if they have none. Runs inside the user's
+ * request (sign-up, sign-in, setup), so row level security scopes it and stamps the owner.
+ */
+export async function ensureUserWorkspaces() {
+  await queryAll(
+    `INSERT INTO workspaces (name, emoji, position)
+     SELECT * FROM (VALUES ('Personal', '🏠', 0), ('Work', '💼', 1)) AS d(name, emoji, position)
+     WHERE NOT EXISTS (SELECT 1 FROM workspaces)`
   );
+}
+
+export async function getDefaultWorkspaceId(): Promise<string | null> {
+  let rows = await queryAll(
+    "SELECT id FROM workspaces WHERE name = 'Work' ORDER BY position, id LIMIT 1"
+  );
+  if (!rows.length) {
+    // Historical accounts may have no workspaces. Seed before deriving diary ids: a date with a
+    // NULL workspace hashes to the same id for every user. Existing NULL-workspace pages keep
+    // their immutable identity; all new pages receive a workspace owned by this user.
+    await ensureUserWorkspaces();
+    rows = await queryAll("SELECT id FROM workspaces ORDER BY (name = 'Work') DESC, position, id LIMIT 1");
+  }
   return rows[0]?.id || null;
 }
 

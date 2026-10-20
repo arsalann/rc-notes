@@ -1,9 +1,11 @@
+import { validateOwnedReferences } from '~/server/utils/ownership';
 import { queryAll, diaryIdSql } from '~/server/utils/db';
 import { hydrateTasksByIds, taskIdsFromLinks } from '~/server/utils/taskHydration';
 import { listValue, LIST, VARCHAR } from '~/server/utils/sqlTypes';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  await validateOwnedReferences(body || {});
   const entryDate = body.entry_date;
   const content = body.content || '';
   const workspaceId = body.workspace_id || null;

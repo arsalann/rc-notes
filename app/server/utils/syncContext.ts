@@ -42,14 +42,16 @@ export function writeContextFor(event: H3Event): WriteContext {
   const cached = event.context._writeContext as WriteContext | undefined;
   if (cached) return cached;
   const kind = classifyClient(getRequestHeader(event, 'user-agent'));
+  const user = event.context.user as { id?: string } | undefined;
   const ctx: WriteContext = {
+    userId: user?.id ? String(user.id) : null,
     deviceKind: kind,
     deviceId: headerToken(getRequestHeader(event, DEVICE_HEADER)),
     opId: headerToken(getRequestHeader(event, OP_HEADER)),
     opTime: editTime(getRequestHeader(event, CLIENT_TIME_HEADER)),
     updatedBy: deriveUpdatedBy(kind, !!event.context.user),
   };
-  // Not cached before auth: `updatedBy` depends on the signed-in user.
+  // Not cached before auth: `userId` and `updatedBy` depend on the signed-in user.
   if (event.context.user) event.context._writeContext = ctx;
   return ctx;
 }

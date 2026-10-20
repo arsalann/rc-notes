@@ -1,5 +1,5 @@
 import { useSession } from 'h3';
-import { getSessionConfig, type SessionUser } from '~/server/utils/auth';
+import { getSessionConfig, requireAuth, type SessionUser } from '~/server/utils/auth';
 import { queryAll } from '~/server/utils/db';
 
 export default defineEventHandler(async (event) => {
@@ -17,8 +17,9 @@ export default defineEventHandler(async (event) => {
     if (session.data.user) {
       // Re-issue the cookie on an active heartbeat so an open app does not expire
       // underneath someone who is still using it.
-      await session.update({ user: session.data.user });
-      return { configured: true, user: session.data.user };
+      const user = await requireAuth(event);
+      await session.update({ user });
+      return { configured: true, user };
     }
   } catch {
     // Invalid or expired session
