@@ -186,7 +186,7 @@ function buildRow(opts: EventLogInput): Record<string, any> {
     workspace_id: opts.workspace_id || '',
     metadata: opts.metadata ? JSON.stringify(opts.metadata) : '{}',
     user_agent: opts.user_agent || '',
-    user_id: opts.user_id || '',
+    user_id: opts.user_id || null,
     user_name: opts.user_name || '',
     updated_by: deriveUpdatedBy(clientKind, !!opts.user_id),
     request_body: opts.request_body || '',

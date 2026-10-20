@@ -134,10 +134,12 @@ Run maintenance commands from `app/`, using `npx tsx --env-file=.env`; they inte
 1. Read-only preflight: `scripts/launch-audit.ts` reports per-table totals, missing/invalid owners,
    the repair ledger and existing snapshot names. Present the affected counts for approval before
    applying the repair. Production sign-up stays disabled until isolation is verified.
-2. Capture the pre-deploy schema (including policies, constraints and indexes) as well as table
+2. Capture the pre-deploy schema (including policies, constraints and indexes) with
+   `scripts/schema-snapshot.ts <output.sql>` (requires `pg_dump`/Homebrew `libpq`), as well as table
    snapshots. Run `scripts/backup-snapshot.ts --apply` for backup #1. Its default invocation is a
    dry run. All public tables are copied atomically with RLS and count verification.
-3. Verify the exact repair on an isolated PGlite fixture, then take backup #2 immediately before
+3. Run `scripts/verify-launch-schema.ts <output.sql>` to verify the captured schema upgrade with
+   synthetic rows in in-memory PGlite, then take backup #2 immediately before
    the approved deployment. Suffixes increment automatically; never assume `_1` / `_2` are free.
 4. Deploy. Boot applies `v16_assign_owner` with its ledger entry in one transaction, then enforces
    required ownership/FKs and the per-user sync receipt key. A repair failure aborts startup.
@@ -168,8 +170,6 @@ before applying it to production.
 
 ## Known limits (unchanged from before the move)
 
-- The data endpoints don't scope by `user_id`, so every signed-in user sees all data. Keep the
-  user list to people you trust; sign-up stays off.
 - Timestamps written before the migration hold the Mac's local time, as they did in MotherDuck.
   Rows written after it hold UTC, which matches how the clients already read them.
 - One replica only: the login rate limiter and the event-log buffer live in process memory.

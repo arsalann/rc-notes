@@ -87,3 +87,9 @@ it('fails closed when request context cannot be parsed', async () => {
     setWriteContextProvider(() => ({ userId, deviceKind: null, deviceId: null, opId: null, opTime: null, updatedBy: 'test_playwright' }));
   }
 });
+
+it('retains anonymous audit records with NULL ownership', async () => {
+  await logEvent({ method: 'GET', path: '/api/setup/status' });
+  const rows = await asSystem(() => queryAll("SELECT user_id FROM event_log WHERE path = '/api/setup/status'"));
+  expect(rows).toEqual([{ user_id: null }]);
+});
