@@ -95,6 +95,7 @@ function resolveEntity(path: string): { entity_type: string | null; entity_id: s
  * - 'curl'       : curl/wget command-line
  * - 'node_fetch' : node-fetch / undici / fetch from Node scripts
  * - 'ios'        : native daybook iOS app (`daybook-ios/<version>` UA)
+ * - 'macos'      : the same app built for the Mac (`daybook-macos/<version>` UA)
  * - 'browser'    : ordinary browser (Mozilla UA)
  * - 'unknown'    : everything else (or empty UA)
  */
@@ -106,6 +107,7 @@ export function classifyClient(userAgent: string | null | undefined): string {
   if (ua.includes('curl/')) return 'curl';
   if (ua.includes('node-fetch') || ua.includes('undici') || ua.startsWith('node')) return 'node_fetch';
   if (ua.startsWith('daybook-ios/')) return 'ios';
+  if (ua.startsWith('daybook-macos/')) return 'macos';
   if (ua.includes('mozilla')) return 'browser';
   return 'unknown';
 }
@@ -119,6 +121,7 @@ export function deriveUpdatedBy(clientKind: string, isAuthed: boolean): string {
   if (clientKind === 'curl' || clientKind === 'node_fetch') return 'agent_query';
   if (clientKind === 'browser') return isAuthed ? 'user_in_app' : 'anonymous_browser';
   if (clientKind === 'ios') return isAuthed ? 'user_in_ios_app' : 'anonymous_ios_app';
+  if (clientKind === 'macos') return isAuthed ? 'user_in_macos_app' : 'anonymous_macos_app';
   return 'unknown';
 }
 
