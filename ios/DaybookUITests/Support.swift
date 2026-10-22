@@ -195,8 +195,10 @@ class DaybookUITestCase: XCTestCase {
 
     func selectWorkspaceChip(_ name: String) {
         let chip = app.buttons["workspace.chip.\(name)"]
-        waitFor(chip)
+        // Editing a long journal can scroll the lazy header out of accessibility entirely.
+        // Reveal it before waiting; this still switches workspace with the edit in flight.
         revealAtTop(chip)
+        waitFor(chip)
         chip.tap()
         let selected = expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: chip)
         wait(for: [selected], timeout: 10)

@@ -32,6 +32,14 @@ and `app/scripts/sync-smoke.mjs` passing (also against a production build over t
 The "Parity checklist" at the bottom is the contract; it separates what a UI test exercises end to end
 from what is built but still worth a manual pass.
 
+## App Store release preparation (2026-10-21)
+
+Follow `docs/APP_STORE.md` for the public App Store release runbook with developer-provisioned accounts. Release sign-in hides public
+signup; Debug retains it for isolated tests. Keep production `ALLOW_SIGNUP=false` and provide a
+dedicated reviewer account. The production bundle audited on this date lacks the privacy/support
+routes, so deploy the current backend/legal pages with a contact address before submission. Paid
+signing, store metadata and real-device/iPad acceptance remain release gates.
+
 ## Build, run, test
 
 Prereqs: Xcode 27.1 at `/Applications/Xcode.app`, iOS 27.1 simulator runtime, `brew install xcodegen`, Node 20 (for the test server).

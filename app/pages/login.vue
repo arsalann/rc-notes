@@ -16,7 +16,7 @@
           <UButton block size="lg" @click="mode = 'login'">
             Sign In
           </UButton>
-          <UButton block size="lg" color="neutral" variant="soft" @click="mode = 'signup'">
+          <UButton v-if="allowsSignup" block size="lg" color="neutral" variant="soft" @click="mode = 'signup'">
             Create Account
           </UButton>
         </div>
@@ -97,9 +97,12 @@
             Already have an account?
             <UButton variant="link" size="sm" :padded="false" @click="mode = 'login'">Sign in</UButton>
           </template>
-          <template v-else>
+          <template v-else-if="allowsSignup">
             Don't have an account?
             <UButton variant="link" size="sm" :padded="false" @click="mode = 'signup'">Create one</UButton>
+          </template>
+          <template v-else>
+            Accounts are provided by the developer. Use Support below to request access.
           </template>
         </p>
       </template>
@@ -115,8 +118,10 @@
 <script setup lang="ts">
 const { login, signup, authNotice } = useAuth();
 
-const mode = ref<'choose' | 'login' | 'signup'>('choose');
-const isSignup = computed(() => mode.value === 'signup');
+// Production is request-access only; local development retains isolated signup flows.
+const allowsSignup = import.meta.dev;
+const mode = ref<'choose' | 'login' | 'signup'>(allowsSignup ? 'choose' : 'login');
+const isSignup = computed(() => allowsSignup && mode.value === 'signup');
 const form = reactive({ username: '', password: '', confirmPassword: '' });
 const showPassword = ref(false);
 const error = ref('');

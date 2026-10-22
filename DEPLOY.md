@@ -53,7 +53,7 @@ run `railway variables` without filtering: it prints secrets.
 | `DATABASE_CA_CERT` | Contents of Supabase's SSL certificate (PEM), so the database certificate is verified |
 | `SESSION_SECRET` | 64 random characters (`openssl rand -hex 32`). Changing it signs everyone out |
 | `PORT` | `3000`. Railway otherwise injects its own port (8080), and the generated domain targets 3000 |
-| `ALLOW_SIGNUP` | `true` once the per-user isolation release is live (App Store sign-up). Unset = off; admins add users in Settings |
+| `ALLOW_SIGNUP` | `false` for the current invite-only release; admins add users in Settings. Do not enable public sign-up for App Review; provide a reviewer account (see `docs/APP_STORE.md`) |
 | `NUXT_PUBLIC_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/support` (required for App Store review) |
 
 `NODE_ENV=production`, `TZ=UTC` and `HOST` come from the Dockerfile.
@@ -146,7 +146,7 @@ Run maintenance commands from `app/`, using `npx tsx --env-file=.env`; they inte
 5. Run the read-only audit again: verify zero missing/invalid owners for content/sync tables,
    unchanged content row totals, the repair ledger entry, and expected visibility in the app.
    Audit counts may grow normally; anonymous audit rows may have NULL ownership by design.
-6. Set `ALLOW_SIGNUP=true` and `NUXT_PUBLIC_CONTACT_EMAIL`, redeploy. Check `/privacy` and `/support`
+6. Keep `ALLOW_SIGNUP=false` and set `NUXT_PUBLIC_CONTACT_EMAIL`, redeploy. Check `/privacy` and `/support`
    signed out, then follow `docs/APP_STORE.md` for submission. Automated tests stay on PGlite.
 
 **Rollback requires schema and data restoration, not just reverting the code.** Stop writes and

@@ -17,7 +17,7 @@
   task templates, tag settings, multi-select bulk actions
 - Tech: Nuxt 4 (SPA) + Nuxt UI + Tailwind CSS + Postgres (Supabase) + Bruin CLI, plus a native iOS app in `ios/`
   that works offline on a local copy and syncs (see "Offline sync" below)
-- Deployed on Railway (see `DEPLOY.md`); open sign-up, data private per user (see "Per-user isolation")
+- Deployed on Railway (see `DEPLOY.md`); invite-only for now (`ALLOW_SIGNUP=false`; admins provision accounts), data private per user (see "Per-user isolation")
 - Primary use: phone browser
 
 ## Key File Locations

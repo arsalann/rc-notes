@@ -147,7 +147,7 @@ private struct CredentialsForm: View {
     }
 }
 
-/// Sign in or create an account (web `/login`).
+/// Release is invite-only; debug builds retain signup for isolated tests.
 struct LoginView: View {
     enum Mode { case signIn, signUp }
 
@@ -172,13 +172,20 @@ struct LoginView: View {
                     Section { Label(notice, systemImage: "clock.badge.exclamationmark").foregroundStyle(Color("Warm")) }
                         .accessibilityIdentifier("auth.notice")
                 }
-                Picker("Mode", selection: $mode) {
-                    Text("Sign in").tag(Mode.signIn)
-                    Text("Create account").tag(Mode.signUp)
+                if AppModel.allowsServerOverride {
+                    Picker("Mode", selection: $mode) {
+                        Text("Sign in").tag(Mode.signIn)
+                        Text("Create account").tag(Mode.signUp)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("auth.mode")
+                } else {
+                    Section {
+                        Text("Sign in with the account provided by the developer. To request access, use the Support link below.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .accessibilityIdentifier("auth.mode")
                 CredentialsForm(username: $username, password: $password, confirm: $confirm, needsConfirm: mode == .signUp)
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }.accessibilityIdentifier("auth.error")

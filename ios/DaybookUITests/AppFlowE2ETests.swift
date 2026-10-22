@@ -133,9 +133,14 @@ final class AppFlowE2ETests: DaybookUITestCase {
 
         app.buttons["task.toggle.\(title)"].firstMatch.tap()
         eventually("completed on server") { try server.task(titled: title)?["completed"] as? Bool == true }
-        app.buttons["task.toggle.\(title)"].firstMatch.tap()
+        // Newest-first moves completed tasks below open tasks. Earlier tests leave open rows,
+        // so the completed row may be outside the lazy list's accessibility tree.
+        let toggle = app.buttons["task.toggle.\(title)"].firstMatch
+        scrollTo(toggle)
+        toggle.tap()
         eventually("reopened on server") { try server.task(titled: title)?["completed"] as? Bool == false }
 
+        revealAtTop(row)
         row.tap()
         waitFor(app.textFields["detail.title"])
         app.segmentedControls["detail.status"].buttons["Now"].tap()
