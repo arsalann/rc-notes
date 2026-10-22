@@ -507,10 +507,13 @@ async function ensureIsolation(run: Run) {
   const role = await run('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1', [APP_ROLE]);
   if (!role.length) await run(`CREATE ROLE ${APP_ROLE} NOLOGIN NOBYPASSRLS`);
   else if (role[0]!.rolsuper || role[0]!.rolbypassrls) throw new Error(`${APP_ROLE} must not bypass row level security`);
-  const member = await run(
-    `SELECT pg_has_role(current_user, $1, 'MEMBER') AS ok`, [APP_ROLE]
+  // Requests `SET ROLE` to it, which needs the SET option. 'MEMBER' is not enough: on Postgres 16+
+  // a CREATEROLE user (Supabase's `postgres`) gets an implicit grant with ADMIN but SET false, so
+  // 'MEMBER' is true while SET ROLE fails (this took production down for a minute on 2026-10-20).
+  const canSet = await run(
+    `SELECT pg_has_role(current_user, $1, 'SET') AS ok`, [APP_ROLE]
   );
-  if (!member[0]?.ok) await run(`GRANT ${APP_ROLE} TO current_user`);
+  if (!canSet[0]?.ok) await run(`GRANT ${APP_ROLE} TO current_user WITH SET TRUE, INHERIT FALSE`);
   await run(`GRANT USAGE ON SCHEMA ${await schemaName(run)} TO ${APP_ROLE}`);
   await run(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${[...OWNED_TABLES, 'users'].join(', ')} TO ${APP_ROLE}`);
   await run(`GRANT USAGE, SELECT ON SEQUENCE sync_seq TO ${APP_ROLE}`);
