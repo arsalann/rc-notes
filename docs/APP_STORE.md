@@ -32,12 +32,11 @@ Apple sources (checked 21 October 2026):
 
 1. Enroll in the paid Apple Developer Program and complete agreements in App Store Connect. A free
    Personal Team cannot upload an App Store release. Confirm the seller name you want shown.
-2. In Certificates, Identifiers & Profiles, register an explicit App ID: `com.arsalann.daybook`.
+2. In Certificates, Identifiers & Profiles, register an explicit App ID: `ca.atlys.daybook`.
    Check it belongs to the paid team before proceeding; confirm the identifier before first upload.
 3. Xcode → Settings → Accounts: add the enrolled Apple account.
-4. In `ios/project.yml`, replace the app target's Personal Team `2PRKX5Z4Q8` with the paid team ID
-   if different. Keep automatic signing. Set the intended marketing version (suggest `1.0.0`) and an
-   unused build number. Increment the build number for every subsequent upload.
+4. `ios/project.yml` now uses the paid Atlys Networks Inc. team `9ABFFFH4DJ`, version `1.0.0`,
+   build `1`, with automatic signing. Increment the build number for every subsequent upload.
 5. Run `cd ios && xcodegen generate`; open `Daybook.xcodeproj`. Verify Signing & Capabilities for the
    Daybook target uses the paid team and correct bundle ID.
 6. App Store Connect → My Apps → + → New App: iOS, name Daybook (subject to availability), English,
@@ -184,6 +183,14 @@ and workspace-selection helper were corrected. A targeted rerun of the task life
 journal safety flows passed 5/5, including both original failures. A full rerun on 23 October with main/PR #58 integrated passed **78/78 Swift tests and 19/19 UI
 tests** (`ios/scripts/test.sh`, isolated PGlite). Real-device, iPad and signed archive acceptance
 remain outstanding.
+
+## Signed package (23 October 2026)
+
+Bundle ID `ca.atlys.daybook` replaces the unavailable `com.arsalann.daybook`. App Store export
+succeeded for 1.0.0 (1), signed by Apple Distribution: Atlys Networks Inc. (9ABFFFH4DJ); codesign
+verification passed. Workspace artifact: `.context/Daybook-AppStore-1.0.0/daybook.ipa`.
+This is a separate install from the old developer app: retain that app until its pending edits sync.
+No upload or review submission has occurred. A new App Store Connect record is still needed.
 
 ## Final go/no-go
 
