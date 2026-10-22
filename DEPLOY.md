@@ -141,7 +141,8 @@ Run maintenance commands from `app/`, using `npx tsx --env-file=.env`; they inte
 3. Run `scripts/verify-launch-schema.ts <output.sql>` to verify the captured schema upgrade with
    synthetic rows in in-memory PGlite, then take backup #2 immediately before
    the approved deployment. Suffixes increment automatically; never assume `_1` / `_2` are free.
-4. Deploy. Boot applies `v16_assign_owner` with its ledger entry in one transaction, then enforces
+4. Deploy (done 2026-10-20 22:37 UTC via `railway up` from a clean `main` checkout; backups
+   `backup.<table>_20261021_1` / `_2`). Boot applies `v16_assign_owner` with its ledger entry in one transaction, then enforces
    required ownership/FKs and the per-user sync receipt key. A repair failure aborts startup.
 5. Run the read-only audit again: verify zero missing/invalid owners for content/sync tables,
    unchanged content row totals, the repair ledger entry, and expected visibility in the app.
