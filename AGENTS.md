@@ -248,8 +248,9 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
   `.accessibilityElement(children: .contain)` first when children need their own ids.
 - Any API response shape change must keep `ios/DaybookKit/Tests/DaybookKitTests/Fixtures` decoding (they
   are real captured responses).
-- Device installs: open `ios/Daybook.xcodeproj` in Xcode, pick the iPhone, Run. Signing uses the personal
-  team in `project.yml` (`DEVELOPMENT_TEAM`); free-team builds expire after 7 days, so re-run from Xcode then.
+- Device installs: open `ios/Daybook.xcodeproj` in Xcode, pick the iPhone, Run. Signing uses the paid Atlys Networks Inc.
+  team `9ABFFFH4DJ` in `project.yml`; the App Store bundle ID is `ca.atlys.daybook`. Keep the old
+  developer-installed app until any pending offline edits have synced.
   The phone must trust the developer certificate (Settings → General → VPN & Device Management).
 - The production server is built in (`AppModel.builtInServer`). Release builds use only it and allow
   HTTPS only. Debug builds can change server and allow local-network HTTP: the ATS exception sits in a
