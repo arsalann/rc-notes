@@ -4,9 +4,11 @@ Release audit: 21 October 2026. **Not yet cleared for submission**: local checks
 signing, production configuration, App Store Connect metadata or real-device acceptance. See
 `.context/app-store-handoff.md` for this workspace's evidence and outstanding checks.
 
-**Production blocker found:** the deployed entry bundle checked on 21 October has neither a
-`/privacy` nor `/support` route and its public runtime config is empty. Both URLs return a generic
-HTTP 200 SPA shell. Deploy the current legal pages and set the contact address before submission.
+**Production update, 23 October 2026:** PR #58 is merged and deployed successfully. Production
+health is OK and its entry bundle now includes `/privacy` and `/support`; the earlier missing-route
+blocker is resolved. A public contact email and rendered-page verification are still pending.
+`ALLOW_SIGNUP=false` is explicitly configured. Draft release PR #59 contains this workspace's
+access-request UI, release guide and test corrections.
 
 ## Distribution choice
 
@@ -179,8 +181,9 @@ reason CA92.1 and a 1024px RGB icon; Debug network exceptions are absent.
 
 Initial UI run passed 17/19. Two failures came from off-screen elements in lazy lists; the task test
 and workspace-selection helper were corrected. A targeted rerun of the task lifecycle plus all four
-journal safety flows passed 5/5, including both original failures. A full 19-test rerun after these
-test changes was not performed. Real-device, iPad and signed archive acceptance remain outstanding.
+journal safety flows passed 5/5, including both original failures. A full rerun on 23 October with main/PR #58 integrated passed **78/78 Swift tests and 19/19 UI
+tests** (`ios/scripts/test.sh`, isolated PGlite). Real-device, iPad and signed archive acceptance
+remain outstanding.
 
 ## Final go/no-go
 
