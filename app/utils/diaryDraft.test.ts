@@ -43,6 +43,19 @@ describe('diary draft identity', () => {
     expect(canPersistDiaryDraft(sourceDraft, september15, serverUpdatedAt)).toBe(false);
   });
 
+  it('never carries journal content across a workspace or account selection reset', () => {
+    const draft = createDiaryDraft(september14, 'Private source workspace journal', serverUpdatedAt);
+    for (const destination of [
+      { ...september14, workspaceId: 'workspace-personal' },
+      { ...september14, workspaceId: null },
+      { ...september14, userId: 'reviewer', workspaceId: 'review-work' },
+    ]) {
+      expect(inspectDiaryDraft(JSON.stringify(draft), destination, serverUpdatedAt))
+        .toEqual({ status: 'context-mismatch' });
+      expect(canPersistDiaryDraft(draft, destination, serverUpdatedAt)).toBe(false);
+    }
+  });
+
   it('rejects a draft when only its entry id differs', () => {
     const draft = createDiaryDraft(september14, 'September 14 notes', serverUpdatedAt);
     const wrongEntry = { ...september14, entryId: 'another-entry-for-the-same-day' };
