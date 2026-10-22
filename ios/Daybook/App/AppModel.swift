@@ -4,7 +4,11 @@ import Network
 import Observation
 import SwiftUI
 import Synchronization
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 enum AppTab: Hashable { case today, tasks, notes, settings }
 
@@ -144,6 +148,8 @@ final class AppModel {
     var selectedTab: AppTab = .today
     /// Set by other tabs (e.g. a diary note in Notes) to open a day on Today.
     var requestedDiaryDate: String?
+    /// Set by File → New Task (⌘N on the Mac) to open quick add on Tasks.
+    var requestedNewTask = false
 
     let days = DayMath.current
     let draftStore = FileDraftStore.standard()
@@ -182,16 +188,49 @@ final class AppModel {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Sync", isDirectory: true)
     }
 
-    /// `daybook-ios/0.1.0 (iPhone17,2; iOS 26.0)`: the server records the client kind from the prefix,
-    /// and the event log keeps the model and OS.
+    /// `daybook-ios/0.1.0 (iPhone17,2; iOS 26.0)` or `daybook-macos/0.1.0 (Mac16,1; macOS 15.5)`: the
+    /// server records the client kind from the prefix, and the event log keeps the model and OS.
     static var userAgent: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        #if os(iOS)
         var info = utsname()
         uname(&info)
         let model = withUnsafeBytes(of: &info.machine) { raw in
             String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
         }
         return "daybook-ios/\(version) (\(model); iOS \(UIDevice.current.systemVersion))"
+        #else
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        var bytes = [CChar](repeating: 0, count: max(size, 1))
+        sysctlbyname("hw.model", &bytes, &size, nil, 0)
+        let model = String(decoding: bytes.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        return "daybook-macos/\(version) (\(model); macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion))"
+        #endif
+    }
+
+    /// Id of this install, sent as `X-Daybook-Device`. iOS: the vendor id. Mac (no vendor id): a
+    /// random id kept in the defaults.
+    static var deviceId: String? {
+        #if os(iOS)
+        return UIDevice.current.identifierForVendor?.uuidString.lowercased()
+        #else
+        let key = "daybook.deviceId"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+        #endif
+    }
+
+    /// The app is frontmost (the 30 s sync loop pauses otherwise).
+    private static var isActive: Bool {
+        #if os(iOS)
+        UIApplication.shared.applicationState == .active
+        #else
+        NSApplication.shared.isActive
+        #endif
     }
 
     /// Clears everything this app stores locally (UI tests start from a clean slate).
@@ -213,7 +252,7 @@ final class AppModel {
 
     private func makeClient(_ url: URL) -> APIClient {
         SessionCookieVault.restore(for: url)
-        return APIClient(baseURL: url, userAgent: Self.userAgent, deviceId: UIDevice.current.identifierForVendor?.uuidString.lowercased()) { [weak self] in
+        return APIClient(baseURL: url, userAgent: Self.userAgent, deviceId: Self.deviceId) { [weak self] in
             Task { @MainActor in self?.handleUnauthorized() }
         }
     }
@@ -294,7 +333,7 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard let self, !Task.isCancelled else { return }
-                if self.phase == .ready, UIApplication.shared.applicationState == .active { await self.store?.sync() }
+                if self.phase == .ready, Self.isActive { await self.store?.sync() }
             }
         }
     }
@@ -309,6 +348,7 @@ final class AppModel {
     /// Going to the background: send queued changes while iOS gives the app a few seconds.
     func syncBeforeBackground() {
         guard let store, !store.outbox.isEmpty else { return }
+        #if os(iOS)
         var taskId: UIBackgroundTaskIdentifier = .invalid
         taskId = UIApplication.shared.beginBackgroundTask(withName: "daybook-sync") {
             UIApplication.shared.endBackgroundTask(taskId)
@@ -317,6 +357,14 @@ final class AppModel {
             await store.sync()
             UIApplication.shared.endBackgroundTask(taskId)
         }
+        #else
+        // A Mac app keeps running in the background; just keep the system from suspending it mid-sync.
+        let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiated, reason: "daybook-sync")
+        Task {
+            await store.sync()
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+        #endif
     }
 
     private func connectivityChanged(_ online: Bool) {

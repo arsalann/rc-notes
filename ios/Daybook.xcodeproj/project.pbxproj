@@ -30,6 +30,7 @@
 		9C911CA1F9DCFD04B7B8726F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 74F73BA3EFFF747EA1F2A9A4 /* PrivacyInfo.xcprivacy */; };
 		BA687AFC2E738D3F0D663879 /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 289011B4A0A5E7E279E977F4 /* AuthViews.swift */; };
 		CD82651871EECB5D6E8512C0 /* MentionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6852E2B040AE181D9A66B57 /* MentionEditor.swift */; };
+		CD95A10601A946288C6CA507 /* PlatformCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AA62257F905ED569EBE91C7 /* PlatformCompat.swift */; };
 		D6DC745D654A8F5388CAE77F /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BBDCAF0B5AA0B1EF4E3FF3 /* TaskDetailView.swift */; };
 		D9A18DFE4919EE24BFD3E368 /* QuickAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */; };
 		DEAF3AC4F7BE801812D6037C /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E9E11EBE713C4C2BA063B9C /* TodayView.swift */; };
@@ -68,12 +69,14 @@
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F332A82AA3CE86CD9DE350F /* AppFlowE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowE2ETests.swift; sourceTree = "<group>"; };
 		94CC93E29E0CB4DA71EAE001 /* DaybookUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DaybookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AA62257F905ED569EBE91C7 /* PlatformCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformCompat.swift; sourceTree = "<group>"; };
 		9F5CCEE2DAE27D23FF1BF99F /* SessionCookieVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCookieVault.swift; sourceTree = "<group>"; };
 		AF60D662053F395AF02DB2E0 /* OfflineE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineE2ETests.swift; sourceTree = "<group>"; };
 		B110E72E5D3F5B5777326C07 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		BBE7EA10D728802B2E620B58 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		C06C7658F8DEE72CBB38F8D0 /* NotesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesViews.swift; sourceTree = "<group>"; };
 		C2BB02A324C9C7639F7DA250 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		C9BDADF08C6547ED500A3F65 /* Daybook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Daybook-macOS.entitlements"; sourceTree = "<group>"; };
 		CCAAF6A01755B2644ADDC6F4 /* CalendarAndSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAndSettings.swift; sourceTree = "<group>"; };
 		CDE226C5C02C24D3E74D83B6 /* DaybookKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DaybookKit; path = DaybookKit; sourceTree = SOURCE_ROOT; };
 		D6852E2B040AE181D9A66B57 /* MentionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionEditor.swift; sourceTree = "<group>"; };
@@ -99,6 +102,7 @@
 				6DAEF051B93D6A8F1142C8FC /* BulkBar.swift */,
 				C2BB02A324C9C7639F7DA250 /* Components.swift */,
 				D6852E2B040AE181D9A66B57 /* MentionEditor.swift */,
+				9AA62257F905ED569EBE91C7 /* PlatformCompat.swift */,
 				20D8CFB8BF420E5BD7D9741F /* QuickAddSheet.swift */,
 				14F7441E741A77BAA1686E96 /* SyncViews.swift */,
 				112D9FEB0FD7D2BE86A8B6B5 /* TaskRows.swift */,
@@ -225,6 +229,7 @@
 		BE90138026AF541F8B9B3390 /* Daybook */ = {
 			isa = PBXGroup;
 			children = (
+				C9BDADF08C6547ED500A3F65 /* Daybook-macOS.entitlements */,
 				B110E72E5D3F5B5777326C07 /* Info.plist */,
 				71D0B646278BD95FD342DEBC /* App */,
 				5276A3B319D959CF0E7C8D61 /* Features */,
@@ -355,6 +360,7 @@
 				728BBFF437B07C30E87207D4 /* DaybookApp.swift in Sources */,
 				CD82651871EECB5D6E8512C0 /* MentionEditor.swift in Sources */,
 				37C72E664E66E57330F0AE6A /* NotesViews.swift in Sources */,
+				CD95A10601A946288C6CA507 /* PlatformCompat.swift in Sources */,
 				D9A18DFE4919EE24BFD3E368 /* QuickAddSheet.swift in Sources */,
 				5ADAC22F0F7568BFB8E137E9 /* SessionCookieVault.swift in Sources */,
 				0272F10D49BBFB344434A54C /* SyncViews.swift in Sources */,
@@ -386,8 +392,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Daybook/Daybook-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = 2PRKX5Z4Q8;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Daybook/Info.plist;
@@ -399,7 +407,11 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.arsalann.daybook;
 				PRODUCT_NAME = daybook;
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -454,11 +466,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -487,8 +499,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "Daybook/Daybook-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = 2PRKX5Z4Q8;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Daybook/Info.plist;
@@ -499,7 +513,11 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.arsalann.daybook;
 				PRODUCT_NAME = daybook;
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -560,12 +578,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;

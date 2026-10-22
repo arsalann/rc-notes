@@ -74,8 +74,8 @@ struct NotesView: View {
             .onChange(of: app.activeWorkspaceId) { Task { await load() } }
             .onChange(of: showArchived) { otherExpanded = true; Task { await load() } }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { WorkspaceMenu() }
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .leadingBar) { WorkspaceMenu() }
+                ToolbarItemGroup(placement: .trailingBar) {
                     Button { showArchived.toggle() } label: {
                         Image(systemName: showArchived ? "tray.and.arrow.up" : "archivebox")
                     }
@@ -180,7 +180,7 @@ struct NoteDetailView: View {
             }
         }
         .navigationTitle(note?.displayId ?? "Note")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .task { await load() }
         .onChange(of: app.store?.revision) { Task { await refresh() } }
         .onDisappear { Task { await flush() } }
@@ -216,7 +216,7 @@ struct NoteDetailView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .trailingBar) {
                 if saving || creatingTasks { ProgressView().accessibilityIdentifier("note.saving") }
                 Button(editing ? "Preview" : "Edit") { Task { await toggleEditing() } }
                     .accessibilityIdentifier("note.toggleEdit")

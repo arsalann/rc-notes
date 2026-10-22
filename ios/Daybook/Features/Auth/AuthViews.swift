@@ -74,9 +74,9 @@ struct ServerView: View {
                 BrandHeader()
                 Section {
                     TextField("http://192.168.1.20:3000", text: $address)
-                        .keyboardType(.URL)
+                        .urlKeyboard()
                         .textContentType(.URL)
-                        .textInputAutocapitalization(.never)
+                        .noAutocapitalization()
                         .autocorrectionDisabled()
                         .submitLabel(.go)
                         .onSubmit(connect)
@@ -130,7 +130,7 @@ private struct CredentialsForm: View {
         Section {
             TextField("Username", text: $username)
                 .textContentType(.username)
-                .textInputAutocapitalization(.never)
+                .noAutocapitalization()
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("auth.username")
             SecureField("Password", text: $password)

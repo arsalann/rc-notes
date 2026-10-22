@@ -7,6 +7,9 @@ describe('classifyClient', () => {
     expect(classifyClient('daybook-ios/1.0 CFNetwork/3826 Darwin/27.0.0')).toBe('ios');
     expect(deriveUpdatedBy('ios', true)).toBe('user_in_ios_app');
     expect(deriveUpdatedBy('ios', false)).toBe('anonymous_ios_app');
+    expect(classifyClient('daybook-macos/1.0 (Mac16,1; macOS 15.5.0)')).toBe('macos');
+    expect(deriveUpdatedBy('macos', true)).toBe('user_in_macos_app');
+    expect(deriveUpdatedBy('macos', false)).toBe('anonymous_macos_app');
   });
 
   it('keeps existing classifications', () => {

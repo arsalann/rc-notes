@@ -87,7 +87,7 @@ private struct TodayScreen: View {
                     doneSection
                 }
             }
-            .listStyle(.insetGrouped)
+            .insetGroupedListStyle()
             .refreshable {
                 await app.syncNow()
                 await model.reload()
@@ -99,7 +99,7 @@ private struct TodayScreen: View {
             }
         }
         .navigationTitle(model.selectedDayLabel)
-        .navigationBarTitleDisplayMode(.large)
+        .largeNavigationTitle()
         .toolbar { toolbar }
         .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
             if !model.selecting {
@@ -158,15 +158,15 @@ private struct TodayScreen: View {
         // Put visibility on the toolbar item itself. A conditional child view can leave a stale
         // toolbar button mounted when sync completes while a different tab is selected.
         if let status = app.store?.status, status.pendingCount > 0, status.lastError != nil || !app.isOnline {
-            ToolbarItem(placement: .topBarLeading) { SyncBadge() }
+            ToolbarItem(placement: .leadingBar) { SyncBadge() }
         }
-        ToolbarItemGroup(placement: .topBarLeading) {
+        ToolbarItemGroup(placement: .leadingBar) {
             if model.selectedDate != model.todayDate {
                 Button("Today") { Task { await model.goToToday() } }
                     .accessibilityIdentifier("today.jump")
             }
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .trailingBar) {
             if model.selecting {
                 Button("Done") { model.toggleSelecting() }
                     .accessibilityIdentifier("today.selectDone")
@@ -212,7 +212,7 @@ private struct TodayScreen: View {
             }
         }
         if model.selecting {
-            ToolbarItem(placement: .bottomBar) {
+            ToolbarItem(placement: .bottomBarOrToolbar) {
                 BulkBar(allSelected: !model.selectableIds.isEmpty && model.selection.count == model.selectableIds.count,
                         count: model.selection.count, busy: model.bulkBusy,
                         onToggleAll: model.toggleSelectAll,

@@ -270,10 +270,8 @@ private struct TasksScreen: View {
     @Environment(AppModel.self) private var app
     @Bindable var model: TasksModel
     @State private var showAdd = false
-    @State private var editMode: EditMode = .inactive
+    @State private var selecting = false
     @State private var confirmBulkDelete = false
-
-    private var selecting: Bool { editMode == .active }
 
     var body: some View {
         List(selection: $model.selection) {
@@ -316,7 +314,7 @@ private struct TasksScreen: View {
                                      onTemplate: { await model.addFromTemplate($0) })
             }
         }
-        .environment(\.editMode, $editMode)
+        .selectionMode($selecting)
         .navigationTitle(model.showArchived ? "Archived" : "Tasks")
         .refreshable {
             await app.syncNow()
@@ -327,29 +325,32 @@ private struct TasksScreen: View {
         .onChange(of: app.activeWorkspaceId) { Task { await model.load() } }
         .onChange(of: model.showArchived) { Task { await model.load() } }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { WorkspaceMenu() }
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItem(placement: .leadingBar) { WorkspaceMenu() }
+            ToolbarItemGroup(placement: .trailingBar) {
                 if !selecting {
                     NavigationLink(value: Route.calendar) { Image(systemName: "calendar") }
                         .accessibilityLabel("Calendar")
                         .accessibilityIdentifier("tasks.calendar")
                     viewMenu
-                    Button { editMode = .active } label: { Image(systemName: "checkmark.circle") }
+                    Button { selecting = true } label: { Image(systemName: "checkmark.circle") }
                         .accessibilityLabel("Select tasks")
                         .accessibilityIdentifier("tasks.select")
                 } else {
-                    Button("Done") { editMode = .inactive; model.selection = [] }
+                    Button("Done") { selecting = false; model.selection = [] }
                 }
             }
             if selecting {
-                ToolbarItem(placement: .bottomBar) { bulkBar }
+                ToolbarItem(placement: .bottomBarOrToolbar) { bulkBar }
             }
         }
         .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
             Task {
                 await model.bulkDelete()
-                editMode = .inactive
+                selecting = false
             }
+        }
+        .onChange(of: app.requestedNewTask, initial: true) { _, requested in
+            if requested { showAdd = true; app.requestedNewTask = false }
         }
         .sheet(isPresented: $showAdd) {
             QuickAddSheet(defaultStatus: .next, onAdd: { result in await model.add(result) },
@@ -372,7 +373,7 @@ private struct TasksScreen: View {
             Divider()
             Toggle(isOn: $model.showDone) { Label("Show done", systemImage: "checkmark.circle") }
             Toggle(isOn: $model.showArchived) { Label("Archived", systemImage: "archivebox") }
-            Button("Select tasks", systemImage: "checkmark.circle.badge.questionmark") { editMode = .active }
+            Button("Select tasks", systemImage: "checkmark.circle.badge.questionmark") { selecting = true }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
         }
@@ -387,7 +388,7 @@ private struct TasksScreen: View {
                        onToggleAll: { model.selection = model.selection == all ? [] : all },
                        onStatus: { status in Task { await model.bulk(["status": .string(status.rawValue)], label: "Status: \(status.rawValue.capitalized)") } },
                        onPriority: { p in Task { await model.bulk(["priority": .int(p)], label: "Priority: \(Priority(value: p).label)") } },
-                       onArchive: { Task { await model.bulkArchive(); editMode = .inactive } },
+                       onArchive: { Task { await model.bulkArchive(); selecting = false } },
                        onDelete: { confirmBulkDelete = true })
     }
 
