@@ -46,6 +46,7 @@ struct InlineTaskRow: View {
     var showTags = true
     var showPriority = true
     var subtasksExpanded = true
+    let onOpenTask: (String) -> Void
     /// Called with the server's version of the task (or a subtask's parent with updated subtasks).
     let onChange: (TaskItem) -> Void
 
@@ -90,7 +91,7 @@ struct InlineTaskRow: View {
                     ForEach(subtasks.filter { !hideDoneSubtasks || !$0.completed }) { sub in
                         HStack(spacing: 8) {
                             CompletionButton(completed: sub.completed, disabled: toggling.contains(sub.id)) { toggle(sub) }
-                            NavigationLink(value: Route.task(sub.id)) {
+                            Button { onOpenTask(sub.id) } label: {
                                 Text(sub.title)
                                     .font(.subheadline)
                                     .strikethrough(sub.completed)
@@ -99,7 +100,7 @@ struct InlineTaskRow: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .navigationLinkIndicatorVisibility(.hidden)
+                            .accessibilityIdentifier("task.row.\(sub.title)")
                             if showPriority { PriorityIcon(priority: sub.priority) }
                         }
                     }
@@ -136,10 +137,10 @@ struct InlineTaskRow: View {
         if task.isPending {
             label
         } else {
-            // Inside a List a NavigationLink draws its own chevron next to the expand control.
-            NavigationLink(value: Route.task(task.id)) { label }
+            // Multiple NavigationLinks in one List cell can all activate on a single tap.
+            // Explicit plain buttons keep navigation scoped to the tapped title.
+            Button { onOpenTask(task.id) } label: { label }
                 .buttonStyle(.plain)
-                .navigationLinkIndicatorVisibility(.hidden)
                 .accessibilityIdentifier("task.row.\(task.title)")
         }
     }

@@ -155,6 +155,7 @@ struct NoteDetailView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     let noteId: String
+    @State private var openTaskId: String?
 
     @State private var note: Note?
     @State private var loadError: String?
@@ -179,6 +180,7 @@ struct NoteDetailView: View {
                 ProgressView()
             }
         }
+        .navigationDestination(item: $openTaskId) { TaskDetailView(taskId: $0) }
         .navigationTitle(note?.displayId ?? "Note")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -246,7 +248,7 @@ struct NoteDetailView: View {
                 MarkdownText(source: text)
             case .task(let id):
                 if let task = taskCache[id] {
-                    InlineTaskRow(task: task) { taskCache[$0.id] = $0 }
+                    InlineTaskRow(task: task, onOpenTask: { openTaskId = $0 }) { taskCache[$0.id] = $0 }
                 } else {
                     ProgressView().task { await hydrate([id]) }
                 }

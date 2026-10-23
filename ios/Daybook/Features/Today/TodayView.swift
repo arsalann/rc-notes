@@ -10,7 +10,7 @@ struct TodayView: View {
         NavigationStack(path: $path) {
             Group {
                 if let model {
-                    TodayScreen(model: model)
+                    TodayScreen(model: model, onOpenTask: { path.append(Route.task($0)) })
                 } else {
                     ProgressView()
                 }
@@ -38,6 +38,7 @@ private struct TodayScreen: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var model: TodayModel
+    let onOpenTask: (String) -> Void
     @State private var showAddTask = false
     @State private var showWeek = false
     @State private var quickAddPriority: Int?
@@ -487,7 +488,7 @@ private struct TodayScreen: View {
     private func taskRow(_ id: String) -> some View {
         if let task = model.taskCache[id] {
             InlineTaskRow(task: task, hideDoneSubtasks: model.hideDone, showTags: false, showPriority: model.taskGroup != .priority,
-                          subtasksExpanded: model.subtasksExpanded) { updated in
+                          subtasksExpanded: model.subtasksExpanded, onOpenTask: onOpenTask) { updated in
                 model.update(updated)
             }
             .id("\(id)-\(model.subtasksExpanded)")

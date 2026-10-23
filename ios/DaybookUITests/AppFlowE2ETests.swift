@@ -110,6 +110,38 @@ final class AppFlowE2ETests: DaybookUITestCase {
         waitFor(app.textViews["note.editor"])
     }
 
+    func testExpandedTaskOpensOnlyTappedTitle() throws {
+        let parentTitle = "\(runTag) navigation parent"
+        let parent = try server.request("POST", "/api/tasks", body: [
+            "title": parentTitle, "due_at": "\(Day.string(0))T09:00:00Z",
+        ]) as! [String: Any]
+        let childTitles = (1...3).map { "\(runTag) navigation child \($0)" }
+        for title in childTitles {
+            _ = try server.request("POST", "/api/tasks", body: [
+                "title": title, "parent_id": parent["id"] as! String,
+            ])
+        }
+        launchSignedIn()
+        let parentRow = element("task.row.\(parentTitle)")
+        scrollTo(parentRow)
+        // Today renders expanded children inside the same List cell as their parent.
+        XCTAssertTrue(element("task.row.\(childTitles[0])").exists)
+        parentRow.tap()
+        let detailTitle = app.textFields["detail.title"]
+        waitFor(detailTitle)
+        XCTAssertEqual(detailTitle.value as? String, parentTitle)
+        waitFor(app.buttons["BackButton"]).tap()
+        XCTAssertTrue(waitFor(parentRow).isHittable, "one Back returns to Today")
+
+        let childRow = element("task.row.\(childTitles[1])")
+        scrollTo(childRow)
+        childRow.tap()
+        waitFor(detailTitle)
+        XCTAssertEqual(detailTitle.value as? String, childTitles[1])
+        waitFor(app.buttons["BackButton"]).tap()
+        XCTAssertTrue(waitFor(parentRow).isHittable, "subtask navigation also adds only one destination")
+    }
+
     func testTaskLifecycleFromTasksTab() throws {
         launchSignedIn()
         tab("Tasks").tap()
