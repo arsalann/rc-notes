@@ -244,6 +244,7 @@ Also use the Bruin MCP tools when available for richer schema inspection — the
   PGlite. Never point iOS tests at the real server.
 - Journal safety rules above apply to iOS too; `JournalSessionTests` and `JournalE2ETests` are the
   regression tests and must stay green.
+- SwiftUI navigation: never put multiple `NavigationLink`s inside one `List` cell (e.g. an expanded task with subtasks); a tap can activate every link and stack destinations. Use plain buttons with explicit navigation owned by the containing screen.
 - SwiftUI gotcha: `.accessibilityIdentifier` on a container overrides its children's identifiers; add
   `.accessibilityElement(children: .contain)` first when children need their own ids.
 - Any API response shape change must keep `ios/DaybookKit/Tests/DaybookKitTests/Fixtures` decoding (they
