@@ -341,10 +341,8 @@ private struct TasksScreen: View {
                     Button("Done") { editMode = .inactive; model.selection = [] }
                 }
             }
-            if selecting {
-                ToolbarItem(placement: .bottomBar) { bulkBar }
-            }
         }
+        .bulkBarInset(selecting) { bulkBar }
         .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
             Task {
                 await model.bulkDelete()
