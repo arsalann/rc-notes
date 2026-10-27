@@ -57,6 +57,23 @@ struct BulkBar: View {
 }
 
 extension View {
+    /// Pins the bulk bar above the tab bar. A `.bottomBar` toolbar item is not shown inside the
+    /// TabView (the tab bar takes the bottom edge), so select mode had no actions at all.
+    func bulkBarInset<Bar: View>(_ visible: Bool, @ViewBuilder bar: () -> Bar) -> some View {
+        let content = bar()
+        return safeAreaInset(edge: .bottom, spacing: 0) {
+            if visible {
+                content
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 52)
+                    .background(.bar)
+                    .overlay(alignment: .top) { Divider() }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("bulk.bar")
+            }
+        }
+    }
+
     /// "Delete N tasks?" confirmation shared by the bulk bars.
     func bulkDeleteConfirmation(count: Int, isPresented: Binding<Bool>, onDelete: @escaping () -> Void) -> some View {
         confirmationDialog("Delete \(count) task\(count == 1 ? "" : "s")?", isPresented: isPresented, titleVisibility: .visible) {

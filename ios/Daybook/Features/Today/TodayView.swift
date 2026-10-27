@@ -115,6 +115,15 @@ private struct TodayScreen: View {
                 await model.addFromTemplate(template)
             })
         }
+        .bulkBarInset(model.selecting) {
+            BulkBar(allSelected: !model.selectableIds.isEmpty && model.selection.count == model.selectableIds.count,
+                    count: model.selection.count, busy: model.bulkBusy,
+                    onToggleAll: model.toggleSelectAll,
+                    onStatus: { status in Task { await model.bulkUpdate(["status": .string(status.rawValue)], label: "Status: \(status.rawValue.capitalized)") } },
+                    onPriority: { p in Task { await model.bulkUpdate(["priority": .int(p)], label: "Priority: \(Priority(value: p).label)") } },
+                    onArchive: { Task { await model.bulkArchive() } },
+                    onDelete: { confirmBulkDelete = true })
+        }
         .bulkDeleteConfirmation(count: model.selection.count, isPresented: $confirmBulkDelete) {
             Task { await model.bulkDelete() }
         }
@@ -210,17 +219,6 @@ private struct TodayScreen: View {
             .disabled(model.allTaskIds.isEmpty)
             .accessibilityLabel("Select tasks")
             .accessibilityIdentifier("today.select")
-            }
-        }
-        if model.selecting {
-            ToolbarItem(placement: .bottomBar) {
-                BulkBar(allSelected: !model.selectableIds.isEmpty && model.selection.count == model.selectableIds.count,
-                        count: model.selection.count, busy: model.bulkBusy,
-                        onToggleAll: model.toggleSelectAll,
-                        onStatus: { status in Task { await model.bulkUpdate(["status": .string(status.rawValue)], label: "Status: \(status.rawValue.capitalized)") } },
-                        onPriority: { p in Task { await model.bulkUpdate(["priority": .int(p)], label: "Priority: \(Priority(value: p).label)") } },
-                        onArchive: { Task { await model.bulkArchive() } },
-                        onDelete: { confirmBulkDelete = true })
             }
         }
     }
